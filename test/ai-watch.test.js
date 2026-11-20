@@ -602,3 +602,34 @@ test('權限詢問：監看器收到鉤子事件 → 發出 permission 事件（
   assert.deepStrictEqual(e.request, { id: 'r1', tool: 'Bash', summary: 'npm test' });
   assert.strictEqual(e.session.status, 'waiting');
 });
+
+test('選擇題（AskUserQuestion）：單選題交給桌寵，答案放回 updatedInput.answers；複選題不介入', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-ask-'));
+  fs.writeFileSync(path.join(dir, 'watch-projects.json'), JSON.stringify({ projects: [], sessions: ['abc'], answer: true }));
+  fs.writeFileSync(path.join(dir, 'app-alive'), 'x');
+  const ask = (toolInput, answers) => new Promise((resolve) => {
+    const p = spawn(process.execPath, [HOOK, dir]);
+    let out = '';
+    p.stdout.on('data', (d) => { out += d; });
+    p.on('close', () => { clearInterval(timer); resolve(out); });
+    p.stdin.end(JSON.stringify({ hook_event_name: 'PermissionRequest', cwd: path.resolve('/x'), session_id: 'abc', transcript_path: '/a.jsonl', tool_name: 'AskUserQuestion', tool_input: toolInput }));
+    const pdir = path.join(dir, 'permission');
+    const timer = setInterval(() => {
+      let names = [];
+      try { names = fs.readdirSync(pdir).filter((n) => n.endsWith('.json') && !n.endsWith('.answer.json')); } catch (e) { return; }
+      if (!names.length) return;
+      clearInterval(timer);
+      const req = JSON.parse(fs.readFileSync(path.join(pdir, names[0]), 'utf8'));
+      assert.deepStrictEqual(req.questions, [{ question: '要哪一種？', options: ['甲', '乙', '丙'] }]);
+      fs.writeFileSync(path.join(pdir, names[0].replace(/[.]json$/, '.answer.json')), JSON.stringify({ choice: 'allow', answers }));
+    }, 50);
+  });
+  const input = { questions: [{ question: '要哪一種？', header: '種類', multiSelect: false, options: [{ label: '甲', description: 'a' }, { label: '乙', description: 'b' }, { label: '丙', description: 'c' }] }] };
+  const out = JSON.parse(await ask(input, { '要哪一種？': '乙' }));
+  assert.strictEqual(out.hookSpecificOutput.decision.behavior, 'allow');
+  assert.deepStrictEqual(out.hookSpecificOutput.decision.updatedInput.answers, { '要哪一種？': '乙' });
+  assert.deepStrictEqual(out.hookSpecificOutput.decision.updatedInput.questions, input.questions);
+
+  const multi = { questions: [Object.assign({}, input.questions[0], { multiSelect: true })] };
+  assert.strictEqual(await ask(multi, {}), '', '複選題：不輸出、不等待');
+});

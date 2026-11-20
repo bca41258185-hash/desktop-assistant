@@ -259,6 +259,9 @@ html, body {
   flex: 1; padding: 10px 0; font: inherit; font-size: 30px; font-weight: 700;
   color: #fff; border: none; border-radius: 8px; cursor: pointer;
 }
+.bubble-choice { background: #3a3a36; }
+.bubble-choices.stack { flex-direction: column; gap: 8px; }
+.bubble-choices.stack .bubble-choice { font-size: 24px; padding: 8px 12px; text-align: left; }
 .bubble-choice.allow { background: #3f8f55; }
 .bubble-choice.deny { background: #b5483f; }
 .bubble-choice:hover { filter: brightness(1.12); }
@@ -295,3 +298,6 @@ html, body {
   .pet-body, .shadow, .eye, .gesture-arm, .sketch-lines,
   #pet .glasses { animation: none !important; }
 }
+
+/* 多選題的題目字小一點，才放得下選項 */
+.bubble:has(.bubble-choices.stack:not([hidden])) .bubble-text { font-size: 28px; }

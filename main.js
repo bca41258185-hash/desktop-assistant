@@ -8,7 +8,7 @@ const chokidar = require('chokidar');
 const { createProvider } = require('./providers');
 const { createAiWatcher, defaultRoots } = require('./ai-watch');
 const hooksInstaller = require('./ai-watch/hooks-installer');
-const { listClaudeSessions } = require('./ai-watch/claude-sessions');
+const { listClaudeSessions, desktopSessionMeta } = require('./ai-watch/claude-sessions');
 const { CHARACTERS, DEFAULT_ID, categoryOf } = require('./renderer/characters');
 
 // 名言資料：讀取 data/ 下所有 quotes*.json（每個職業一個檔，方便擴充）
@@ -376,6 +376,19 @@ function clip(text, n) {
 
 // --- 在泡泡上回答 Claude 的權限詢問 ---
 const pendingPermissions = new Set();   // 還在等使用者回答的請求 id
+const pendingQuestions = new Map();     // 請求 id → { questions, index, answers }（Claude 的選擇題，一題一題問）
+
+function askNextQuestion(id) {
+  const st = pendingQuestions.get(id);
+  if (!st) return;
+  const q = st.questions[st.index];
+  speak({
+    text: q.question,
+    attribution: st.questions.length > 1 ? `第 ${st.index + 1} 題，共 ${st.questions.length} 題` : '',
+    ai: true, sticky: true, action: 'choice', requestId: id,
+    choices: q.options.map((label, i) => ({ id: 'opt' + i, label }))
+  });
+}
 
 // 讓鉤子知道桌寵開著（沒開的話鉤子不會讓 Claude 空等）
 function touchAlive() {
@@ -386,12 +399,13 @@ function touchAlive() {
 }
 
 // choice：'allow'｜'deny'｜'pass'（不回答，交回 Claude 自己的詢問畫面）
-function answerPermission(id, choice) {
+function answerPermission(id, choice, answers) {
+  pendingQuestions.delete(id);
   if (!/^[\w-]+$/.test(String(id || '')) || !pendingPermissions.delete(id)) return;
   try {
     const dir = path.join(aiHooksDir(), 'permission');
     if (!fs.existsSync(path.join(dir, id + '.json'))) return;   // 鉤子已經結束（逾時）
-    fs.writeFileSync(path.join(dir, id + '.answer.json'), JSON.stringify({ choice }));
+    fs.writeFileSync(path.join(dir, id + '.answer.json'), JSON.stringify(answers ? { choice, answers } : { choice }));
   } catch (e) {
     console.error('寫入權限回答失敗:', e.message);
   }
@@ -401,6 +415,11 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
   if (kind === 'permission') {
     pendingPermissions.add(request.id);
     setPetPose('idle');
+    if (Array.isArray(request.questions) && request.questions.length) {
+      pendingQuestions.set(request.id, { questions: request.questions, index: 0, answers: {} });
+      askNextQuestion(request.id);
+      return;
+    }
     speak({
       text: `可以用 ${request.tool} 嗎？`,
       attribution: request.summary,
@@ -544,6 +563,17 @@ function registerIpc() {
   ipcMain.on('pet:menu', () => showPetMenu());
   ipcMain.on('claude:focus', () => focusClaudeWindow());
   ipcMain.on('pet:choice', (e, { requestId, choice }) => {
+    // Claude 的選擇題：記下這題的答案，還有下一題就繼續問，問完一次回覆
+    const st = pendingQuestions.get(requestId);
+    if (st) {
+      const q = st.questions[st.index];
+      const label = q.options[Number(String(choice).replace('opt', ''))];
+      if (label === undefined) return answerPermission(requestId, 'pass');
+      st.answers[q.question] = label;
+      st.index += 1;
+      if (st.index < st.questions.length) return askNextQuestion(requestId);
+      return answerPermission(requestId, 'allow', st.answers);
+    }
     answerPermission(requestId, choice === 'allow' ? 'allow' : choice === 'deny' ? 'deny' : 'pass');
   });
 
@@ -598,8 +628,22 @@ function registerIpc() {
   ipcMain.handle('ai:recent-sessions', () => {
     const watched = new Set(aiSessions().map((s) => s.id));
     // 只列近三天用過的對話，太久沒用的不出現
-    return listClaudeSessions(defaultRoots().claude, { limit: 60, maxAgeMs: 3 * 24 * 3600 * 1000 })
-      .map((s) => ({ id: s.id, title: s.title, cwd: s.cwd, mtime: s.mtime, watched: watched.has(s.id) }));
+    // 群組、母子關係、封存狀態照 Claude 桌面版側欄（讀不到就退回用資料夾名稱分組）
+    let meta = new Map();
+    try { meta = desktopSessionMeta(); } catch (e) { /* 沒有桌面版資料 */ }
+    const folderName = (p) => String(p || '').split(/[\\/]/).filter(Boolean).pop() || '其他';
+    // 清單只顯示近三天用過的（recent）；更早的（60 天內）只有打字搜尋時才會出現
+    const now = Date.now();
+    return listClaudeSessions(defaultRoots().claude, { limit: 200, maxAgeMs: 60 * 24 * 3600 * 1000 })
+      .filter((s) => !(meta.get(s.id) || {}).archived)
+      .map((s) => {
+        const m = meta.get(s.id) || {};
+        return {
+          id: s.id, title: m.title || s.title, cwd: s.cwd, mtime: s.mtime, watched: watched.has(s.id),
+          recent: now - s.mtime <= 3 * 24 * 3600 * 1000,
+          group: m.group || folderName(s.cwd), parentTitle: m.parentTitle || ''
+        };
+      });
   });
 
   ipcMain.handle('ai:add-session', (e, s) => {

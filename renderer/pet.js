@@ -83,6 +83,8 @@ function showBubble(payload) {
       });
       bubbleChoicesEl.appendChild(b);
     });
+    // 超過兩個選項、或選項文字較長時改成直排
+    bubbleChoicesEl.classList.toggle('stack', choices.length > 2 || choices.some((c) => String(c.label).length > 6));
     bubbleChoicesEl.hidden = !choices.length;
   }
   bubbleEl.classList.toggle('sticky', sticky);

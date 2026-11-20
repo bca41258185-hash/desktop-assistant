@@ -409,63 +409,97 @@ function renderAiConfig() {
     : '開啟後提醒更快更準。會在 Claude 的設定檔加一小段，隨時可以關閉還原。');
 }
 
-// 「加入對話」：列出最近的 Claude Code 對話，點一下就加入追蹤
+// 「加入對話」：列出近三天用過的 Claude 對話。排法和 Claude 側欄一樣（同樣的群組、
+// 子對話收在母對話底下），最上面多一組「剛剛在用」，還可以打字搜尋。
 const aiPicker = document.getElementById('aiSessionPicker');
 const aiPickerList = document.getElementById('aiPickerList');
+const aiPickerSearch = document.getElementById('aiPickerSearch');
+let pickerItems = [];
+
+function closeSessionPicker() {
+  aiPicker.hidden = true;
+  aiList.hidden = false;
+}
 
 async function openSessionPicker() {
   aiPicker.hidden = false;
+  aiList.hidden = true;            // 挑選時整頁只剩清單，不被下面的東西擠壓
+  if (aiPickerSearch) { aiPickerSearch.value = ''; aiPickerSearch.focus(); }
   aiPickerList.innerHTML = '';
   aiPickerList.appendChild(el('li', 'empty', '讀取中…'));
-  const items = await window.api.recentAiSessions();
+  pickerItems = await window.api.recentAiSessions();
+  renderPicker();
+}
+
+function renderPicker() {
+  const q = (aiPickerSearch ? aiPickerSearch.value : '').trim().toLowerCase();
+  // 沒打字：只看近三天用過的；有打字：連更早的對話一起找
+  const items = pickerItems.filter((s) => (q ? (s.title + ' ' + (s.group || '') + ' ' + (s.parentTitle || '')).toLowerCase().includes(q) : s.recent !== false));
   aiPickerList.innerHTML = '';
   if (!items.length) {
-    aiPickerList.appendChild(el('li', 'empty', '最近三天沒有用過的 Claude 對話。'));
+    aiPickerList.appendChild(el('li', 'empty', q ? '找不到符合的對話。' : '最近三天沒有用過的 Claude 對話。'));
     return;
   }
-  // 依資料夾分組（最近用過的資料夾在前），組內由新到舊
+  const older = pickerItems.filter((s) => s.recent === false).length;
+  const addGroup = (name, list) => {
+    if (!list.length) return;
+    const head = el('li', 'ai-picker-group');
+    head.appendChild(el('span', 'ai-picker-group-name', name));
+    head.appendChild(el('span', 'ai-picker-group-count', list.length + ' 段'));
+    aiPickerList.appendChild(head);
+    list.forEach((s) => addPickerRow(s));
+  };
+  // 剛剛在用（15 分鐘內）：最可能就是你要找的
+  const now = Date.now();
+  const recent = q ? [] : items.filter((s) => now - s.mtime < 15 * 60 * 1000);
+  addGroup('剛剛在用', recent);
+  // 其餘照側欄群組；群組依最近使用排序，組內母對話在前、子對話緊跟在後
+  const rest = items.filter((s) => !recent.includes(s));
   const groups = new Map();
-  items.forEach((s) => {
-    const key = s.cwd || '';
+  rest.forEach((s) => {
+    const key = s.group || '其他';
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(s);
   });
-  groups.forEach((list, cwd) => {
-    const head = el('li', 'ai-picker-group');
-    head.appendChild(el('span', 'ai-picker-group-name', cwd ? cwd.split(/[\\/]/).filter(Boolean).pop() : '其他'));
-    head.appendChild(el('span', 'ai-picker-group-count', list.length + ' 段'));
-    head.title = cwd;
-    aiPickerList.appendChild(head);
-    list.forEach((s) => addPickerRow(s));
+  groups.forEach((list, name) => {
+    const titles = new Set(list.map((s) => s.title));
+    const parents = list.filter((s) => !(s.parentTitle && titles.has(s.parentTitle)));
+    const ordered = [];
+    parents.forEach((p) => {
+      ordered.push(p);
+      list.filter((c) => c.parentTitle === p.title && c !== p && !parents.includes(c)).forEach((c) => ordered.push(Object.assign({}, c, { child: true })));
+    });
+    addGroup(name, ordered);
   });
+  if (!q && older) aiPickerList.appendChild(el('li', 'empty', `找不到？在上面打幾個字，可以找到更早的 ${older} 段對話。`));
 }
 
 function addPickerRow(s) {
-  {
-    const li = el('li', s.watched ? 'watched' : '');
-    const text = el('div', 'ai-picker-text');
-    text.appendChild(el('span', 'ai-picker-title', s.title));
-    text.appendChild(el('span', 'ai-picker-meta', timeAgo(s.mtime)));
-    li.appendChild(text);
-    const btn = el('button', '', s.watched ? '已加入' : '加入');
-    btn.disabled = s.watched;
-    btn.addEventListener('click', async () => {
-      aiState = await window.api.addAiSession({ id: s.id, title: s.title, cwd: s.cwd });
-      btn.textContent = '已加入';
-      aiPicker.hidden = true;   // 加完就收起清單，回到對話列表
-      btn.disabled = true;
-      li.className = 'watched';
-      renderAi();
-    });
-    li.appendChild(btn);
-    aiPickerList.appendChild(li);
-  }
+  const li = el('li', (s.watched ? 'watched ' : '') + (s.child ? 'child' : ''));
+  const text = el('div', 'ai-picker-text');
+  text.appendChild(el('span', 'ai-picker-title', s.title));
+  text.appendChild(el('span', 'ai-picker-meta', timeAgo(s.mtime) + (s.parentTitle && !s.child ? '・來自「' + s.parentTitle + '」' : '')));
+  li.appendChild(text);
+  const btn = el('button', '', s.watched ? '已加入' : '加入');
+  btn.disabled = s.watched;
+  const add = async () => {
+    if (s.watched) return;
+    s.watched = true;
+    aiState = await window.api.addAiSession({ id: s.id, title: s.title, cwd: s.cwd });
+    closeSessionPicker();          // 加完就回到對話列表
+    renderAi();
+  };
+  btn.addEventListener('click', (e) => { e.stopPropagation(); add(); });
+  li.addEventListener('click', add);   // 點整列也可以
+  li.appendChild(btn);
+  aiPickerList.appendChild(li);
 }
 
 document.getElementById('aiAddSession').addEventListener('click', () => {
-  if (aiPicker.hidden) openSessionPicker(); else aiPicker.hidden = true;
+  if (aiPicker.hidden) openSessionPicker(); else closeSessionPicker();
 });
-document.getElementById('aiPickerClose').addEventListener('click', () => { aiPicker.hidden = true; });
+document.getElementById('aiPickerClose').addEventListener('click', closeSessionPicker);
+if (aiPickerSearch) aiPickerSearch.addEventListener('input', renderPicker);
 
 document.getElementById('aiAddProject').addEventListener('click', async () => {
   aiState = await window.api.addAiProject();

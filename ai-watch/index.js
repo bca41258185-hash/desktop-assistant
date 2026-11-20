@@ -422,10 +422,11 @@ function createAiWatcher(options) {
       } catch (e) { return; }   // 請求檔已不在（已逾時或已回答）就不用再問
       const tool = req.tool_name || ev.tool_name || '';
       s.lastActivity = Math.max(s.lastActivity, at);
-      s.waitingMessage = `需要你允許使用 ${tool}`;
+      const questions = Array.isArray(req.questions) && req.questions.length ? req.questions : null;
+      s.waitingMessage = questions ? 'Claude 有問題要問你' : `需要你允許使用 ${tool}`;
       s.status = 'waiting';
       s.notifiedWaiting = true;
-      onEvent({ kind: 'permission', session: publicSession(s), request: { id: String(ev.request_id), tool, summary: String(req.summary || '') } });
+      onEvent({ kind: 'permission', session: publicSession(s), request: Object.assign({ id: String(ev.request_id), tool, summary: String(req.summary || '') }, questions ? { questions } : {}) });
     }
     queueUpdate();
   }

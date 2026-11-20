@@ -69,13 +69,16 @@ function main(raw) {
     ev.message = String(input.message || '').slice(0, 200);   // 系統通知文字，例如「Claude needs your permission to use Bash」
   }
   let reqFile = '';
+  // Claude 用選項問問題（AskUserQuestion）：把題目和選項交給桌寵；複選題桌寵不處理，交回 Claude
+  const questions = isPermission && input.tool_name === 'AskUserQuestion' ? pickQuestions(input.tool_input) : null;
+  if (isPermission && input.tool_name === 'AskUserQuestion' && !questions) return null;
   if (isPermission) {
     // 要顯示在泡泡上的內容放在獨立的小檔，回答後就刪掉，不留在事件紀錄裡
     const id = `${Date.now()}-${process.pid}`;
     const pdir = path.join(dir, 'permission');
     fs.mkdirSync(pdir, { recursive: true });
     reqFile = path.join(pdir, id + '.json');
-    fs.writeFileSync(reqFile, JSON.stringify({ id, tool_name: String(input.tool_name || ''), summary: summarize(input.tool_name, input.tool_input) }));
+    fs.writeFileSync(reqFile, JSON.stringify({ id, tool_name: String(input.tool_name || ''), summary: summarize(input.tool_name, input.tool_input), questions: questions || undefined }));
     ev.request_id = id;
     ev.tool_name = String(input.tool_name || '');
   }
@@ -86,7 +89,20 @@ function main(raw) {
   } catch (e) { /* 檔案還不存在 */ }
   fs.appendFileSync(file, JSON.stringify(ev) + '\n');
 
-  return isPermission ? waitForAnswer(reqFile) : null;
+  return isPermission ? waitForAnswer(reqFile, input.tool_input) : null;
+}
+
+// 只接受「每題單選、選項 2～6 個」的題目；其他情況回傳 null（不介入）
+function pickQuestions(toolInput) {
+  const qs = toolInput && Array.isArray(toolInput.questions) ? toolInput.questions : [];
+  if (!qs.length || qs.length > 4) return null;
+  const out = [];
+  for (const q of qs) {
+    const opts = q && Array.isArray(q.options) ? q.options.map((o) => String((o && o.label) || '')).filter(Boolean) : [];
+    if (!q || q.multiSelect || typeof q.question !== 'string' || opts.length < 2 || opts.length > 6) return null;
+    out.push({ question: q.question, options: opts });
+  }
+  return out;
 }
 
 // 桌寵每幾秒更新一次 app-alive；太久沒更新代表桌寵沒開，就不要讓 Claude 空等
@@ -105,7 +121,7 @@ function summarize(tool, input) {
 }
 
 // 等桌寵寫入 <id>.answer.json：allow／deny 就回覆 Claude；其他或逾時就什麼都不說（交回 Claude 自己的詢問畫面）
-function waitForAnswer(reqFile) {
+function waitForAnswer(reqFile, toolInput) {
   const ansFile = reqFile.replace(/\.json$/, '.answer.json');
   const deadline = Date.now() + PERMISSION_WAIT_MS;
   return new Promise((resolve) => {
@@ -119,7 +135,10 @@ function waitForAnswer(reqFile) {
       let ans = null;
       try { ans = JSON.parse(fs.readFileSync(ansFile, 'utf8')); } catch (e) { /* 還沒回答 */ }
       if (ans && ans.choice === 'allow') {
-        return finish({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } } });
+        const decision = { behavior: 'allow' };
+        // 選擇題：把使用者選的答案放回工具輸入（題目文字 → 選項文字）
+        if (ans.answers && typeof ans.answers === 'object') decision.updatedInput = Object.assign({}, toolInput, { answers: ans.answers });
+        return finish({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision } });
       }
       if (ans && ans.choice === 'deny') {
         return finish({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'deny', message: '使用者在桌面大師上按了「拒絕」。' } } });

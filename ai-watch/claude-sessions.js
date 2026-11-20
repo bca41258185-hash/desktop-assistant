@@ -59,8 +59,20 @@ function summarize(file) {
   };
   scan(head, true);
   if (tail) scan(tail, false);
+  // 真正「最後使用」的時間 = 最後一則對話訊息的時間。
+  // 不能用檔案修改時間：Claude 桌面版開啟時會在舊紀錄後面補寫標題，檔案時間會變新。
+  let lastUsed = 0;
+  const lines = (tail || head).split('\n');
+  for (let i = lines.length - 1; i >= 0 && !lastUsed; i--) {
+    const line = lines[i];
+    if (!line.includes('"timestamp"') || line.length > 400000) continue;
+    try {
+      const e = JSON.parse(line);
+      if ((e.type === 'user' || e.type === 'assistant') && e.timestamp) lastUsed = Date.parse(e.timestamp) || 0;
+    } catch (err) { /* 被截斷的行 */ }
+  }
   const title = (customTitle || aiTitle || prompt.replace(/\s+/g, ' ').slice(0, 60) || '（尚無指令）').trim();
-  return { id: path.basename(file, '.jsonl'), file, cwd, title, mtime: st.mtimeMs };
+  return { id: path.basename(file, '.jsonl'), file, cwd, title, mtime: lastUsed || st.mtimeMs };
 }
 
 /**
@@ -93,10 +105,72 @@ function listClaudeSessions(root, opts = {}) {
   for (const { f } of files.slice(0, limit)) {
     try {
       const s = summarize(f);
-      if (s.title !== '（尚無指令）') out.push(s);
+      if (s.title !== '（尚無指令）' && now - s.mtime <= maxAgeMs) out.push(s);
     } catch (e) { /* 讀不到就略過 */ }
+  }
+  return out.sort((a, b) => b.mtime - a.mtime);
+}
+
+// ---------------------------------------------------------------------------
+// Claude 桌面版的側欄資料（唯讀）：每段對話一個小檔，記著側欄標題、是否封存、
+// 以及它是從哪段對話開出來的。用來讓挑選清單和側欄長得一樣。
+// 位置：%LOCALAPPDATA%/Claude-Data/<帳號>/claude-code-sessions/**/local_*.json
+// ---------------------------------------------------------------------------
+function desktopSessionDirs() {
+  const out = [];
+  const bases = [process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Claude-Data'), process.env.APPDATA && path.join(process.env.APPDATA, 'Claude')].filter(Boolean);
+  for (const base of bases) {
+    let names = [];
+    try { names = fs.readdirSync(base); } catch (e) { continue; }
+    for (const n of [''].concat(names)) {
+      const d = path.join(base, n, 'claude-code-sessions');
+      try { if (fs.statSync(d).isDirectory()) out.push(d); } catch (e) { /* 沒有 */ }
+    }
   }
   return out;
 }
 
-module.exports = { listClaudeSessions, summarize };
+function walkJson(dir, depth, out) {
+  let ents = [];
+  try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
+  for (const e of ents) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) { if (depth > 0) walkJson(p, depth - 1, out); } else if (e.name.startsWith('local_') && e.name.endsWith('.json')) out.push(p);
+  }
+}
+
+/**
+ * 回傳 Map：CLI 對話 ID → { title, archived, group, parentTitle }
+ *  - group：側欄的群組名稱（最上層母對話所在資料夾的名稱）
+ *  - parentTitle：若是從別段對話開出來的，母對話的標題
+ */
+function desktopSessionMeta(dirs) {
+  const byLocal = new Map();
+  for (const d of dirs || desktopSessionDirs()) {
+    const files = [];
+    walkJson(d, 3, files);
+    for (const f of files) {
+      try {
+        const o = JSON.parse(fs.readFileSync(f, 'utf8'));
+        if (o && o.sessionId) byLocal.set(o.sessionId, o);
+      } catch (e) { /* 略過讀不懂的 */ }
+    }
+  }
+  const base = (p) => String(p || '').split(/[\\/]/).filter(Boolean).pop() || '';
+  const out = new Map();
+  for (const o of byLocal.values()) {
+    if (!o.cliSessionId) continue;
+    let root = o;
+    for (let i = 0; i < 10 && root.spawnedFrom && byLocal.has(root.spawnedFrom.sessionId); i++) root = byLocal.get(root.spawnedFrom.sessionId);
+    const parent = o.spawnedFrom && byLocal.get(o.spawnedFrom.sessionId);
+    out.set(String(o.cliSessionId), {
+      title: String(o.title || ''),
+      archived: !!o.isArchived,
+      group: base(root.originCwd || root.cwd),
+      parentTitle: parent ? String(parent.title || '') : ''
+    });
+  }
+  return out;
+}
+
+module.exports = { listClaudeSessions, summarize, desktopSessionMeta };
