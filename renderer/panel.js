@@ -550,6 +550,16 @@ function renderAi() {
     aiList.appendChild(el('p', 'empty big', '追蹤已關閉。到「更多 → 設定 → 進階」可以打開。'));
     return;
   }
+  // 即時提醒還沒開：在最上面放一條看得見的提示（開關本體在進階設定裡，新手找不到）
+  const hk = aiState.hooks || {};
+  if (!hk.installed && !hk.error) {
+    const bar = el('div', 'ai-banner');
+    bar.appendChild(el('span', '', '開啟「即時提醒」，大師才能馬上通知你，你也才能在泡泡上直接回答 Claude。'));
+    const on = el('button', 'primary', '開啟');
+    on.addEventListener('click', () => aiHookBtn.click());
+    bar.appendChild(on);
+    aiList.appendChild(bar);
+  }
   // 目前有動靜的對話（依檔名對應回加入的那一段）
   const live = new Map();
   (aiState.projects || []).forEach((p) => p.sessions.forEach((s) => {

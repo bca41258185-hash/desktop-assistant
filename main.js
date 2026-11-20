@@ -553,7 +553,7 @@ function composeTarget(id) {
 function openCompose() {
   const list = composeTargets();
   if (!list.length) {
-    speak({ text: '先按下面的「📋 面板」，再按「＋ 加入對話」。', duration: 10000 });
+    speak({ text: '還沒有可以說話的對話。先按「📋 面板」，再按「＋ 加入對話」。', duration: 10000 });
     return;
   }
   speak({
