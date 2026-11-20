@@ -612,7 +612,7 @@ function petStatusOf(list) {
   const all = [].concat(...(list || []).map((p) => p.sessions || []));
   if (all.some((s) => s.status === 'waiting')) return { text: '等你回答', cls: 'waiting' };
   const working = all.filter((s) => s.status === 'working').length;
-  if (working) return { text: working > 1 ? `${working} 段進行中` : '進行中', cls: 'working' };
+  if (working) return { text: working > 1 ? `${working} 個對話進行中` : '進行中', cls: 'working' };
   if (all.some((s) => s.status === 'done' && Date.now() - s.lastActivity < 10 * 60 * 1000)) return { text: '完成', cls: 'done' };
   return { text: '', cls: '' };
 }
