@@ -25,7 +25,8 @@ const path = require('path');
 // 桌寵發現對話不再等待時也會主動放掉，所以等久一點不會卡住任何東西。
 const PERMISSION_WAIT_MS = 10 * 60 * 1000;
 // 從桌寵送給 Claude 的訊息，前後各加一小段說明
-const REPLY_PREFIX = '使用者透過桌面大師（桌寵）傳來新的訊息，請當成使用者的下一則訊息來處理：\n';
+// （這段文字也會顯示在 Claude 的畫面上，所以開頭先讓使用者看得懂，後面才是給 Claude 的說明）
+const REPLY_PREFIX = '💬 你從桌面大師傳來的訊息（請 Claude 當成我的下一則訊息來處理）：\n';
 const REPLY_SUFFIX = '\n\n（你的回覆會顯示在桌寵的小泡泡上：第一行請用一句 30 字以內的完整句子直接講結論，細節寫在後面。）';
 const STOP_BASE_WAIT_MS = 20 * 1000;    // 回合結束後先等 20 秒，看使用者要不要在泡泡上回覆
 const MAX_BYTES = 1024 * 1024;   // 事件檔超過 1MB 就換新，避免無限成長

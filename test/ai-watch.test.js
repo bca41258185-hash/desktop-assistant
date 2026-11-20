@@ -725,3 +725,22 @@ test('已安裝即時提醒時，跑很久的指令不會被時間推測誤報�
   assert.deepStrictEqual(mk({ hooksInstalled: true }), ['start']);
   assert.deepStrictEqual(mk({ hooksInstalled: false }), ['start', 'waiting']);
 });
+
+test('空閒閒聊：只挑「每位說話的人都在場」的對話；不連續重複；每段是不同人輪流說', () => {
+  const { CHATS, pickChat } = require('../data/chats');
+  const chars = require('../renderer/characters');
+  for (const lines of CHATS) {
+    assert.ok(lines.length >= 2 && lines.length <= 4);
+    assert.strictEqual(new Set(lines.map(([who]) => who)).size, 2, '每段剛好兩個人');
+    lines.forEach(([who, text], i) => {
+      assert.ok(chars.ORDER.includes(who), who + ' 必須是開放中的角色');
+      assert.ok(text && text.length <= 40, '一句不要太長，泡泡放得下');
+      if (i > 0) assert.notStrictEqual(who, lines[i - 1][0], '同一個人不連說兩句');
+    });
+  }
+  assert.strictEqual(pickChat(['mozi']), null, '只有一位就不聊');
+  const first = () => 0;
+  const c = pickChat(['mozi', 'laozi'], { rand: first });
+  assert.ok(c.lines.every(([who]) => who === 'mozi' || who === 'laozi'));
+  assert.notStrictEqual(pickChat(['mozi', 'laozi'], { rand: first, avoid: c.index }).index, c.index);
+});

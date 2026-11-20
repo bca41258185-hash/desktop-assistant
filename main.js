@@ -11,6 +11,7 @@ const hooksInstaller = require('./ai-watch/hooks-installer');
 const { listClaudeSessions, desktopSessionMeta } = require('./ai-watch/claude-sessions');
 const compose = require('./ai-watch/compose');
 const { remarkFor } = require('./data/remarks');
+const { pickChat } = require('./data/chats');
 const { CHARACTERS, ORDER: ACTIVE_CHARACTERS, DEFAULT_ID, categoryOf } = require('./renderer/characters');
 // 只有開放中的角色可以選；封存的角色（設定檔裡的舊值）一律換成預設角色
 const isActiveCharacter = (id) => ACTIVE_CHARACTERS.includes(id);
@@ -124,6 +125,7 @@ function effectiveSettings() {
 // ---------------------------------------------------------------------------
 // 桌寵視窗平常只有角色大小（不擋住後面的畫面），說話時才向上展開放泡泡。
 // 兩種大小都以「角色底部中央」為錨點，所以角色不會跳動。
+const APP_ICON = path.join(__dirname, 'assets', 'icon.png');   // 由 tools/make-icon.js 產生
 const PET_SMALL = { width: 240, height: 250 };
 const PET_BIG = { width: 520, height: 640 };
 
@@ -184,6 +186,33 @@ function defaultPetPosition(index) {
   };
 }
 
+// 使用者把這位助手拖到哪裡，下次開啟就站在哪裡（位置還在某個螢幕裡才採用）
+function savedPetPosition(characterId) {
+  const p = (config.settings.petPositions || {})[characterId];
+  if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
+  const visible = screen.getAllDisplays().some((d) => {
+    const w = d.workArea;
+    return p.x + PET_SMALL.width / 2 >= w.x && p.x + PET_SMALL.width / 2 <= w.x + w.width &&
+      p.y + PET_SMALL.height / 2 >= w.y && p.y + PET_SMALL.height / 2 <= w.y + w.height;
+  });
+  return visible ? { x: Math.round(p.x), y: Math.round(p.y) } : null;
+}
+
+let petPositionTimer = null;
+function rememberPetPosition(pet) {
+  if (!pet || pet.win.isDestroyed()) return;
+  // 一律換算成「沒有泡泡時的小視窗」位置（角色腳底中央不變）
+  const b = pet.win.getBounds();
+  const size = pet.expanded ? PET_BIG : PET_SMALL;
+  const anchorX = b.x + size.width / 2 + pet.shift;
+  const bottom = b.y + size.height;
+  if (!config.settings.petPositions) config.settings.petPositions = {};
+  config.settings.petPositions[pet.id] = { x: Math.round(anchorX - PET_SMALL.width / 2), y: Math.round(bottom - PET_SMALL.height) };
+  // 拖曳時事件很密，停手半秒後才寫入設定檔
+  if (petPositionTimer) clearTimeout(petPositionTimer);
+  petPositionTimer = setTimeout(saveConfig, 500);
+}
+
 // greeting：這位助手出現時要說的第一句話（不說就留空）
 function createPet(characterId, index, greeting) {
   const win = new BrowserWindow({
@@ -195,6 +224,7 @@ function createPet(characterId, index, greeting) {
     alwaysOnTop: true,
     hasShadow: false,
     skipTaskbar: index > 0,          // 工作列只留主助手一個圖示
+    icon: APP_ICON,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -213,7 +243,7 @@ function createPet(characterId, index, greeting) {
     win.webContents.send('pet:status', petStatusOf(sessionsOfPet(characterId)));
   });
 
-  const pos = defaultPetPosition(index);
+  const pos = savedPetPosition(characterId) || defaultPetPosition(index);
   win.setPosition(pos.x, pos.y);
   return pet;
 }
@@ -263,7 +293,8 @@ function createPanelWindow() {
     width: 440,
     height: 640,
     show: false,
-    title: '桌面大師工作室',
+    title: '桌面大師',
+    icon: APP_ICON,
     backgroundColor: '#f4f1e9',
     autoHideMenuBar: true,
     webPreferences: {
@@ -697,6 +728,7 @@ async function sendCompose(text, targetId, characterId) {
     // 3. Claude 閒著：用官方連結開到那段對話，把字貼進去送出
     let meta = null;
     try { meta = desktopSessionMeta().get(t.id); } catch (e) { /* 沒有桌面版資料 */ }
+    const clipboardBefore = clipboard.readText();
     clipboard.writeText(text);
     if (!meta || !/^local_[A-Za-z0-9-]+$/.test(meta.localId || '')) {
       focusClaudeWindow();
@@ -704,6 +736,8 @@ async function sendCompose(text, targetId, characterId) {
     }
     await shell.openExternal('claude://code/continue?session=' + meta.localId);
     const r = await compose.pasteIntoClaude();
+    // 成功貼上後把剪貼簿還給使用者（沒貼成功就留著，讓使用者自己貼）
+    if (r === 'sent') setTimeout(() => { try { clipboard.writeText(clipboardBefore); } catch (e) { /* ignore */ } }, 1500);
     say(r === 'sent' ? '送出了。' : '已經複製好了。請到 Claude 的輸入框按 Ctrl+V 貼上，再按 Enter 送出。');
   } catch (e) {
     console.error('送出訊息失敗:', e.message);
@@ -749,6 +783,53 @@ function remarkTickFor(characterId) {
   st.last = line;
   // 一般泡泡（不是 ai 通知）：有等你回答／完成的泡泡開著時不會蓋掉它
   speak({ text: line, duration: 9000 }, characterId);
+}
+
+// --- 空閒時，在場的助手彼此聊天 ---
+const CHAT_FIRST_IDLE_MS = 60 * 1000;                 // 大家都閒下來多久後開始第一段
+const CHAT_GAP_MS = [3 * 60 * 1000, 6 * 60 * 1000];   // 之後每隔 3～6 分鐘聊一段
+const CHAT_LINE_MS = 5000;                            // 一句話之後隔多久接下一句
+let chatLastBusyAt = Date.now();
+let chatNextAt = 0;
+let chatLastIndex = -1;
+let chatPlaying = false;
+
+function anySessionBusy() {
+  return [].concat(...(aiSnapshot || []).map((p) => p.sessions || []))
+    .some((s) => s.status === 'working' || s.status === 'waiting');
+}
+
+function chatTick() {
+  const t = Date.now();
+  if (anySessionBusy()) { chatLastBusyAt = t; chatNextAt = 0; return; }
+  if (config.settings.aiRemarks === false || chatPlaying || pets.size < 2) return;
+  if (!chatNextAt) chatNextAt = chatLastBusyAt + CHAT_FIRST_IDLE_MS;
+  if (t < chatNextAt) return;
+  const chat = pickChat([...pets.keys()], { avoid: chatLastIndex });
+  if (!chat) { chatNextAt = t + CHAT_GAP_MS[0]; return; }
+  // 要聊的人裡有誰的泡泡還開著（例如「完成了」還沒按確認）：半分鐘後再看看
+  if (chat.lines.some(([who]) => pets.get(who) && pets.get(who).expanded)) { chatNextAt = t + 30 * 1000; return; }
+  chatNextAt = t + CHAT_GAP_MS[0] + Math.random() * (CHAT_GAP_MS[1] - CHAT_GAP_MS[0]);
+  playChat(chat, false);
+}
+
+// force：開發測試用（啟動參數 --test-chat），不管有沒有對話在忙都把一段聊完
+function playChat(chat, force) {
+  chatLastIndex = chat.index;
+  chatPlaying = true;
+  const sayLine = (i) => {
+    // 中途有對話開始忙了、或有人離場，就不聊了
+    if (i >= chat.lines.length || (!force && anySessionBusy()) || !chat.lines.every(([who]) => pets.has(who))) {
+      chatPlaying = false;
+      return;
+    }
+    const [who, text] = chat.lines[i];
+    // 一般泡泡（不是 ai 通知）：有等你回答／完成的泡泡開著時不會蓋掉它
+    // 泡泡在下一句出現前就收起來，兩位站得近時才不會疊在一起
+    speak({ text, duration: CHAT_LINE_MS - 500 }, who);
+    setTimeout(() => sayLine(i + 1), CHAT_LINE_MS);
+  };
+  sayLine(0);
 }
 
 // 角色頭上的小狀態標籤：等你 > 進行中 > 剛完成（10 分鐘內）；都沒有就不顯示
@@ -846,6 +927,7 @@ function registerIpc() {
     const b = pet.win.getBounds();
     const size = pet.expanded ? PET_BIG : PET_SMALL;
     pet.win.setBounds({ x: Math.round(b.x + dx), y: Math.round(b.y + dy), width: size.width, height: size.height });
+    rememberPetPosition(pet);
   });
 
   // 泡泡出現／消失 → 展開／收起桌寵視窗
@@ -1070,6 +1152,7 @@ function registerIpc() {
       characterId: currentCharacterId(),
       aiWatch: s.aiWatch !== false,
       aiRemarks: s.aiRemarks !== false,
+      aiReplyAfterDone: s.aiReplyAfterDone !== false,
       // 提示 UI：哪些值被環境變數覆蓋
       env: {
         apiKey: !!process.env.OPENAI_API_KEY,
@@ -1097,7 +1180,8 @@ function registerIpc() {
         : (Number(incoming.quoteIntervalMinutes) || 20),
       characterId: nextCharacter,
       aiWatch: incoming.aiWatch !== false,
-      aiRemarks: incoming.aiRemarks !== false
+      aiRemarks: incoming.aiRemarks !== false,
+      aiReplyAfterDone: incoming.aiReplyAfterDone !== false
     };
     saveConfig();
     setupReminder();
@@ -1298,6 +1382,11 @@ app.whenReady().then(() => {
   touchAlive();
   setInterval(touchAlive, 5000);
   setInterval(remarkTick, 10000);
+  setInterval(chatTick, 10000);
+  // 開發測試：啟動 8 秒後直接播一段閒聊（不必等大家都閒下來）
+  if (process.argv.includes('--test-chat')) {
+    setTimeout(() => { const c = pickChat([...pets.keys()]); if (c) playChat(c, true); }, 8000);
+  }
 
   // 第一次使用（還沒追蹤任何對話）：自動打開面板，並由桌寵說明怎麼操作
   if (!config.settings.welcomed && !aiSessions().length && !aiProjects().length) {
