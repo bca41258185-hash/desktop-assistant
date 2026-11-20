@@ -196,6 +196,36 @@ const setApiKey = document.getElementById('setApiKey');
 const setReminder = document.getElementById('setReminder');
 const envHint = document.getElementById('envHint');
 const saveStatus = document.getElementById('saveStatus');
+const charPicker = document.getElementById('charPicker');
+
+// 目前選用的大師（供儲存設定時一併帶上）
+let selectedCharId = (window.CHAR_DEFAULT || 'ando');
+
+// 繪製大師選擇器（每張卡 = 縮圖 + 繁中名 + 英文名）
+function renderCharPicker() {
+  const chars = window.CHARACTERS || {};
+  const order = window.CHAR_ORDER || Object.keys(chars);
+  charPicker.innerHTML = '';
+  order.forEach((id) => {
+    const c = chars[id];
+    if (!c) return;
+    const card = document.createElement('div');
+    card.className = 'char-card' + (id === selectedCharId ? ' selected' : '');
+    card.dataset.id = id;
+    card.innerHTML =
+      `<div class="char-thumb">${c.svg}</div>` +
+      `<div class="char-name-zh">${c.nameZh}</div>` +
+      `<div class="char-name-en">${c.nameEn}</div>`;
+    card.addEventListener('click', async () => {
+      if (selectedCharId === id) return;
+      selectedCharId = id;
+      charPicker.querySelectorAll('.char-card').forEach((el) =>
+        el.classList.toggle('selected', el.dataset.id === id));
+      await window.api.setCharacter(id);   // 立即切換桌寵並持久化
+    });
+    charPicker.appendChild(card);
+  });
+}
 
 async function loadSettings() {
   const s = await window.api.getSettings();
@@ -204,6 +234,8 @@ async function loadSettings() {
   setModel.value = s.model;
   setApiKey.value = s.apiKey;
   setReminder.value = s.reminderIntervalMinutes;
+  selectedCharId = s.characterId || selectedCharId;
+  renderCharPicker();
 
   const overrides = [];
   if (s.env.apiKey) overrides.push('OPENAI_API_KEY');
@@ -220,7 +252,8 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
     baseUrl: setBaseUrl.value.trim(),
     model: setModel.value.trim(),
     apiKey: setApiKey.value,
-    reminderIntervalMinutes: Number(setReminder.value) || 0
+    reminderIntervalMinutes: Number(setReminder.value) || 0,
+    characterId: selectedCharId
   });
   saveStatus.textContent = '已儲存 ✓';
   setTimeout(() => (saveStatus.textContent = ''), 2000);

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>六位大師預覽</title>
+  <style>
+    body{
+      margin:0;
+      background:#f4f1e9;
+      background-image:linear-gradient(rgba(120,128,110,.06) 1px,transparent 1px),
+                       linear-gradient(90deg,rgba(120,128,110,.06) 1px,transparent 1px);
+      background-size:22px 22px;
+      font-family:"Noto Sans TC","Noto Sans CJK TC","Microsoft JhengHei",sans-serif;
+      color:#2d2c28;
+      padding:28px 28px 40px;
+    }
+    h1{font-size:20px;letter-spacing:2px;margin:0 0 20px;font-weight:700}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:980px}
+    .card{background:#faf8f1;border:1px solid #d9d3c4;border-radius:10px;padding:14px;text-align:center}
+    .art{height:230px;display:flex;align-items:flex-end;justify-content:center}
+    .art svg{width:200px;height:225px}
+    .nm{font-size:17px;font-weight:700;margin-top:6px}
+    .nm span{font-size:12px;color:#8c8676;font-weight:400;margin-left:6px}
+    .gr{font-size:12px;color:#6b6a62;margin-top:4px;line-height:1.5}
+  </style>
+</head>
+<body>
+  <h1>桌面大師 — 六位普立茲克建築大師 Q 版造型</h1>
+  <div class="grid" id="grid"></div>
+  <script src="../renderer/characters.js"></script>
+  <script>
+    const grid = document.getElementById('grid');
+    (window.CHAR_ORDER || []).forEach((id) => {
+      const c = window.CHARACTERS[id];
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML =
+        `<div class="art">${c.svg}</div>` +
+        `<div class="nm">${c.nameZh}<span>${c.nameEn}</span></div>` +
+        `<div class="gr">「${c.greeting}」</div>`;
+      grid.appendChild(card);
+    });
+  </script>
+</body>
+</html>

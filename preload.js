@@ -8,6 +8,10 @@ contextBridge.exposeInMainWorld('api', {
   movePetBy: (dx, dy) => ipcRenderer.send('pet:move-by', { dx, dy }),
   togglePanel: () => ipcRenderer.send('panel:toggle'),
   onSpeak: (cb) => ipcRenderer.on('pet:speak', (_e, text) => cb(text)),
+  // 角色與姿勢
+  onCharacter: (cb) => ipcRenderer.on('pet:character', (_e, payload) => cb(payload)),
+  onPose: (cb) => ipcRenderer.on('pet:pose', (_e, pose) => cb(pose)),
+  setCharacter: (id) => ipcRenderer.invoke('character:set', id),
 
   // --- 資料夾監看 ---
   pickFolders: () => ipcRenderer.invoke('folders:pick'),

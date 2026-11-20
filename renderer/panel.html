@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
-  <title>桌面助手</title>
+  <title>桌面大師工作室</title>
   <link rel="stylesheet" href="panel.css" />
 </head>
 <body>
@@ -55,7 +55,11 @@
 
   <!-- 設定 -->
   <section class="panel-view" id="view-settings">
-    <h2>AI 供應商設定</h2>
+    <h2>選擇你的大師</h2>
+    <p class="hint">私人用的 Q 版致敬造型，點選即可即時換角色。</p>
+    <div class="char-picker" id="charPicker"></div>
+
+    <h2 class="mt">AI 供應商設定</h2>
     <label class="field">
       供應商
       <select id="setProvider">
@@ -92,6 +96,7 @@
     </p>
   </section>
 
+  <script src="characters.js"></script>
   <script src="panel.js"></script>
 </body>
 </html>

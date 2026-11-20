@@ -1,11 +1,12 @@
 // 主行程：負責視窗、IPC、資料夾監看、設定讀寫、提醒、AI 呼叫。
 // Main process: windows, IPC, folder watching, config I/O, reminders, AI calls.
 
-const { app, BrowserWindow, ipcMain, dialog, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
 const { createProvider } = require('./providers');
+const { CHARACTERS, DEFAULT_ID } = require('./renderer/characters');
 
 let petWindow = null;
 let panelWindow = null;
@@ -25,9 +26,16 @@ const CONFIG_DEFAULTS = {
     apiKey: '',
     baseUrl: '',
     model: '',
-    reminderIntervalMinutes: 30
+    reminderIntervalMinutes: 30,
+    characterId: DEFAULT_ID        // 目前選用的大師（'ando' | 'gehry' | ...）
   }
 };
+
+// 回傳有效且存在的角色 id（避免設定檔殘留無效值）
+function currentCharacterId() {
+  const id = config && config.settings && config.settings.characterId;
+  return CHARACTERS[id] ? id : DEFAULT_ID;
+}
 
 function configPath() {
   return path.join(app.getPath('userData'), 'config.json');
@@ -71,8 +79,8 @@ function effectiveSettings() {
 // ---------------------------------------------------------------------------
 function createPetWindow() {
   petWindow = new BrowserWindow({
-    width: 220,
-    height: 300,
+    width: 240,
+    height: 340,
     frame: false,
     transparent: true,
     resizable: false,
@@ -89,27 +97,39 @@ function createPetWindow() {
   petWindow.loadFile(path.join(__dirname, 'renderer', 'pet.html'));
   petWindow.setAlwaysOnTop(true, 'screen-saver');
 
+  // 載入完成後，告知桌寵目前選用的大師並顯示其問候語
+  petWindow.webContents.on('did-finish-load', () => {
+    const id = currentCharacterId();
+    const c = CHARACTERS[id];
+    petWindow.webContents.send('pet:character', { id, greeting: c.greeting });
+  });
+
   // 預設放在主螢幕右下角
   const { workArea } = screen.getPrimaryDisplay();
   petWindow.setPosition(
-    workArea.x + workArea.width - 240,
-    workArea.y + workArea.height - 320
+    workArea.x + workArea.width - 260,
+    workArea.y + workArea.height - 360
   );
 }
 
 function createPanelWindow() {
   panelWindow = new BrowserWindow({
     width: 440,
-    height: 620,
+    height: 640,
     show: false,
-    title: '桌面助手',
-    backgroundColor: '#ffffff',
+    title: '桌面大師工作室',
+    backgroundColor: '#f4f1e9',
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false
     }
   });
+
+  // 隱藏原生英文選單列（File / Edit / View ...），Windows / Linux 皆適用
+  panelWindow.setMenuBarVisibility(false);
+  panelWindow.removeMenu();
 
   panelWindow.loadFile(path.join(__dirname, 'renderer', 'panel.html'));
 
@@ -138,6 +158,24 @@ function togglePanel() {
 function speak(text) {
   if (petWindow && !petWindow.isDestroyed()) {
     petWindow.webContents.send('pet:speak', text);
+  }
+}
+
+// 讓桌寵切換姿勢：'idle' | 'think' | 'happy'
+function setPetPose(pose) {
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.webContents.send('pet:pose', pose);
+  }
+}
+
+// 切換桌寵角色並播放該大師的問候語
+function setPetCharacter(id, withGreeting) {
+  if (petWindow && !petWindow.isDestroyed()) {
+    const c = CHARACTERS[id];
+    petWindow.webContents.send('pet:character', {
+      id,
+      greeting: withGreeting && c ? c.greeting : undefined
+    });
   }
 }
 
@@ -259,6 +297,7 @@ function registerIpc() {
       baseUrl: s.baseUrl || '',
       model: s.model || '',
       reminderIntervalMinutes: Number(s.reminderIntervalMinutes) || 30,
+      characterId: currentCharacterId(),
       // 提示 UI：哪些值被環境變數覆蓋
       env: {
         apiKey: !!process.env.OPENAI_API_KEY,
@@ -269,17 +308,32 @@ function registerIpc() {
   });
 
   ipcMain.handle('config:save-settings', (e, incoming) => {
+    const nextCharacter = CHARACTERS[incoming.characterId]
+      ? incoming.characterId
+      : currentCharacterId();
+    const changedCharacter = nextCharacter !== currentCharacterId();
     config.settings = {
       ...config.settings,
       provider: incoming.provider || 'openai',
       apiKey: incoming.apiKey || '',
       baseUrl: incoming.baseUrl || '',
       model: incoming.model || '',
-      reminderIntervalMinutes: Number(incoming.reminderIntervalMinutes) || 30
+      reminderIntervalMinutes: Number(incoming.reminderIntervalMinutes) || 30,
+      characterId: nextCharacter
     };
     saveConfig();
     setupReminder();
+    if (changedCharacter) setPetCharacter(nextCharacter, true);
     return { ok: true };
+  });
+
+  // 切換大師：立即更新桌寵（不需重啟）、持久化、播放問候語
+  ipcMain.handle('character:set', (e, id) => {
+    if (!CHARACTERS[id]) return { ok: false };
+    config.settings.characterId = id;
+    saveConfig();
+    setPetCharacter(id, true);
+    return { ok: true, id };
   });
 
   // --- 任務 ---
@@ -303,6 +357,11 @@ function registerIpc() {
     if (t) {
       t.done = !t.done;
       saveConfig();
+      // 勾選「完成」時（非取消完成）讓大師開心一下
+      if (t.done) {
+        setPetPose('happy');
+        speak('完成一項了，好看。');
+      }
     }
     return config.tasks;
   });
@@ -317,24 +376,34 @@ function registerIpc() {
   ipcMain.handle('chat:send', async (e, { message, withContext }) => {
     const s = effectiveSettings();
     const provider = createProvider(s.provider, s);
+    const c = CHARACTERS[currentCharacterId()];
     let userContent = String(message || '');
     if (withContext) {
       userContent =
         `【最近的資料夾變更】\n${changesSummary()}\n\n【使用者訊息】\n${userContent}`;
     }
+
+    // 進入思考姿勢
+    setPetPose('think');
+    const systemPrompt =
+      `你是「大師」，一位沉穩、有涵養的建築工作室導師。` +
+      `此刻你以 ${c.nameZh}（${c.nameEn}）的風格與語氣與使用者對話。` +
+      `請一律使用繁體中文，用字精煉、文化而不賣弄，不使用網路流行語或誇張口氣，` +
+      `像一位受人敬重的建築前輩，給予簡潔、到位而帶有工作室氣息的回應。` +
+      `避免逐字引用任何名人名言，以自己的語氣表達即可。`;
+
     try {
       const reply = await provider.chat([
-        {
-          role: 'system',
-          content: '你是一個桌面助理寵物，請一律用繁體中文、簡潔友善地回答使用者。'
-        },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent }
       ]);
       // 氣泡只放簡短版，完整內容回面板
+      setPetPose('idle');
       speak(reply.length > 60 ? reply.slice(0, 60) + '…' : reply);
       return { ok: true, reply };
     } catch (err) {
-      speak('抱歉，我現在無法回覆 😥');
+      setPetPose('idle');
+      speak('抱歉，此刻難以回應。');
       return { ok: false, error: err.message };
     }
   });
@@ -345,6 +414,8 @@ function registerIpc() {
 // ---------------------------------------------------------------------------
 app.whenReady().then(() => {
   config = loadConfig();
+  // 移除整個應用程式的原生選單（避免出現英文 File/Edit/View... 選單列）
+  Menu.setApplicationMenu(null);
   registerIpc();
   createPetWindow();
   createPanelWindow();
