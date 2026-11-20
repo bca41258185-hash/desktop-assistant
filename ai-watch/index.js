@@ -414,6 +414,9 @@ function createAiWatcher(options) {
       apply(s, { type: 'waiting', message: m ? `需要你允許使用 ${m[1]}` : '需要你允許' }, false, at);
     } else if (ev.event === 'Stop') {
       apply(s, { type: 'turnEnd' }, false, at);
+      // 鉤子正在等使用者回覆（做完後可在泡泡打字）：另外通知桌寵開放輸入
+      // （「完成」通常已經由紀錄檔先發過了，所以不能只靠 done 事件帶出去）
+      if (ev.request_id) onEvent({ kind: 'reply-open', session: publicSession(s), request: { id: String(ev.request_id) } });
     } else if (ev.event === 'PermissionRequest' && ev.request_id) {
       // Claude 正在問「可以用這個工具嗎」，而且鉤子在等桌寵上的回答
       let req = {};

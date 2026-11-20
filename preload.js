@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('api', {
   showPetMenu: () => ipcRenderer.send('pet:menu'),
   focusClaude: () => ipcRenderer.send('claude:focus'),
   answerChoice: (requestId, choice, text) => ipcRenderer.send('pet:choice', { requestId, choice, text }),
+  notifyTyping: (requestId) => ipcRenderer.send('pet:typing', requestId),
+  onInputExpire: (cb) => ipcRenderer.on('pet:input-expire', (_e, id) => cb(id)),
   onDismissReply: (cb) => ipcRenderer.on('pet:dismiss-reply', () => cb()),
   onSpeak: (cb) => ipcRenderer.on('pet:speak', (_e, text) => cb(text)),
   // 角色與姿勢

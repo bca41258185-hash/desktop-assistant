@@ -376,6 +376,7 @@ function clip(text, n) {
 
 // --- 在泡泡上回答 Claude 的權限詢問 ---
 const pendingPermissions = new Set();   // 還在等使用者回答的請求 id
+const pendingReplies = new Set();       // 做完後等使用者回覆的請求 id
 const pendingQuestions = new Map();     // 請求 id → { questions, index, answers }（Claude 的選擇題，一題一題問）
 
 function askNextQuestion(id) {
@@ -424,6 +425,27 @@ function answerPermission(id, choice, answers, message) {
 }
 
 function onAiEvent({ kind, session: s, image, fromUser, request }) {
+  if (kind === 'reply-open') {
+    // Claude 做完了，而且鉤子還在等：完成泡泡多一格輸入框，打字就把話交給 Claude 繼續做
+    const id = request.id;
+    permLog(`${id} reply-open`);
+    pendingPermissions.add(id);
+    pendingReplies.add(id);
+    setPetPose('happy');
+    speak({
+      text: `完成了：${clip(s.lastText, 34) || s.lastAction}`,
+      ai: true, sticky: true, action: 'confirm', requestId: id, inputPlaceholder: '回覆 Claude…'
+    });
+    // 20 秒內沒有開始打字，鉤子會自己結束；輸入框也跟著收起來
+    setTimeout(() => {
+      if (!pendingReplies.has(id)) return;
+      if (fs.existsSync(path.join(aiHooksDir(), 'permission', id + '.hold'))) return;
+      pendingReplies.delete(id);
+      pendingPermissions.delete(id);
+      if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:input-expire', id);
+    }, 19000);
+    return;
+  }
   if (kind === 'permission') {
     permLog(`${request.id} shown tool=${request.tool}`);
     pendingPermissions.add(request.id);
@@ -497,7 +519,7 @@ function onAiUpdate(list) {
     if (st.cls !== 'waiting') {
       petWindow.webContents.send('pet:dismiss-reply');
       // 已經不在等了（例如你在 Claude 裡回答了）：放掉還在等的鉤子
-      [...pendingPermissions].forEach((id) => answerPermission(id, 'pass'));
+      [...pendingPermissions].filter((id) => !pendingReplies.has(id)).forEach((id) => answerPermission(id, 'pass'));
     }
   }
   if (panelWindow && !panelWindow.isDestroyed()) {
@@ -527,7 +549,11 @@ function writeWatchProjects() {
     fs.mkdirSync(aiHooksDir(), { recursive: true });
     const on = config.settings.aiWatch !== false;
     // answer：允許鉤子等使用者在泡泡上按「允許／拒絕」
-    const data = { projects: on ? aiProjects() : [], sessions: on ? aiSessions().map((s) => s.id) : [], answer: on };
+    // replyAfterDone：Claude 做完後先等一下，讓使用者可以在泡泡上打字回覆
+    const data = {
+      projects: on ? aiProjects() : [], sessions: on ? aiSessions().map((s) => s.id) : [],
+      answer: on, replyAfterDone: on && config.settings.aiReplyAfterDone !== false
+    };
     fs.writeFileSync(path.join(aiHooksDir(), 'watch-projects.json'), JSON.stringify(data, null, 2));
   } catch (e) {
     console.error('寫入監看專案清單失敗:', e.message);
@@ -576,9 +602,19 @@ function registerIpc() {
   ipcMain.on('panel:toggle', () => togglePanel());
   ipcMain.on('pet:menu', () => showPetMenu());
   ipcMain.on('claude:focus', () => focusClaudeWindow());
+  // 使用者開始在泡泡上打字：請鉤子繼續等
+  ipcMain.on('pet:typing', (e, requestId) => {
+    if (!pendingReplies.has(requestId)) return;
+    try { fs.writeFileSync(path.join(aiHooksDir(), 'permission', requestId + '.hold'), '1'); } catch (err) { /* ignore */ }
+  });
+
   ipcMain.on('pet:choice', (e, { requestId, choice, text }) => {
     permLog(`${requestId} clicked ${choice}`);
     const typed = choice === 'text' ? String(text || '').trim().slice(0, 2000) : '';
+    // 做完後的回覆：有打字就交給 Claude 繼續；只是點泡泡確認就放掉鉤子
+    if (pendingReplies.delete(requestId)) {
+      return answerPermission(requestId, typed ? 'reply' : 'pass', null, typed);
+    }
     // Claude 的選擇題：記下這題的答案，還有下一題就繼續問，問完一次回覆
     const st = pendingQuestions.get(requestId);
     if (st) {

@@ -44,6 +44,18 @@ if (bubbleInputEl) {
     if (window.api.answerChoice) window.api.answerChoice(id, 'text', text);
     hideBubble();
   });
+  // 一開始打字（或點進輸入框）就通知主行程：請鉤子繼續等
+  const typing = () => { const id = bubbleInputEl.dataset.requestId; if (id && window.api.notifyTyping) window.api.notifyTyping(id); };
+  bubbleTextInput.addEventListener('focus', typing);
+  bubbleTextInput.addEventListener('input', typing);
+  // 等太久、鉤子已經結束：把輸入框收起來（泡泡本身留著）
+  if (window.api.onInputExpire) {
+    window.api.onInputExpire((id) => {
+      if (bubbleInputEl.dataset.requestId !== id) return;
+      bubbleInputEl.hidden = true;
+      bubbleInputEl.dataset.requestId = '';
+    });
+  }
   // 中文輸入法選字時的 Enter 不算送出
   bubbleTextInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.isComposing) e.stopPropagation(); });
 }
@@ -104,7 +116,7 @@ function showBubble(payload) {
   }
   // 打字回覆：選項之外也可以自己輸入
   if (bubbleInputEl) {
-    const canType = stickyAction === 'choice' && !!payload.inputPlaceholder;
+    const canType = sticky && !!payload.inputPlaceholder && !!payload.requestId;
     bubbleInputEl.hidden = !canType;
     bubbleInputEl.dataset.requestId = canType ? payload.requestId : '';
     bubbleTextInput.value = '';
@@ -137,6 +149,9 @@ function hideBubble() {
 bubbleEl.addEventListener('click', () => {
   if (!stickyOpen || stickyAction === 'choice') return;   // 選擇題要點選項才算
   const action = stickyAction;
+  // 完成泡泡若還開著回覆框：點泡泡確認 = 不回覆，讓 Claude 馬上結束等待
+  const rid = bubbleInputEl ? bubbleInputEl.dataset.requestId : '';
+  if (rid && window.api.answerChoice) window.api.answerChoice(rid, 'pass');
   hideBubble();
   if (action === 'reply' && window.api.focusClaude) window.api.focusClaude();
 });

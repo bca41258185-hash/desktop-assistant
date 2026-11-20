@@ -394,7 +394,7 @@ test('安裝鉤子：保留原有設定與其他鉤子、先備份、重複安�
     const ours = s.hooks[ev].flatMap((g) => g.hooks).filter((h) => h.command.includes('hooks/claude-hook.js'));
     assert.strictEqual(ours.length, 1);
     assert.ok(ours[0].command.includes('/new/place/'));
-    assert.strictEqual(ours[0].timeout, ev === 'PermissionRequest' ? 660 : 5);
+    assert.strictEqual(ours[0].timeout, (ev === 'PermissionRequest' || ev === 'Stop') ? 660 : 5);
   }
   assert.strictEqual(installer.status(file).installed, true);
 
@@ -632,4 +632,42 @@ test('選擇題（AskUserQuestion）：單選題交給桌寵，答案放回 upda
 
   const multi = { questions: [Object.assign({}, input.questions[0], { multiSelect: true })] };
   assert.strictEqual(await ask(multi, {}), '', '複選題：不輸出、不等待');
+});
+
+test('做完後回覆：Stop 鉤子等桌寵的回覆 → 以 decision:block 把訊息交給 Claude；點確認（pass）或沒開啟 → 不輸出', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-stop-'));
+  const setWatch = (extra) => fs.writeFileSync(path.join(dir, 'watch-projects.json'), JSON.stringify(Object.assign({ projects: [], sessions: ['abc'], answer: true }, extra)));
+  fs.writeFileSync(path.join(dir, 'app-alive'), 'x');
+  const stop = (answer) => new Promise((resolve) => {
+    const started = Date.now();
+    const p = spawn(process.execPath, [HOOK, dir]);
+    let out = '';
+    p.stdout.on('data', (d) => { out += d; });
+    p.on('close', () => { clearInterval(timer); resolve({ out, ms: Date.now() - started }); });
+    p.stdin.end(JSON.stringify({ hook_event_name: 'Stop', cwd: path.resolve('/x'), session_id: 'abc', transcript_path: '/a.jsonl' }));
+    const pdir = path.join(dir, 'permission');
+    const timer = setInterval(() => {
+      if (!answer) return;
+      let names = [];
+      try { names = fs.readdirSync(pdir).filter((n) => n.endsWith('.json') && !n.endsWith('.answer.json')); } catch (e) { return; }
+      if (!names.length) return;
+      clearInterval(timer);
+      fs.writeFileSync(path.join(pdir, names[0].replace(/[.]json$/, '.answer.json')), JSON.stringify(answer));
+    }, 50);
+  });
+
+  setWatch({ replyAfterDone: true });
+  let r = await stop({ choice: 'reply', message: '再幫我加一個按鈕' });
+  const o = JSON.parse(r.out);
+  assert.strictEqual(o.decision, 'block');
+  assert.ok(o.reason.includes('再幫我加一個按鈕'));
+
+  r = await stop({ choice: 'pass' });
+  assert.strictEqual(r.out, '');
+
+  setWatch({});                               // 沒開啟「做完後回覆」：立刻結束，不等待
+  r = await stop(null);
+  assert.strictEqual(r.out, '');
+  assert.ok(r.ms < 3000);
+  assert.deepStrictEqual(fs.readdirSync(path.join(dir, 'permission')), []);
 });

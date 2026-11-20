@@ -24,6 +24,7 @@ const path = require('path');
 // 最多等使用者 10 分鐘。等待期間 Claude 自己的詢問畫面照常可用（兩邊誰先回答算誰的），
 // 桌寵發現對話不再等待時也會主動放掉，所以等久一點不會卡住任何東西。
 const PERMISSION_WAIT_MS = 10 * 60 * 1000;
+const STOP_BASE_WAIT_MS = 20 * 1000;    // 回合結束後先等 20 秒，看使用者要不要在泡泡上回覆
 const MAX_BYTES = 1024 * 1024;   // 事件檔超過 1MB 就換新，避免無限成長
 
 function norm(p) {
@@ -85,12 +86,24 @@ function main(raw) {
     ev.tool_name = String(input.tool_name || '');
   }
 
+  // 回合結束：使用者開了「做完後可在泡泡回覆」且桌寵開著時，留一個回覆請求給桌寵
+  const isReply = input.hook_event_name === 'Stop' && watch && watch.answer === true && watch.replyAfterDone === true && appAlive(dir);
+  if (isReply) {
+    const id = `${Date.now()}-${process.pid}`;
+    const pdir = path.join(dir, 'permission');
+    fs.mkdirSync(pdir, { recursive: true });
+    reqFile = path.join(pdir, id + '.json');
+    fs.writeFileSync(reqFile, JSON.stringify({ id, kind: 'stop' }));
+    ev.request_id = id;
+  }
+
   const file = path.join(dir, 'hook-events.jsonl');
   try {
     if (fs.statSync(file).size > MAX_BYTES) fs.renameSync(file, file + '.old');
   } catch (e) { /* 檔案還不存在 */ }
   fs.appendFileSync(file, JSON.stringify(ev) + '\n');
 
+  if (isReply) return waitForReply(reqFile);
   return isPermission ? waitForAnswer(reqFile, input.tool_input) : null;
 }
 
@@ -152,6 +165,39 @@ function waitForAnswer(reqFile, toolInput) {
         return finish({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'deny', message: typeof ans.message === 'string' && ans.message ? '使用者沒有允許這一步，並說：' + ans.message : '使用者在桌面大師上按了「拒絕」。' } } }, 'deny');
       }
       if (ans || Date.now() > deadline) return finish(null, ans ? 'pass' : 'timeout');
+      setTimeout(tick, 200);
+    };
+    tick();
+  });
+}
+
+// 回合結束（Stop）後短暫等一下：使用者若在泡泡上打字，就把那句話交給 Claude 讓它繼續做。
+//  - 先等 STOP_BASE_WAIT_MS；這段時間內使用者開始打字（桌寵寫入 <id>.hold）才會繼續等，最多 10 分鐘。
+//  - 沒人理就什麼都不輸出，Claude 照常結束。
+function waitForReply(reqFile) {
+  const ansFile = reqFile.replace(/\.json$/, '.answer.json');
+  const holdFile = reqFile.replace(/\.json$/, '.hold');
+  const started = Date.now();
+  return new Promise((resolve) => {
+    const finish = (out, why) => {
+      try {
+        fs.appendFileSync(path.join(path.dirname(path.dirname(reqFile)), 'permission-debug.log'),
+          new Date().toISOString() + ' hook ' + path.basename(reqFile, '.json') + ' stop:' + why + ' waited=' + Math.round((Date.now() - started) / 1000) + 's\n');
+      } catch (e) { /* ignore */ }
+      for (const f of [reqFile, ansFile, holdFile]) { try { fs.unlinkSync(f); } catch (e) { /* ignore */ } }
+      if (out) process.stdout.write(JSON.stringify(out));
+      resolve();
+    };
+    const tick = () => {
+      let ans = null;
+      try { ans = JSON.parse(fs.readFileSync(ansFile, 'utf8')); } catch (e) { /* 還沒回答 */ }
+      if (ans && ans.choice === 'reply' && typeof ans.message === 'string' && ans.message.trim()) {
+        return finish({ decision: 'block', reason: '使用者透過桌面大師（桌寵）傳來新的訊息，請當成使用者的下一則訊息來處理：\n' + ans.message.trim() }, 'reply');
+      }
+      if (ans) return finish(null, 'pass');
+      const waited = Date.now() - started;
+      const holding = fs.existsSync(holdFile);
+      if (waited > PERMISSION_WAIT_MS || (!holding && waited > STOP_BASE_WAIT_MS)) return finish(null, 'timeout');
       setTimeout(tick, 200);
     };
     tick();
