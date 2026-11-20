@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('api', {
   movePetBy: (dx, dy) => ipcRenderer.send('pet:move-by', { dx, dy }),
   togglePanel: () => ipcRenderer.send('panel:toggle'),
   showPetMenu: () => ipcRenderer.send('pet:menu'),
+  focusClaude: () => ipcRenderer.send('claude:focus'),
+  onDismissReply: (cb) => ipcRenderer.on('pet:dismiss-reply', () => cb()),
   onSpeak: (cb) => ipcRenderer.on('pet:speak', (_e, text) => cb(text)),
   // 角色與姿勢
   onCharacter: (cb) => ipcRenderer.on('pet:character', (_e, payload) => cb(payload)),

@@ -231,22 +231,31 @@ html, body {
 .bubble.has-img .bubble-text { font-size: 26px; }
 .bubble.has-attr { max-width: 500px; padding-bottom: 8px; }
 
-/* 需要確認的泡泡（完成通知）：可以點，帶一顆「確認」鈕 */
-.bubble.sticky { pointer-events: auto; }
-.bubble-ok {
-  display: block;
-  margin: 8px 0 2px auto;
-  padding: 4px 22px;
-  font: inherit;
-  font-size: 22px;
-  color: #fff;
-  background: #3a3a36;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+/* 等你點的泡泡：整個泡泡可以點，用發光效果表示「還在等你」 */
+.bubble.sticky { pointer-events: auto; cursor: pointer; }
+.bubble.sticky.confirm {
+  border-color: #6fae7c;
+  animation: glowDone 2.2s ease-in-out infinite;
 }
-.bubble-ok:hover { background: #55554f; }
-.bubble-ok[hidden] { display: none; }
+.bubble.sticky.reply {
+  border-color: #e0a84a;
+  background-color: #fff8e6;
+  animation: glowReply 1.3s ease-in-out infinite;
+}
+.bubble.sticky:hover { filter: brightness(1.03); }
+@keyframes glowDone {
+  0%, 100% { box-shadow: 0 5px 16px rgba(60, 60, 50, 0.22), 0 0 0 2px rgba(111, 174, 124, 0.35); }
+  50%      { box-shadow: 0 5px 16px rgba(60, 60, 50, 0.22), 0 0 0 5px rgba(111, 174, 124, 0.75), 0 0 26px rgba(111, 174, 124, 0.8); }
+}
+@keyframes glowReply {
+  0%, 100% { box-shadow: 0 5px 16px rgba(60, 60, 50, 0.22), 0 0 0 2px rgba(224, 168, 74, 0.4); }
+  50%      { box-shadow: 0 5px 16px rgba(60, 60, 50, 0.22), 0 0 0 6px rgba(224, 168, 74, 0.85), 0 0 30px rgba(224, 168, 74, 0.9); }
+}
+.bubble-hint {
+  display: block; margin-top: 4px; text-align: right;
+  font-size: 15px; color: #7a7a70;
+}
+.bubble-hint[hidden] { display: none; }
 
 /* 折角 */
 .bubble::before {

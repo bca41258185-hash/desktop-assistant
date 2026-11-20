@@ -30,9 +30,10 @@ function setPose(pose) {
 const bubbleTextEl = bubbleEl.querySelector('.bubble-text') || bubbleEl;
 const bubbleAttrEl = bubbleEl.querySelector('.bubble-attr');
 const bubbleImgEl = bubbleEl.querySelector('.bubble-img');
-const bubbleOkEl = document.getElementById('bubbleOk');
+const bubbleHintEl = document.getElementById('bubbleHint');
 let bubbleTimer = null;
 let stickyOpen = false;
+let stickyAction = '';   // 'confirm'：點一下就收起；'reply'：點一下跳到 Claude 去回覆
 function showBubble(payload) {
   let text = '';
   let attr = '';
@@ -65,8 +66,14 @@ function showBubble(payload) {
   // 先請主行程把視窗展開，再顯示泡泡；泡泡消失後收回，只留角色大小
   if (window.api.setBubbleOpen) window.api.setBubbleOpen(true);
   bubbleEl.classList.add('show');
+  stickyAction = sticky ? (payload.action === 'reply' ? 'reply' : 'confirm') : '';
   bubbleEl.classList.toggle('sticky', sticky);
-  if (bubbleOkEl) bubbleOkEl.hidden = !sticky;
+  bubbleEl.classList.toggle('confirm', stickyAction === 'confirm');
+  bubbleEl.classList.toggle('reply', stickyAction === 'reply');
+  if (bubbleHintEl) {
+    bubbleHintEl.textContent = stickyAction === 'reply' ? '點一下去回覆' : '點一下確認';
+    bubbleHintEl.hidden = !sticky;
+  }
   stickyOpen = sticky;
   if (bubbleTimer) clearTimeout(bubbleTimer);
   bubbleTimer = sticky ? null : setTimeout(hideBubble, duration);
@@ -76,11 +83,22 @@ function hideBubble() {
   stickyOpen = false;
   if (bubbleTimer) clearTimeout(bubbleTimer);
   bubbleTimer = null;
-  bubbleEl.classList.remove('show', 'sticky');
-  if (bubbleOkEl) bubbleOkEl.hidden = true;
+  stickyAction = '';
+  bubbleEl.classList.remove('show', 'sticky', 'confirm', 'reply');
+  if (bubbleHintEl) bubbleHintEl.hidden = true;
   if (window.api.setBubbleOpen) window.api.setBubbleOpen(false);
 }
-if (bubbleOkEl) bubbleOkEl.addEventListener('click', hideBubble);
+// 點泡泡本身就是確認；等你回覆的泡泡點了會把 Claude 視窗叫到最前面
+bubbleEl.addEventListener('click', () => {
+  if (!stickyOpen) return;
+  const action = stickyAction;
+  hideBubble();
+  if (action === 'reply' && window.api.focusClaude) window.api.focusClaude();
+});
+// Claude 已經不再等你（例如你已在 Claude 裡回覆）→ 自動收起「等你回覆」的泡泡
+if (window.api.onDismissReply) {
+  window.api.onDismissReply(() => { if (stickyOpen && stickyAction === 'reply') hideBubble(); });
+}
 
 // 視窗被推回螢幕內時，角色反向位移以維持在原位
 const stageEl = document.getElementById('stage');

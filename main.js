@@ -398,7 +398,8 @@ function onAiEvent({ kind, session: s, image, fromUser }) {
     speak({ text: `開始處理：${clip(s.lastPrompt, 30)}`, ai: true });
   } else if (kind === 'waiting') {
     setPetPose('idle');
-    speak({ text: s.waitingMessage || 'Claude 可能在等你按允許', ai: true });
+    // 等你回覆的泡泡也留著，點一下就跳到 Claude
+    speak({ text: s.waitingMessage || 'Claude 可能在等你按允許', ai: true, sticky: true, action: 'reply' });
   } else if (kind === 'done') {
     if (s.interrupted) {
       setPetPose('idle');
@@ -423,7 +424,11 @@ function petStatusOf(list) {
 
 function onAiUpdate(list) {
   aiSnapshot = list;
-  if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:status', petStatusOf(list));
+  if (petWindow && !petWindow.isDestroyed()) {
+    const st = petStatusOf(list);
+    petWindow.webContents.send('pet:status', st);
+    if (st.cls !== 'waiting') petWindow.webContents.send('pet:dismiss-reply');
+  }
   if (panelWindow && !panelWindow.isDestroyed()) {
     panelWindow.webContents.send('ai:update', list);
   }
@@ -498,6 +503,7 @@ function registerIpc() {
   // 點擊桌寵 → 開/關面板
   ipcMain.on('panel:toggle', () => togglePanel());
   ipcMain.on('pet:menu', () => showPetMenu());
+  ipcMain.on('claude:focus', () => focusClaudeWindow());
 
   // --- 資料夾 ---
   ipcMain.handle('folders:pick', async () => {
@@ -814,6 +820,17 @@ function loginItemOptions() {
 }
 function autoStartEnabled() {
   try { return !!app.getLoginItemSettings(loginItemOptions()).openAtLogin; } catch (e) { return false; }
+}
+
+// 把 Claude 桌面版的視窗叫到最前面（讓使用者去回覆）。找不到就不做任何事。
+function focusClaudeWindow() {
+  if (process.platform !== 'win32') return;
+  const ps = "$p = Get-Process claude -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | Select-Object -First 1; " +
+    "if ($p) { (New-Object -ComObject WScript.Shell).AppActivate($p.Id) | Out-Null }";
+  try {
+    require('child_process').spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', ps],
+      { windowsHide: true, stdio: 'ignore', detached: true }).unref();
+  } catch (e) { /* ignore */ }
 }
 
 // 桌寵的右鍵選單：所有「桌寵本身」的操作都在這裡，包含結束程式
