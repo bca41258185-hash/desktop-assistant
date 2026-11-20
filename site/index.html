@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta property="og:title" content="桌面大師">
+<meta property="og:description" content="請幾位古人站在桌面角落，幫你盯著 Claude。Windows 免費下載。">
+<title>桌面大師</title>
+<style>
+/* 版面：一張製圖用的描圖紙。米白方格底、墨色字，只有下載鈕用深墨色；泡泡和狀態標籤照 app 裡真正的樣子畫。 */
+:root {
+  --paper: #f4f1e9;
+  --surface: #faf8f1;
+  --line: #d8d2c2;
+  --ink: #2b2b28;
+  --ink-soft: #5c5b54;
+  --muted: #8a887d;
+  --btn: #3a3a36;
+  --working: #3b7dd8;
+  --waiting: #d9902a;
+  --done: #4c9a5f;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; color: var(--ink); font-size: 17px; line-height: 1.75;
+  font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 27px, rgba(120, 130, 120, 0.09) 27px 28px),
+    repeating-linear-gradient(90deg, transparent 0 27px, rgba(120, 130, 120, 0.09) 27px 28px),
+    var(--paper);
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+h1, h2, h3 { margin: 0; line-height: 1.3; text-wrap: balance; }
+h2 { font-size: clamp(28px, 4.4vw, 40px); letter-spacing: 0.06em; }
+h3 { font-size: 20px; }
+p { margin: 0; }
+a { color: inherit; }
+section { padding: 64px 0; }
+.eyebrow { font-size: 13px; letter-spacing: 0.28em; color: var(--muted); margin-bottom: 8px; }
+.lede { color: var(--ink-soft); max-width: 60ch; margin-top: 12px; }
+svg .think-dots, svg .sketch-lines, svg .mouth-happy { display: none; }
+
+/* ---------- 開頭 ---------- */
+.hero { padding: 72px 0 40px; text-align: center; }
+.hero h1 { font-size: clamp(54px, 12vw, 120px); letter-spacing: 0.16em; padding-left: 0.16em; font-weight: 800; }
+.hero .tag { font-size: clamp(19px, 2.8vw, 26px); color: var(--ink-soft); letter-spacing: 0.1em; margin-top: 10px; }
+.dl { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 28px; }
+.btn {
+  display: inline-flex; flex-direction: column; align-items: center; padding: 12px 28px; border-radius: 999px;
+  text-decoration: none; font-weight: 700; font-size: 18px; border: 2px solid var(--btn); line-height: 1.4;
+}
+.btn small { font-weight: 400; font-size: 12px; opacity: 0.8; }
+.btn.main { background: var(--btn); color: #fff; }
+.btn.main:hover { background: #55554f; }
+.btn.alt { background: transparent; color: var(--btn); }
+.btn.alt:hover { background: #fff; }
+.lineup { display: flex; justify-content: center; align-items: flex-end; gap: clamp(2px, 1vw, 12px); margin-top: 44px; }
+.lineup .face { display: block; width: clamp(48px, 15vw, 150px); }
+.lineup .face svg { width: 100%; height: auto; display: block; }
+
+/* ---------- 影片 ---------- */
+.film video { width: 100%; display: block; border-radius: 14px; border: 1px solid var(--line); background: #1f1e1c; box-shadow: 0 18px 50px rgba(60, 50, 30, 0.22); margin-top: 24px; }
+
+/* ---------- 他會做什麼 ---------- */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; margin-top: 28px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.card p { color: var(--ink-soft); font-size: 15.5px; }
+/* 照 app 裡的泡泡畫的小示意 */
+.bub { position: relative; align-self: flex-start; max-width: 100%; background: #faf8f1; border: 1px solid var(--line); border-radius: 5px; padding: 10px 14px; font-size: 17px; line-height: 1.5; box-shadow: 0 4px 12px rgba(60, 60, 50, 0.16); }
+.bub::after { content: ""; position: absolute; left: 28px; bottom: -8px; border: 8px solid transparent; border-top-color: #faf8f1; border-bottom: 0; filter: drop-shadow(0 1px 0 var(--line)); }
+.bub.wait { background: #fff8e6; border-color: #e0a84a; box-shadow: 0 0 0 3px rgba(224, 168, 74, 0.35), 0 4px 12px rgba(60, 60, 50, 0.16); }
+.bub.wait::after { border-top-color: #fff8e6; }
+.bub.ok { border-color: #6fae7c; box-shadow: 0 0 0 3px rgba(111, 174, 124, 0.4), 0 4px 12px rgba(60, 60, 50, 0.16); }
+.bub .row { display: flex; gap: 8px; margin-top: 8px; }
+.bub .pill { flex: 1; text-align: center; color: #fff; font-weight: 700; border-radius: 6px; padding: 5px 10px; font-size: 15px; }
+.bub .yes { background: #3f8f55; } .bub .no { background: #b5483f; } .bub .opt { background: var(--btn); }
+.bub .field { margin-top: 8px; border: 2px solid #d8c9a0; border-radius: 6px; background: #fff; padding: 4px 10px; color: var(--muted); font-size: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-size: 13px; padding: 2px 10px 3px; border-radius: 999px; background: #faf8f1; border: 1px solid var(--line); }
+.chip::before { content: "●"; font-size: 10px; margin-right: 5px; vertical-align: 1px; }
+.chip.working::before { color: var(--working); }
+.chip.waiting { background: #fff6dd; border-color: #e0c48a; font-weight: 700; } .chip.waiting::before { color: var(--waiting); }
+.chip.done::before { content: "✓"; color: var(--done); font-size: 12px; }
+.duo { display: flex; gap: 10px; align-items: flex-end; }
+.duo .face { width: 62px; flex-shrink: 0; } .duo .face svg { width: 100%; height: auto; display: block; }
+.duo .bub { font-size: 14.5px; padding: 7px 11px; }
+
+/* ---------- 六位角色 ---------- */
+.cast { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-top: 28px; }
+.who { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 12px 16px; text-align: center; }
+.who .art svg { width: 120px; height: auto; display: block; margin: 0 auto; }
+.who figcaption b { display: block; font-size: 19px; margin-top: 4px; }
+.who figcaption span { display: block; font-size: 13.5px; color: var(--ink-soft); line-height: 1.6; margin-top: 4px; }
+
+/* ---------- 步驟、下載 ---------- */
+.steps { counter-reset: s; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 28px; padding: 0; list-style: none; }
+.steps li { counter-increment: s; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 18px 18px 62px; position: relative; }
+.steps li::before { content: counter(s); position: absolute; left: 16px; top: 16px; width: 34px; height: 34px; border-radius: 50%; background: var(--btn); color: #fff; font-weight: 800; display: grid; place-items: center; }
+.steps b { display: block; }
+.steps span { color: var(--ink-soft); font-size: 15px; }
+.get { text-align: center; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 16px; margin-top: 32px; text-align: left; }
+.notes .card ul { margin: 0; padding-left: 1.2em; color: var(--ink-soft); font-size: 15px; }
+footer { padding: 36px 0 60px; color: var(--muted); font-size: 13.5px; text-align: center; border-top: 1px dashed var(--line); }
+footer p + p { margin-top: 6px; }
+@media (max-width: 520px) { section { padding: 44px 0; } .btn { width: 100%; } }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <h1>桌面大師</h1>
+    <p class="tag">請幾位古人站在桌面角落，幫你盯著 Claude</p>
+    <div class="dl">
+      <a class="btn main" href="https://github.com/bca41258185-hash/desktop-assistant/releases/download/v0.1.0/DesktopMaster-Setup-0.1.0.exe">下載安裝版<small>Windows 10／11・v0.1.0</small></a>
+      <a class="btn alt" href="#film">先看影片<small>約 1 分鐘</small></a>
+    </div>
+    <div class="lineup" aria-hidden="true"><span class="face"><svg viewBox="0 0 160 180" class="char-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse class="shadow" cx="80" cy="174" rx="42" ry="6" fill="#000000" fill-opacity="0.16"/>
+      
+        <g class="motif"><rect x="8" y="118" width="4.4" height="34" rx="1" fill="#dcc07e" stroke="#a8874c" stroke-width=".8"/><rect x="13" y="118" width="4.4" height="34" rx="1" fill="#dcc07e" stroke="#a8874c" stroke-width=".8"/><rect x="18" y="118" width="4.4" height="34" rx="1" fill="#dcc07e" stroke="#a8874c" stroke-width=".8"/><rect x="23" y="118" width="4.4" height="34" rx="1" fill="#dcc07e" stroke="#a8874c" stroke-width=".8"/><rect x="28" y="118" width="4.4" height="34" rx="1" fill="#dcc07e" stroke="#a8874c" stroke-width=".8"/><rect x="33" y="118" width="4.4" height="34" rx="1" fill="#dcc07e" stroke="#a8874c" stroke-width=".8"/><path d="M7 126 H38 M7 144 H38" stroke="#6e5126" stroke-width="1.3"/></g>
+        <g class="pet-body">
+          <g class="body">
+            <path d="M50 172 Q47 123 80 119 Q113 123 110 172 Z" fill="#3d4a6b" stroke="#29324c" stroke-width="2"/>
+            <path d="M68 120 L90 152" stroke="#ece4cc" stroke-width="5" fill="none"/>
+        <path d="M92 120 L82 134" stroke="#ece4cc" stroke-width="5" fill="none"/><rect x="51" y="150" width="58" height="6" fill="#8a6d3b"/>
+          </g>
+          <g class="gesture-arm">
+            <path d="M55 136 Q38 150 27 154" fill="none" stroke="#3d4a6b" stroke-width="9" stroke-linecap="round"/>
+            <circle class="hand" cx="26" cy="155" r="6" fill="#f3d4b4"/>
+          </g>
+          <g class="head">
+            <path d="M52 56 Q50 30 80 27 Q110 30 108 56 L108 72 L52 72 Z" fill="#9c9b96"/>
+            <path class="face" d="M54 52 Q54 28 80 28 Q106 28 106 52 L105 78 Q103 98 80 104 Q57 98 55 78 Z" fill="#f3d4b4"/>
+            <path d="M54 52 Q56 32 80 31 Q104 32 106 52 Q96 42 80 42 Q64 42 54 52 Z" fill="#a8a7a1"/><path d="M68 31 L70 14 L90 14 L92 31 Z" fill="#2b2b2b"/><rect x="62" y="28" width="36" height="5" rx="2" fill="#2b2b2b"/><line x1="60" y1="21" x2="100" y2="21" stroke="#b08d57" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M57 64 Q65 59 73 64 M87 64 Q95 59 103 64" stroke="#7f7e78" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+            <ellipse class="eye" cx="66" cy="72" rx="3.8" ry="2" fill="#242424"/>
+        <ellipse class="eye" cx="94" cy="72" rx="3.8" ry="2" fill="#242424"/>
+            <path d="M80 75 L78 84 L82 85" fill="none" stroke="#c69879" stroke-width="1.4"/>
+            <path d="M58 84 Q60 100 68 110 Q72 136 80 142 Q88 136 92 110 Q100 100 102 84 Q94 97 80 98 Q66 97 58 84 Z" fill="#dcdbd4"/>
+        <path d="M67 89 Q80 83 93 89 Q86 92 80 90 Q74 92 67 89 Z" fill="#dcdbd4"/>
+            <path class="mouth" d="M74 92 Q80 95 86 92" fill="none" stroke="#7a4b40" stroke-width="2.2" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M71 90 Q80 99 89 90" fill="none" stroke="#7a4b40" stroke-width="2.5" stroke-linecap="round"/>
+            
+            
+    <g class="think-dots" opacity="0">
+      <circle cx="122" cy="30" r="3.2" fill="#8a8f98"/>
+      <circle cx="132" cy="25" r="2.5" fill="#8a8f98"/>
+      <circle cx="140" cy="21" r="1.8" fill="#8a8f98"/>
+    </g>
+          </g>
+          
+    <g class="sketch-lines">
+      <line x1="18" y1="150" x2="33" y2="146"/>
+      <line x1="16" y1="156" x2="37" y2="151"/>
+      <line x1="20" y1="162" x2="33" y2="159"/>
+    </g>
+        </g>
+    </svg></span><span class="face"><svg viewBox="0 0 160 180" class="char-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse class="shadow" cx="80" cy="174" rx="42" ry="6" fill="#000000" fill-opacity="0.16"/>
+      
+        <g class="motif"><g fill="none" stroke="#5c9ac2" stroke-width="2.6" stroke-linecap="round"><path d="M6 132 Q14 124 22 132 T38 132"/><path d="M6 142 Q14 134 22 142 T38 142"/><path d="M6 152 Q14 144 22 152 T38 152"/></g></g>
+        <g class="pet-body">
+          <g class="body">
+            <path d="M50 172 Q47 123 80 119 Q113 123 110 172 Z" fill="#cbb999" stroke="#9c8a6c" stroke-width="2"/>
+            <path d="M68 120 L90 152" stroke="#7a6a50" stroke-width="5" fill="none"/>
+        <path d="M92 120 L82 134" stroke="#7a6a50" stroke-width="5" fill="none"/>
+          </g>
+          <g class="gesture-arm">
+            <path d="M55 136 Q38 150 27 154" fill="none" stroke="#cbb999" stroke-width="9" stroke-linecap="round"/>
+            <circle class="hand" cx="26" cy="155" r="6" fill="#f3d4b4"/>
+          </g>
+          <g class="head">
+            <path d="M51 52 Q46 86 54 122 L106 122 Q114 86 109 52 Q104 30 80 30 Q56 30 51 52 Z" fill="#efeee9"/>
+            <path class="face" d="M53 56 Q52 18 80 18 Q108 18 107 56 L105 78 Q103 98 80 104 Q57 98 55 78 Z" fill="#f3d4b4"/>
+            <ellipse cx="72" cy="30" rx="9" ry="4.5" fill="#ffffff" opacity=".4"/><path d="M53 60 Q47 48 54 40 L57 62 Z M107 60 Q113 48 106 40 L103 62 Z" fill="#f6f5f1"/>
+            <path d="M56 65 Q64 58 73 63 Q62 64 53 74 Z M104 65 Q96 58 87 63 Q98 64 107 74 Z" fill="#f6f5f1" stroke="#cfcdc6" stroke-width=".8"/>
+            <ellipse class="eye" cx="66" cy="72" rx="3.8" ry="2" fill="#242424"/>
+        <ellipse class="eye" cx="94" cy="72" rx="3.8" ry="2" fill="#242424"/>
+            <path d="M80 75 L78 84 L82 85" fill="none" stroke="#c69879" stroke-width="1.4"/>
+            <path d="M58 84 Q60 100 68 110 Q72 144 80 150 Q88 144 92 110 Q100 100 102 84 Q94 97 80 98 Q66 97 58 84 Z" fill="#f4f3ef"/>
+        <path d="M67 89 Q80 83 93 89 Q86 92 80 90 Q74 92 67 89 Z" fill="#f4f3ef"/>
+            <path class="mouth" d="M74 92 Q80 95 86 92" fill="none" stroke="#8a5a4c" stroke-width="2.2" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M71 90 Q80 99 89 90" fill="none" stroke="#8a5a4c" stroke-width="2.5" stroke-linecap="round"/>
+            
+            
+    <g class="think-dots" opacity="0">
+      <circle cx="122" cy="30" r="3.2" fill="#8a8f98"/>
+      <circle cx="132" cy="25" r="2.5" fill="#8a8f98"/>
+      <circle cx="140" cy="21" r="1.8" fill="#8a8f98"/>
+    </g>
+          </g>
+          
+    <g class="sketch-lines">
+      <line x1="18" y1="150" x2="33" y2="146"/>
+      <line x1="16" y1="156" x2="37" y2="151"/>
+      <line x1="20" y1="162" x2="33" y2="159"/>
+    </g>
+        </g>
+    </svg></span><span class="face"><svg viewBox="0 0 160 180" class="char-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse class="shadow" cx="80" cy="174" rx="42" ry="6" fill="#000000" fill-opacity="0.16"/>
+      
+        <g class="motif"><g transform="translate(22 132)"><ellipse cx="-7" cy="-5" rx="8" ry="6" fill="#eaa63e" transform="rotate(-25 -7 -5)"/><ellipse cx="7" cy="-5" rx="8" ry="6" fill="#eaa63e" transform="rotate(25 7 -5)"/><ellipse cx="-5" cy="5" rx="5" ry="4" fill="#d47f2a"/><ellipse cx="5" cy="5" rx="5" ry="4" fill="#d47f2a"/><circle cx="-8" cy="-6" r="1.6" fill="#fff6dc"/><circle cx="8" cy="-6" r="1.6" fill="#fff6dc"/><rect x="-1" y="-9" width="2" height="17" rx="1" fill="#3a3028"/><path d="M-1 -9 Q-4 -15 -7 -17 M1 -9 Q4 -15 7 -17" stroke="#3a3028" fill="none" stroke-width="1"/></g></g>
+        <g class="pet-body">
+          <g class="body">
+            <path d="M50 172 Q47 123 80 119 Q113 123 110 172 Z" fill="#5f7a64" stroke="#435a48" stroke-width="2"/>
+            <path d="M68 120 L90 152" stroke="#e6e1cf" stroke-width="5" fill="none"/>
+        <path d="M92 120 L82 134" stroke="#e6e1cf" stroke-width="5" fill="none"/>
+          </g>
+          <g class="gesture-arm">
+            <path d="M55 136 Q38 150 27 154" fill="none" stroke="#5f7a64" stroke-width="9" stroke-linecap="round"/>
+            <circle class="hand" cx="26" cy="155" r="6" fill="#f3d4b4"/>
+          </g>
+          <g class="head">
+            <path d="M52 54 Q50 26 80 25 Q110 26 108 54 L112 100 L101 94 L104 62 L56 62 L59 94 L48 100 Z" fill="#2c2a28"/>
+            <path class="face" d="M54 52 Q54 28 80 28 Q106 28 106 52 L105 78 Q103 98 80 104 Q57 98 55 78 Z" fill="#f3d4b4"/>
+            <path d="M54 52 Q58 30 80 29 Q102 30 106 52 Q92 38 80 40 Q66 38 54 52 Z" fill="#2c2a28"/><ellipse cx="80" cy="22" rx="9" ry="7" fill="#2c2a28"/><line x1="65" y1="23" x2="95" y2="18" stroke="#b08d57" stroke-width="2.2" stroke-linecap="round"/>
+            <path d="M59 64 Q66 61 72 64 M88 64 Q94 61 101 64" stroke="#2c2a28" stroke-width="2" fill="none" stroke-linecap="round"/>
+            
+      <ellipse class="eye" cx="66" cy="72" rx="3.4" ry="4.4" fill="#242424"/>
+      <ellipse class="eye" cx="94" cy="72" rx="3.4" ry="4.4" fill="#242424"/>
+      <circle class="shine" cx="68" cy="70" r="1.7" fill="#ffffff"/>
+      <circle class="shine" cx="96" cy="70" r="1.7" fill="#ffffff"/>
+            <path d="M80 75 L78 84 L82 85" fill="none" stroke="#c69879" stroke-width="1.4"/>
+            <path d="M70 88 Q80 84 90 88" stroke="#2c2a28" stroke-width="2" fill="none"/><path d="M76 98 Q80 114 84 98 Z" fill="#2c2a28"/>
+            <path class="mouth" d="M73 92 Q80 97 87 92" fill="none" stroke="#8a5547" stroke-width="2.2" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M71 90 Q80 100 89 90" fill="none" stroke="#8a5547" stroke-width="2.5" stroke-linecap="round"/>
+            
+            
+    <g class="think-dots" opacity="0">
+      <circle cx="122" cy="30" r="3.2" fill="#8a8f98"/>
+      <circle cx="132" cy="25" r="2.5" fill="#8a8f98"/>
+      <circle cx="140" cy="21" r="1.8" fill="#8a8f98"/>
+    </g>
+          </g>
+          
+    <g class="sketch-lines">
+      <line x1="18" y1="150" x2="33" y2="146"/>
+      <line x1="16" y1="156" x2="37" y2="151"/>
+      <line x1="20" y1="162" x2="33" y2="159"/>
+    </g>
+        </g>
+    </svg></span><span class="face"><svg viewBox="0 0 160 180" class="char-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse class="shadow" cx="80" cy="174" rx="42" ry="6" fill="#000000" fill-opacity="0.16"/>
+      
+        <g class="motif"><polygon points="5,134 24,123 41,131 27,134 31,147 20,136" fill="#b58a58" stroke="#7a5630" stroke-width="1.3"/><path d="M24 123 L22 136" stroke="#7a5630" stroke-width="1"/></g>
+        <g class="pet-body">
+          <g class="body">
+            <path d="M50 172 Q47 123 80 119 Q113 123 110 172 Z" fill="#8a6a48" stroke="#5f4830" stroke-width="2"/>
+            <path d="M68 120 L90 152" stroke="#5f4830" stroke-width="5" fill="none"/>
+        <path d="M92 120 L82 134" stroke="#5f4830" stroke-width="5" fill="none"/><path d="M51 150 L109 150" stroke="#4a3a28" stroke-width="4"/>
+          </g>
+          <g class="gesture-arm">
+            <path d="M55 136 Q38 150 27 154" fill="none" stroke="#8a6a48" stroke-width="8" stroke-linecap="round"/>
+            <circle class="hand" cx="26" cy="155" r="6" fill="#dfb48c"/>
+          </g>
+          <g class="head">
+            <path d="M54 50 Q54 25 80 25 Q106 25 106 50 Z" fill="#2a2622"/>
+            <path class="face" d="M54 52 Q54 28 80 28 Q106 28 106 52 L105 78 Q103 98 80 104 Q57 98 55 78 Z" fill="#dfb48c"/>
+            <rect x="52" y="43" width="56" height="8" rx="3" fill="#5b4a3a"/><path d="M106 47 Q116 52 114 64 M106 48 Q120 50 120 58" stroke="#5b4a3a" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M58 63 L72 62 M88 62 L102 63" stroke="#2a2622" stroke-width="3" stroke-linecap="round"/>
+            
+      <ellipse class="eye" cx="66" cy="72" rx="3.4" ry="4.4" fill="#242424"/>
+      <ellipse class="eye" cx="94" cy="72" rx="3.4" ry="4.4" fill="#242424"/>
+      <circle class="shine" cx="68" cy="70" r="1.7" fill="#ffffff"/>
+      <circle class="shine" cx="96" cy="70" r="1.7" fill="#ffffff"/>
+            <path d="M80 75 L78 84 L82 85" fill="none" stroke="#a87554" stroke-width="1.4"/>
+            <path d="M59 84 Q62 102 80 106 Q98 102 101 84 Q92 98 80 98 Q68 98 59 84 Z" fill="#3a332c" opacity=".9"/><path d="M69 88 Q80 84 91 88" stroke="#3a332c" stroke-width="2.4" fill="none"/>
+            <path class="mouth" d="M74 92 Q80 95 86 92" fill="none" stroke="#f0d0b4" stroke-width="2.2" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M71 90 Q80 99 89 90" fill="none" stroke="#f0d0b4" stroke-width="2.5" stroke-linecap="round"/>
+            
+            
+    <g class="think-dots" opacity="0">
+      <circle cx="122" cy="30" r="3.2" fill="#8a8f98"/>
+      <circle cx="132" cy="25" r="2.5" fill="#8a8f98"/>
+      <circle cx="140" cy="21" r="1.8" fill="#8a8f98"/>
+    </g>
+          </g>
+          
+    <g class="sketch-lines">
+      <line x1="18" y1="150" x2="33" y2="146"/>
+      <line x1="16" y1="156" x2="37" y2="151"/>
+      <line x1="20" y1="162" x2="33" y2="159"/>
+    </g>
+        </g>
+    </svg></span><span class="face"><svg viewBox="0 0 160 180" class="char-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse class="shadow" cx="80" cy="174" rx="42" ry="6" fill="#000000" fill-opacity="0.16"/>
+      
+        <g class="motif"><rect x="10" y="112" width="24" height="4" fill="#9a7a4a"/><line x1="22" y1="116" x2="22" y2="144" stroke="#1d1d1d" stroke-width="1.5"/><path d="M22 144 L16 150 L22 157 L28 150 Z" fill="#8a8f96" stroke="#5d6066" stroke-width="1"/></g>
+        <g class="pet-body">
+          <g class="body">
+            <path d="M50 172 Q47 123 80 119 Q113 123 110 172 Z" fill="#262626" stroke="#111" stroke-width="2"/>
+            <path d="M68 120 L90 152" stroke="#a8342b" stroke-width="5" fill="none"/>
+        <path d="M92 120 L82 134" stroke="#a8342b" stroke-width="5" fill="none"/><rect x="51" y="150" width="58" height="6" fill="#a8342b"/>
+          </g>
+          <g class="gesture-arm">
+            <path d="M55 136 Q38 150 27 154" fill="none" stroke="#262626" stroke-width="9" stroke-linecap="round"/>
+            <circle class="hand" cx="26" cy="155" r="6" fill="#f3d4b4"/>
+          </g>
+          <g class="head">
+            <path d="M52 56 Q50 30 80 27 Q110 30 108 56 L108 70 L52 70 Z" fill="#1d1b19"/>
+            <path class="face" d="M54 52 Q54 28 80 28 Q106 28 106 52 L105 78 Q103 98 80 104 Q57 98 55 78 Z" fill="#f3d4b4"/>
+            <path d="M54 52 Q56 32 80 31 Q104 32 106 52 Q96 42 80 42 Q64 42 54 52 Z" fill="#1d1b19"/><path d="M70 31 L66 6 L94 6 L90 31 Z" fill="#141414"/><rect x="62" y="28" width="36" height="5" rx="2" fill="#141414"/><path d="M62 33 Q57 62 60 86 M98 33 Q103 62 100 86" stroke="#141414" stroke-width="1.2" fill="none"/>
+            <path d="M57 61 L72 65 M88 65 L103 61" stroke="#1d1b19" stroke-width="3" stroke-linecap="round"/>
+            
+      <ellipse class="eye" cx="66" cy="72" rx="3.4" ry="4.4" fill="#242424"/>
+      <ellipse class="eye" cx="94" cy="72" rx="3.4" ry="4.4" fill="#242424"/>
+      <circle class="shine" cx="68" cy="70" r="1.7" fill="#ffffff"/>
+      <circle class="shine" cx="96" cy="70" r="1.7" fill="#ffffff"/>
+            <path d="M80 75 L78 84 L82 85" fill="none" stroke="#c69879" stroke-width="1.4"/>
+            <path d="M80 87 Q70 85 62 94 M80 87 Q90 85 98 94" stroke="#1d1b19" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M77 99 L80 112 L83 99 Z" fill="#1d1b19"/>
+            <path class="mouth" d="M74 93 L86 93" fill="none" stroke="#8a5547" stroke-width="2.2" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M73 91 Q80 97 87 91" fill="none" stroke="#8a5547" stroke-width="2.4" stroke-linecap="round"/>
+            
+            
+    <g class="think-dots" opacity="0">
+      <circle cx="122" cy="30" r="3.2" fill="#8a8f98"/>
+      <circle cx="132" cy="25" r="2.5" fill="#8a8f98"/>
+      <circle cx="140" cy="21" r="1.8" fill="#8a8f98"/>
+    </g>
+          </g>
+          
+    <g class="sketch-lines">
+      <line x1="18" y1="150" x2="33" y2="146"/>
+      <line x1="16" y1="156" x2="37" y2="151"/>
+      <line x1="20" y1="162" x2="33" y2="159"/>
+    </g>
+        </g>
+    </svg></span><span class="face"><svg viewBox="0 0 160 180" class="char-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse class="shadow" cx="80" cy="174" rx="42" ry="6" fill="#000000" fill-opacity="0.16"/>
+      
+        <g class="motif"><circle cx="22" cy="132" r="13" fill="#f3f0e6" stroke="#3a3a36" stroke-width="1.4"/><path d="M22 119 A13 13 0 0 1 22 145 A6.5 6.5 0 0 1 22 132 A6.5 6.5 0 0 0 22 119 Z" fill="#2b2b2b"/><circle cx="22" cy="125.5" r="1.9" fill="#2b2b2b"/><circle cx="22" cy="138.5" r="1.9" fill="#f3f0e6"/></g>
+        <g class="pet-body">
+          <g class="body">
+            <path d="M50 172 Q47 123 80 119 Q113 123 110 172 Z" fill="#44525a" stroke="#2b363c" stroke-width="2"/>
+            <path d="M68 120 L90 152" stroke="#cfd6d2" stroke-width="5" fill="none"/>
+        <path d="M92 120 L82 134" stroke="#cfd6d2" stroke-width="5" fill="none"/>
+          </g>
+          <g class="gesture-arm">
+            <path d="M55 136 Q38 150 27 154" fill="none" stroke="#44525a" stroke-width="9" stroke-linecap="round"/>
+            <circle class="hand" cx="26" cy="155" r="6" fill="#f3d4b4"/>
+          </g>
+          <g class="head">
+            <path d="M52 56 Q50 30 80 27 Q110 30 108 56 L109 84 Q104 74 104 62 L56 62 Q56 74 51 84 Z" fill="#bdbab2"/>
+            <path class="face" d="M54 52 Q54 28 80 28 Q106 28 106 52 L105 78 Q103 98 80 104 Q57 98 55 78 Z" fill="#f3d4b4"/>
+            <path d="M54 52 Q56 32 80 31 Q104 32 106 52 Q96 43 80 43 Q64 43 54 52 Z" fill="#bdbab2"/><ellipse cx="80" cy="21" rx="10.5" ry="9.5" fill="#bdbab2" stroke="#93908a" stroke-width="1"/><line x1="63" y1="23" x2="97" y2="19" stroke="#6b4a2a" stroke-width="2.6" stroke-linecap="round"/>
+            <path d="M57 65 Q65 59 73 63 M87 63 Q95 59 103 65" stroke="#ecebe5" stroke-width="3.4" fill="none" stroke-linecap="round"/><path d="M57 65 Q53 70 52 78 M103 65 Q107 70 108 78" stroke="#ecebe5" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+            <ellipse class="eye" cx="66" cy="72" rx="3.8" ry="2" fill="#242424"/>
+        <ellipse class="eye" cx="94" cy="72" rx="3.8" ry="2" fill="#242424"/>
+            <path d="M80 75 L78 84 L82 85" fill="none" stroke="#c69879" stroke-width="1.4"/>
+            <path d="M58 84 Q60 100 68 110 Q72 134 80 140 Q88 134 92 110 Q100 100 102 84 Q94 97 80 98 Q66 97 58 84 Z" fill="#e6e3db"/>
+        <path d="M67 89 Q80 83 93 89 Q86 92 80 90 Q74 92 67 89 Z" fill="#e6e3db"/>
+            <path class="mouth" d="M74 92 Q80 95 86 92" fill="none" stroke="#cdb9a6" stroke-width="2.2" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M71 90 Q80 99 89 90" fill="none" stroke="#cdb9a6" stroke-width="2.5" stroke-linecap="round"/>
+            
+            
+    <g class="think-dots" opacity="0">
+      <circle cx="122" cy="30" r="3.2" fill="#8a8f98"/>
+      <circle cx="132" cy="25" r="2.5" fill="#8a8f98"/>
+      <circle cx="140" cy="21" r="1.8" fill="#8a8f98"/>
+    </g>
+          </g>
+          
+    <g class="sketch-lines">
+      <line x1="18" y1="150" x2="33" y2="146"/>
+      <line x1="16" y1="156" x2="37" y2="151"/>
+      <line x1="20" y1="162" x2="33" y2="159"/>
+    </g>
+        </g>
+    </svg></span></div>
+  </div>
+</header>
+
+<section class="film" id="film">
+  <div class="wrap">
+    <p class="eyebrow">一分鐘看完</p>
+    <h2>你忙你的，有事他會叫你</h2>
+    <p class="lede">讓 Claude 去做事的時候，不用一直切回去看它做完沒。助手會站在桌面角落，Claude 開始、等你、做完時用泡泡告訴你。</p>
+    <video controls preload="metadata" playsinline poster="trailer-poster.jpg" aria-label="桌面大師介紹影片">
+      <source src="trailer.mp4" type="video/mp4">
+      你的瀏覽器無法播放影片，可以<a href="trailer.mp4">直接下載影片</a>。
+    </video>
+  </div>
+</section>
+
+<section id="what">
+  <div class="wrap">
+    <p class="eyebrow">他會做什麼</p>
+    <h2>不用切視窗，在泡泡上就能處理</h2>
+    <div class="grid">
+      <div class="card">
+        <div class="chips"><span class="chip working">進行中</span><span class="chip waiting">等你回答</span><span class="chip done">完成</span></div>
+        <h3>一眼看出 Claude 在幹嘛</h3>
+        <p>助手頭上有一個小標籤，隨時顯示這個對話現在是進行中、在等你，還是已經做完。</p>
+      </div>
+      <div class="card">
+        <div class="bub wait">Claude 想修改檔案，要讓它改嗎？<div class="row"><span class="pill yes">允許</span><span class="pill no">拒絕</span></div></div>
+        <h3>要你同意時，按一下就好</h3>
+        <p>Claude 需要你允許才能繼續時，泡泡上直接有「允許」和「拒絕」。不同意也可以打字告訴它改怎麼做。</p>
+      </div>
+      <div class="card">
+        <div class="bub wait">報告要用哪一種格式交？<div class="row"><span class="pill opt">Word 檔</span><span class="pill opt">PDF</span></div></div>
+        <h3>Claude 問你問題，直接回答</h3>
+        <p>Claude 用選項問你時，選項會出現在泡泡上；都不是的話也能自己打字回答。</p>
+      </div>
+      <div class="card">
+        <div class="bub ok">格式整理好了，已經存成 PDF。<div class="field">回覆 Claude…</div></div>
+        <h3>做完了會叫你，還能直接回話</h3>
+        <p>做完的泡泡會發光，等你看過。在下面打字就是下一個指令，也可以隨時按「對 Claude 說」主動交代事情。</p>
+      </div>
+      <div class="card">
+        <div class="duo"><span class="face"><svg viewBox="0 0 160 180" class="char-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse class="shadow" cx="80" cy="174" rx="42" ry="6" fill="#000000" fill-opacity="0.16"/>
+      
+        <g class="motif"><polygon points="5,134 24,123 41,131 27,134 31,147 20,136" fill="#b58a58" stroke="#7a5630" stroke-width="1.3"/><path d="M24 123 L22 136" stroke="#7a5630" stroke-width="1"/></g>
+        <g class="pet-body">
+          <g class="body">
+            <path d="M50 172 Q47 123 80 119 Q113 123 110 172 Z" fill="#8a6a48" stroke="#5f4830" stroke-width="2"/>
+            <path d="M68 120 L90 152" stroke="#5f4830" stroke-width="5" fill="none"/>
+        <path d="M92 120 L82 134" stroke="#5f4830" stroke-width="5" fill="none"/><path d="M51 150 L109 150" stroke="#4a3a28" stroke-width="4"/>
+          </g>
+          <g class="gesture-arm">
+            <path d="M55 136 Q38 150 27 154" fill="none" stroke="#8a6a48" stroke-width="8" stroke-linecap="round"/>
+            <circle class="hand" cx="26" cy="155" r="6" fill="#dfb48c"/>
+          </g>
+          <g class="head">
+            <path d="M54 50 Q54 25 80 25 Q106 25 106 50 Z" fill="#2a2622"/>
+            <path class="face" d="M54 52 Q54 28 80 28 Q106 28 106 52 L105 78 Q103 98 80 104 Q57 98 55 78 Z" fill="#dfb48c"/>
+            <rect x="52" y="43" width="56" height="8" rx="3" fill="#5b4a3a"/><path d="M106 47 Q116 52 114 64 M106 48 Q120 50 120 58" stroke="#5b4a3a" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M58 63 L72 62 M88 62 L102 63" stroke="#2a2622" stroke-width="3" stroke-linecap="round"/>
+            
+      <ellipse class="eye" cx="66" cy="72" rx="3.4" ry="4.4" fill="#242424"/>
+      <ellipse class="eye" cx="94" cy="72" rx="3.4" ry="4.4" fill="#242424"/>
+      <circle class="shine" cx="68" cy="70" r="1.7" fill="#ffffff"/>
+      <circle class="shine" cx="96" cy="70" r="1.7" fill="#ffffff"/>
+            <path d="M80 75 L78 84 L82 85" fill="none" stroke="#a87554" stroke-width="1.4"/>
+            <path d="M59 84 Q62 102 80 106 Q98 102 101 84 Q92 98 80 98 Q68 98 59 84 Z" fill="#3a332c" opacity=".9"/><path d="M69 88 Q80 84 91 88" stroke="#3a332c" stroke-width="2.4" fill="none"/>
+            <path class="mouth" d="M74 92 Q80 95 86 92" fill="none" stroke="#f0d0b4" stroke-width="2.2" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M71 90 Q80 99 89 90" fill="none" stroke="#f0d0b4" stroke-width="2.5" stroke-linecap="round"/>
+            
+            
+    <g class="think-dots" opacity="0">
+      <circle cx="122" cy="30" r="3.2" fill="#8a8f98"/>
+      <circle cx="132" cy="25" r="2.5" fill="#8a8f98"/>
+      <circle cx="140" cy="21" r="1.8" fill="#8a8f98"/>
+    </g>
+          </g>
+          
+    <g class="sketch-lines">
+      <line x1="18" y1="150" x2="33" y2="146"/>
+      <line x1="16" y1="156" x2="37" y2="151"/>
+      <line x1="20" y1="162" x2="33" y2="159"/>
+    </g>
+        </g>
+    </svg></span><div class="bub">你今天做了什麼有用的事？</div></div>
+        <div class="duo"><span class="face"><svg viewBox="0 0 160 180" class="char-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse class="shadow" cx="80" cy="174" rx="42" ry="6" fill="#000000" fill-opacity="0.16"/>
+      
+        <g class="motif"><g transform="translate(22 132)"><ellipse cx="-7" cy="-5" rx="8" ry="6" fill="#eaa63e" transform="rotate(-25 -7 -5)"/><ellipse cx="7" cy="-5" rx="8" ry="6" fill="#eaa63e" transform="rotate(25 7 -5)"/><ellipse cx="-5" cy="5" rx="5" ry="4" fill="#d47f2a"/><ellipse cx="5" cy="5" rx="5" ry="4" fill="#d47f2a"/><circle cx="-8" cy="-6" r="1.6" fill="#fff6dc"/><circle cx="8" cy="-6" r="1.6" fill="#fff6dc"/><rect x="-1" y="-9" width="2" height="17" rx="1" fill="#3a3028"/><path d="M-1 -9 Q-4 -15 -7 -17 M1 -9 Q4 -15 7 -17" stroke="#3a3028" fill="none" stroke-width="1"/></g></g>
+        <g class="pet-body">
+          <g class="body">
+            <path d="M50 172 Q47 123 80 119 Q113 123 110 172 Z" fill="#5f7a64" stroke="#435a48" stroke-width="2"/>
+            <path d="M68 120 L90 152" stroke="#e6e1cf" stroke-width="5" fill="none"/>
+        <path d="M92 120 L82 134" stroke="#e6e1cf" stroke-width="5" fill="none"/>
+          </g>
+          <g class="gesture-arm">
+            <path d="M55 136 Q38 150 27 154" fill="none" stroke="#5f7a64" stroke-width="9" stroke-linecap="round"/>
+            <circle class="hand" cx="26" cy="155" r="6" fill="#f3d4b4"/>
+          </g>
+          <g class="head">
+            <path d="M52 54 Q50 26 80 25 Q110 26 108 54 L112 100 L101 94 L104 62 L56 62 L59 94 L48 100 Z" fill="#2c2a28"/>
+            <path class="face" d="M54 52 Q54 28 80 28 Q106 28 106 52 L105 78 Q103 98 80 104 Q57 98 55 78 Z" fill="#f3d4b4"/>
+            <path d="M54 52 Q58 30 80 29 Q102 30 106 52 Q92 38 80 40 Q66 38 54 52 Z" fill="#2c2a28"/><ellipse cx="80" cy="22" rx="9" ry="7" fill="#2c2a28"/><line x1="65" y1="23" x2="95" y2="18" stroke="#b08d57" stroke-width="2.2" stroke-linecap="round"/>
+            <path d="M59 64 Q66 61 72 64 M88 64 Q94 61 101 64" stroke="#2c2a28" stroke-width="2" fill="none" stroke-linecap="round"/>
+            
+      <ellipse class="eye" cx="66" cy="72" rx="3.4" ry="4.4" fill="#242424"/>
+      <ellipse class="eye" cx="94" cy="72" rx="3.4" ry="4.4" fill="#242424"/>
+      <circle class="shine" cx="68" cy="70" r="1.7" fill="#ffffff"/>
+      <circle class="shine" cx="96" cy="70" r="1.7" fill="#ffffff"/>
+            <path d="M80 75 L78 84 L82 85" fill="none" stroke="#c69879" stroke-width="1.4"/>
+            <path d="M70 88 Q80 84 90 88" stroke="#2c2a28" stroke-width="2" fill="none"/><path d="M76 98 Q80 114 84 98 Z" fill="#2c2a28"/>
+            <path class="mouth" d="M73 92 Q80 97 87 92" fill="none" stroke="#8a5547" stroke-width="2.2" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M71 90 Q80 100 89 90" fill="none" stroke="#8a5547" stroke-width="2.5" stroke-linecap="round"/>
+            
+            
+    <g class="think-dots" opacity="0">
+      <circle cx="122" cy="30" r="3.2" fill="#8a8f98"/>
+      <circle cx="132" cy="25" r="2.5" fill="#8a8f98"/>
+      <circle cx="140" cy="21" r="1.8" fill="#8a8f98"/>
+    </g>
+          </g>
+          
+    <g class="sketch-lines">
+      <line x1="18" y1="150" x2="33" y2="146"/>
+      <line x1="16" y1="156" x2="37" y2="151"/>
+      <line x1="20" y1="162" x2="33" y2="159"/>
+    </g>
+        </g>
+    </svg></span><div class="bub">我看了一下午的雲，算嗎？</div></div>
+        <h3>一個對話，一位助手</h3>
+        <p>同時跑好幾個對話時，每個對話各有一位助手盯著。大家都沒事的時候，他們會自己聊起來。</p>
+      </div>
+      <div class="card">
+        <div class="bub">跑一次、驗一次。木匠也是拿尺量過才下鋸。</div>
+        <h3>各有各的脾氣</h3>
+        <p>Claude 做事時，助手會照自己的性格說兩句看法；點他一下，會說一句查證過出處的真實名言。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="cast">
+  <div class="wrap">
+    <p class="eyebrow">目前開放六位</p>
+    <h2>你想請誰來盯？</h2>
+    <p class="lede">都是兩千多年前的思想家，畫成 Q 版。每位的台詞和彼此的閒聊，都照他們的想法另外寫過。</p>
+    <div class="cast"><figure class="who"><div class="art"><svg viewBox="0 0 160 180" class="char-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse class="shadow" cx="80" cy="174" rx="42" ry="6" fill="#000000" fill-opacity="0.16"/>
+      
+        <g class="motif"><rect x="8" y="118" width="4.4" height="34" rx="1" fill="#dcc07e" stroke="#a8874c" stroke-width=".8"/><rect x="13" y="118" width="4.4" height="34" rx="1" fill="#dcc07e" stroke="#a8874c" stroke-width=".8"/><rect x="18" y="118" width="4.4" height="34" rx="1" fill="#dcc07e" stroke="#a8874c" stroke-width=".8"/><rect x="23" y="118" width="4.4" height="34" rx="1" fill="#dcc07e" stroke="#a8874c" stroke-width=".8"/><rect x="28" y="118" width="4.4" height="34" rx="1" fill="#dcc07e" stroke="#a8874c" stroke-width=".8"/><rect x="33" y="118" width="4.4" height="34" rx="1" fill="#dcc07e" stroke="#a8874c" stroke-width=".8"/><path d="M7 126 H38 M7 144 H38" stroke="#6e5126" stroke-width="1.3"/></g>
+        <g class="pet-body">
+          <g class="body">
+            <path d="M50 172 Q47 123 80 119 Q113 123 110 172 Z" fill="#3d4a6b" stroke="#29324c" stroke-width="2"/>
+            <path d="M68 120 L90 152" stroke="#ece4cc" stroke-width="5" fill="none"/>
+        <path d="M92 120 L82 134" stroke="#ece4cc" stroke-width="5" fill="none"/><rect x="51" y="150" width="58" height="6" fill="#8a6d3b"/>
+          </g>
+          <g class="gesture-arm">
+            <path d="M55 136 Q38 150 27 154" fill="none" stroke="#3d4a6b" stroke-width="9" stroke-linecap="round"/>
+            <circle class="hand" cx="26" cy="155" r="6" fill="#f3d4b4"/>
+          </g>
+          <g class="head">
+            <path d="M52 56 Q50 30 80 27 Q110 30 108 56 L108 72 L52 72 Z" fill="#9c9b96"/>
+            <path class="face" d="M54 52 Q54 28 80 28 Q106 28 106 52 L105 78 Q103 98 80 104 Q57 98 55 78 Z" fill="#f3d4b4"/>
+            <path d="M54 52 Q56 32 80 31 Q104 32 106 52 Q96 42 80 42 Q64 42 54 52 Z" fill="#a8a7a1"/><path d="M68 31 L70 14 L90 14 L92 31 Z" fill="#2b2b2b"/><rect x="62" y="28" width="36" height="5" rx="2" fill="#2b2b2b"/><line x1="60" y1="21" x2="100" y2="21" stroke="#b08d57" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M57 64 Q65 59 73 64 M87 64 Q95 59 103 64" stroke="#7f7e78" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+            <ellipse class="eye" cx="66" cy="72" rx="3.8" ry="2" fill="#242424"/>
+        <ellipse class="eye" cx="94" cy="72" rx="3.8" ry="2" fill="#242424"/>
+            <path d="M80 75 L78 84 L82 85" fill="none" stroke="#c69879" stroke-width="1.4"/>
+            <path d="M58 84 Q60 100 68 110 Q72 136 80 142 Q88 136 92 110 Q100 100 102 84 Q94 97 80 98 Q66 97 58 84 Z" fill="#dcdbd4"/>
+        <path d="M67 89 Q80 83 93 89 Q86 92 80 90 Q74 92 67 89 Z" fill="#dcdbd4"/>
+            <path class="mouth" d="M74 92 Q80 95 86 92" fill="none" stroke="#7a4b40" stroke-width="2.2" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M71 90 Q80 99 89 90" fill="none" stroke="#7a4b40" stroke-width="2.5" stroke-linecap="round"/>
+            
+            
+    <g class="think-dots" opacity="0">
+      <circle cx="122" cy="30" r="3.2" fill="#8a8f98"/>
+      <circle cx="132" cy="25" r="2.5" fill="#8a8f98"/>
+      <circle cx="140" cy="21" r="1.8" fill="#8a8f98"/>
+    </g>
+          </g>
+          
+    <g class="sketch-lines">
+      <line x1="18" y1="150" x2="33" y2="146"/>
+      <line x1="16" y1="156" x2="37" y2="151"/>
+      <line x1="20" y1="162" x2="33" y2="159"/>
+    </g>
+        </g>
+    </svg></div><figcaption><b>孔子</b><span>溫和的老師。會誇你，也會委婉提醒你一步一步來。</span></figcaption></figure><figure class="who"><div class="art"><svg viewBox="0 0 160 180" class="char-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse class="shadow" cx="80" cy="174" rx="42" ry="6" fill="#000000" fill-opacity="0.16"/>
+      
+        <g class="motif"><g fill="none" stroke="#5c9ac2" stroke-width="2.6" stroke-linecap="round"><path d="M6 132 Q14 124 22 132 T38 132"/><path d="M6 142 Q14 134 22 142 T38 142"/><path d="M6 152 Q14 144 22 152 T38 152"/></g></g>
+        <g class="pet-body">
+          <g class="body">
+            <path d="M50 172 Q47 123 80 119 Q113 123 110 172 Z" fill="#cbb999" stroke="#9c8a6c" stroke-width="2"/>
+            <path d="M68 120 L90 152" stroke="#7a6a50" stroke-width="5" fill="none"/>
+        <path d="M92 120 L82 134" stroke="#7a6a50" stroke-width="5" fill="none"/>
+          </g>
+          <g class="gesture-arm">
+            <path d="M55 136 Q38 150 27 154" fill="none" stroke="#cbb999" stroke-width="9" stroke-linecap="round"/>
+            <circle class="hand" cx="26" cy="155" r="6" fill="#f3d4b4"/>
+          </g>
+          <g class="head">
+            <path d="M51 52 Q46 86 54 122 L106 122 Q114 86 109 52 Q104 30 80 30 Q56 30 51 52 Z" fill="#efeee9"/>
+            <path class="face" d="M53 56 Q52 18 80 18 Q108 18 107 56 L105 78 Q103 98 80 104 Q57 98 55 78 Z" fill="#f3d4b4"/>
+            <ellipse cx="72" cy="30" rx="9" ry="4.5" fill="#ffffff" opacity=".4"/><path d="M53 60 Q47 48 54 40 L57 62 Z M107 60 Q113 48 106 40 L103 62 Z" fill="#f6f5f1"/>
+            <path d="M56 65 Q64 58 73 63 Q62 64 53 74 Z M104 65 Q96 58 87 63 Q98 64 107 74 Z" fill="#f6f5f1" stroke="#cfcdc6" stroke-width=".8"/>
+            <ellipse class="eye" cx="66" cy="72" rx="3.8" ry="2" fill="#242424"/>
+        <ellipse class="eye" cx="94" cy="72" rx="3.8" ry="2" fill="#242424"/>
+            <path d="M80 75 L78 84 L82 85" fill="none" stroke="#c69879" stroke-width="1.4"/>
+            <path d="M58 84 Q60 100 68 110 Q72 144 80 150 Q88 144 92 110 Q100 100 102 84 Q94 97 80 98 Q66 97 58 84 Z" fill="#f4f3ef"/>
+        <path d="M67 89 Q80 83 93 89 Q86 92 80 90 Q74 92 67 89 Z" fill="#f4f3ef"/>
+            <path class="mouth" d="M74 92 Q80 95 86 92" fill="none" stroke="#8a5a4c" stroke-width="2.2" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M71 90 Q80 99 89 90" fill="none" stroke="#8a5a4c" stroke-width="2.5" stroke-linecap="round"/>
+            
+            
+    <g class="think-dots" opacity="0">
+      <circle cx="122" cy="30" r="3.2" fill="#8a8f98"/>
+      <circle cx="132" cy="25" r="2.5" fill="#8a8f98"/>
+      <circle cx="140" cy="21" r="1.8" fill="#8a8f98"/>
+    </g>
+          </g>
+          
+    <g class="sketch-lines">
+      <line x1="18" y1="150" x2="33" y2="146"/>
+      <line x1="16" y1="156" x2="37" y2="151"/>
+      <line x1="20" y1="162" x2="33" y2="159"/>
+    </g>
+        </g>
+    </svg></div><figcaption><b>老子</b><span>話少、慢條斯理。提醒你少做一點，事情反而順。</span></figcaption></figure><figure class="who"><div class="art"><svg viewBox="0 0 160 180" class="char-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse class="shadow" cx="80" cy="174" rx="42" ry="6" fill="#000000" fill-opacity="0.16"/>
+      
+        <g class="motif"><g transform="translate(22 132)"><ellipse cx="-7" cy="-5" rx="8" ry="6" fill="#eaa63e" transform="rotate(-25 -7 -5)"/><ellipse cx="7" cy="-5" rx="8" ry="6" fill="#eaa63e" transform="rotate(25 7 -5)"/><ellipse cx="-5" cy="5" rx="5" ry="4" fill="#d47f2a"/><ellipse cx="5" cy="5" rx="5" ry="4" fill="#d47f2a"/><circle cx="-8" cy="-6" r="1.6" fill="#fff6dc"/><circle cx="8" cy="-6" r="1.6" fill="#fff6dc"/><rect x="-1" y="-9" width="2" height="17" rx="1" fill="#3a3028"/><path d="M-1 -9 Q-4 -15 -7 -17 M1 -9 Q4 -15 7 -17" stroke="#3a3028" fill="none" stroke-width="1"/></g></g>
+        <g class="pet-body">
+          <g class="body">
+            <path d="M50 172 Q47 123 80 119 Q113 123 110 172 Z" fill="#5f7a64" stroke="#435a48" stroke-width="2"/>
+            <path d="M68 120 L90 152" stroke="#e6e1cf" stroke-width="5" fill="none"/>
+        <path d="M92 120 L82 134" stroke="#e6e1cf" stroke-width="5" fill="none"/>
+          </g>
+          <g class="gesture-arm">
+            <path d="M55 136 Q38 150 27 154" fill="none" stroke="#5f7a64" stroke-width="9" stroke-linecap="round"/>
+            <circle class="hand" cx="26" cy="155" r="6" fill="#f3d4b4"/>
+          </g>
+          <g class="head">
+            <path d="M52 54 Q50 26 80 25 Q110 26 108 54 L112 100 L101 94 L104 62 L56 62 L59 94 L48 100 Z" fill="#2c2a28"/>
+            <path class="face" d="M54 52 Q54 28 80 28 Q106 28 106 52 L105 78 Q103 98 80 104 Q57 98 55 78 Z" fill="#f3d4b4"/>
+            <path d="M54 52 Q58 30 80 29 Q102 30 106 52 Q92 38 80 40 Q66 38 54 52 Z" fill="#2c2a28"/><ellipse cx="80" cy="22" rx="9" ry="7" fill="#2c2a28"/><line x1="65" y1="23" x2="95" y2="18" stroke="#b08d57" stroke-width="2.2" stroke-linecap="round"/>
+            <path d="M59 64 Q66 61 72 64 M88 64 Q94 61 101 64" stroke="#2c2a28" stroke-width="2" fill="none" stroke-linecap="round"/>
+            
+      <ellipse class="eye" cx="66" cy="72" rx="3.4" ry="4.4" fill="#242424"/>
+      <ellipse class="eye" cx="94" cy="72" rx="3.4" ry="4.4" fill="#242424"/>
+      <circle class="shine" cx="68" cy="70" r="1.7" fill="#ffffff"/>
+      <circle class="shine" cx="96" cy="70" r="1.7" fill="#ffffff"/>
+            <path d="M80 75 L78 84 L82 85" fill="none" stroke="#c69879" stroke-width="1.4"/>
+            <path d="M70 88 Q80 84 90 88" stroke="#2c2a28" stroke-width="2" fill="none"/><path d="M76 98 Q80 114 84 98 Z" fill="#2c2a28"/>
+            <path class="mouth" d="M73 92 Q80 97 87 92" fill="none" stroke="#8a5547" stroke-width="2.2" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M71 90 Q80 100 89 90" fill="none" stroke="#8a5547" stroke-width="2.5" stroke-linecap="round"/>
+            
+            
+    <g class="think-dots" opacity="0">
+      <circle cx="122" cy="30" r="3.2" fill="#8a8f98"/>
+      <circle cx="132" cy="25" r="2.5" fill="#8a8f98"/>
+      <circle cx="140" cy="21" r="1.8" fill="#8a8f98"/>
+    </g>
+          </g>
+          
+    <g class="sketch-lines">
+      <line x1="18" y1="150" x2="33" y2="146"/>
+      <line x1="16" y1="156" x2="37" y2="151"/>
+      <line x1="20" y1="162" x2="33" y2="159"/>
+    </g>
+        </g>
+    </svg></div><figcaption><b>莊子</b><span>逍遙自在，愛說寓言。看你太緊繃時會勸你放輕鬆。</span></figcaption></figure><figure class="who"><div class="art"><svg viewBox="0 0 160 180" class="char-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse class="shadow" cx="80" cy="174" rx="42" ry="6" fill="#000000" fill-opacity="0.16"/>
+      
+        <g class="motif"><polygon points="5,134 24,123 41,131 27,134 31,147 20,136" fill="#b58a58" stroke="#7a5630" stroke-width="1.3"/><path d="M24 123 L22 136" stroke="#7a5630" stroke-width="1"/></g>
+        <g class="pet-body">
+          <g class="body">
+            <path d="M50 172 Q47 123 80 119 Q113 123 110 172 Z" fill="#8a6a48" stroke="#5f4830" stroke-width="2"/>
+            <path d="M68 120 L90 152" stroke="#5f4830" stroke-width="5" fill="none"/>
+        <path d="M92 120 L82 134" stroke="#5f4830" stroke-width="5" fill="none"/><path d="M51 150 L109 150" stroke="#4a3a28" stroke-width="4"/>
+          </g>
+          <g class="gesture-arm">
+            <path d="M55 136 Q38 150 27 154" fill="none" stroke="#8a6a48" stroke-width="8" stroke-linecap="round"/>
+            <circle class="hand" cx="26" cy="155" r="6" fill="#dfb48c"/>
+          </g>
+          <g class="head">
+            <path d="M54 50 Q54 25 80 25 Q106 25 106 50 Z" fill="#2a2622"/>
+            <path class="face" d="M54 52 Q54 28 80 28 Q106 28 106 52 L105 78 Q103 98 80 104 Q57 98 55 78 Z" fill="#dfb48c"/>
+            <rect x="52" y="43" width="56" height="8" rx="3" fill="#5b4a3a"/><path d="M106 47 Q116 52 114 64 M106 48 Q120 50 120 58" stroke="#5b4a3a" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M58 63 L72 62 M88 62 L102 63" stroke="#2a2622" stroke-width="3" stroke-linecap="round"/>
+            
+      <ellipse class="eye" cx="66" cy="72" rx="3.4" ry="4.4" fill="#242424"/>
+      <ellipse class="eye" cx="94" cy="72" rx="3.4" ry="4.4" fill="#242424"/>
+      <circle class="shine" cx="68" cy="70" r="1.7" fill="#ffffff"/>
+      <circle class="shine" cx="96" cy="70" r="1.7" fill="#ffffff"/>
+            <path d="M80 75 L78 84 L82 85" fill="none" stroke="#a87554" stroke-width="1.4"/>
+            <path d="M59 84 Q62 102 80 106 Q98 102 101 84 Q92 98 80 98 Q68 98 59 84 Z" fill="#3a332c" opacity=".9"/><path d="M69 88 Q80 84 91 88" stroke="#3a332c" stroke-width="2.4" fill="none"/>
+            <path class="mouth" d="M74 92 Q80 95 86 92" fill="none" stroke="#f0d0b4" stroke-width="2.2" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M71 90 Q80 99 89 90" fill="none" stroke="#f0d0b4" stroke-width="2.5" stroke-linecap="round"/>
+            
+            
+    <g class="think-dots" opacity="0">
+      <circle cx="122" cy="30" r="3.2" fill="#8a8f98"/>
+      <circle cx="132" cy="25" r="2.5" fill="#8a8f98"/>
+      <circle cx="140" cy="21" r="1.8" fill="#8a8f98"/>
+    </g>
+          </g>
+          
+    <g class="sketch-lines">
+      <line x1="18" y1="150" x2="33" y2="146"/>
+      <line x1="16" y1="156" x2="37" y2="151"/>
+      <line x1="20" y1="162" x2="33" y2="159"/>
+    </g>
+        </g>
+    </svg></div><figcaption><b>墨子</b><span>工匠出身，凡事問有沒有用。量過才算數。</span></figcaption></figure><figure class="who"><div class="art"><svg viewBox="0 0 160 180" class="char-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse class="shadow" cx="80" cy="174" rx="42" ry="6" fill="#000000" fill-opacity="0.16"/>
+      
+        <g class="motif"><rect x="10" y="112" width="24" height="4" fill="#9a7a4a"/><line x1="22" y1="116" x2="22" y2="144" stroke="#1d1d1d" stroke-width="1.5"/><path d="M22 144 L16 150 L22 157 L28 150 Z" fill="#8a8f96" stroke="#5d6066" stroke-width="1"/></g>
+        <g class="pet-body">
+          <g class="body">
+            <path d="M50 172 Q47 123 80 119 Q113 123 110 172 Z" fill="#262626" stroke="#111" stroke-width="2"/>
+            <path d="M68 120 L90 152" stroke="#a8342b" stroke-width="5" fill="none"/>
+        <path d="M92 120 L82 134" stroke="#a8342b" stroke-width="5" fill="none"/><rect x="51" y="150" width="58" height="6" fill="#a8342b"/>
+          </g>
+          <g class="gesture-arm">
+            <path d="M55 136 Q38 150 27 154" fill="none" stroke="#262626" stroke-width="9" stroke-linecap="round"/>
+            <circle class="hand" cx="26" cy="155" r="6" fill="#f3d4b4"/>
+          </g>
+          <g class="head">
+            <path d="M52 56 Q50 30 80 27 Q110 30 108 56 L108 70 L52 70 Z" fill="#1d1b19"/>
+            <path class="face" d="M54 52 Q54 28 80 28 Q106 28 106 52 L105 78 Q103 98 80 104 Q57 98 55 78 Z" fill="#f3d4b4"/>
+            <path d="M54 52 Q56 32 80 31 Q104 32 106 52 Q96 42 80 42 Q64 42 54 52 Z" fill="#1d1b19"/><path d="M70 31 L66 6 L94 6 L90 31 Z" fill="#141414"/><rect x="62" y="28" width="36" height="5" rx="2" fill="#141414"/><path d="M62 33 Q57 62 60 86 M98 33 Q103 62 100 86" stroke="#141414" stroke-width="1.2" fill="none"/>
+            <path d="M57 61 L72 65 M88 65 L103 61" stroke="#1d1b19" stroke-width="3" stroke-linecap="round"/>
+            
+      <ellipse class="eye" cx="66" cy="72" rx="3.4" ry="4.4" fill="#242424"/>
+      <ellipse class="eye" cx="94" cy="72" rx="3.4" ry="4.4" fill="#242424"/>
+      <circle class="shine" cx="68" cy="70" r="1.7" fill="#ffffff"/>
+      <circle class="shine" cx="96" cy="70" r="1.7" fill="#ffffff"/>
+            <path d="M80 75 L78 84 L82 85" fill="none" stroke="#c69879" stroke-width="1.4"/>
+            <path d="M80 87 Q70 85 62 94 M80 87 Q90 85 98 94" stroke="#1d1b19" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M77 99 L80 112 L83 99 Z" fill="#1d1b19"/>
+            <path class="mouth" d="M74 93 L86 93" fill="none" stroke="#8a5547" stroke-width="2.2" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M73 91 Q80 97 87 91" fill="none" stroke="#8a5547" stroke-width="2.4" stroke-linecap="round"/>
+            
+            
+    <g class="think-dots" opacity="0">
+      <circle cx="122" cy="30" r="3.2" fill="#8a8f98"/>
+      <circle cx="132" cy="25" r="2.5" fill="#8a8f98"/>
+      <circle cx="140" cy="21" r="1.8" fill="#8a8f98"/>
+    </g>
+          </g>
+          
+    <g class="sketch-lines">
+      <line x1="18" y1="150" x2="33" y2="146"/>
+      <line x1="16" y1="156" x2="37" y2="151"/>
+      <line x1="20" y1="162" x2="33" y2="159"/>
+    </g>
+        </g>
+    </svg></div><figcaption><b>韓非子</b><span>冷面法家。只信規則和證據，話短但句句到位。</span></figcaption></figure><figure class="who"><div class="art"><svg viewBox="0 0 160 180" class="char-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse class="shadow" cx="80" cy="174" rx="42" ry="6" fill="#000000" fill-opacity="0.16"/>
+      
+        <g class="motif"><circle cx="22" cy="132" r="13" fill="#f3f0e6" stroke="#3a3a36" stroke-width="1.4"/><path d="M22 119 A13 13 0 0 1 22 145 A6.5 6.5 0 0 1 22 132 A6.5 6.5 0 0 0 22 119 Z" fill="#2b2b2b"/><circle cx="22" cy="125.5" r="1.9" fill="#2b2b2b"/><circle cx="22" cy="138.5" r="1.9" fill="#f3f0e6"/></g>
+        <g class="pet-body">
+          <g class="body">
+            <path d="M50 172 Q47 123 80 119 Q113 123 110 172 Z" fill="#44525a" stroke="#2b363c" stroke-width="2"/>
+            <path d="M68 120 L90 152" stroke="#cfd6d2" stroke-width="5" fill="none"/>
+        <path d="M92 120 L82 134" stroke="#cfd6d2" stroke-width="5" fill="none"/>
+          </g>
+          <g class="gesture-arm">
+            <path d="M55 136 Q38 150 27 154" fill="none" stroke="#44525a" stroke-width="9" stroke-linecap="round"/>
+            <circle class="hand" cx="26" cy="155" r="6" fill="#f3d4b4"/>
+          </g>
+          <g class="head">
+            <path d="M52 56 Q50 30 80 27 Q110 30 108 56 L109 84 Q104 74 104 62 L56 62 Q56 74 51 84 Z" fill="#bdbab2"/>
+            <path class="face" d="M54 52 Q54 28 80 28 Q106 28 106 52 L105 78 Q103 98 80 104 Q57 98 55 78 Z" fill="#f3d4b4"/>
+            <path d="M54 52 Q56 32 80 31 Q104 32 106 52 Q96 43 80 43 Q64 43 54 52 Z" fill="#bdbab2"/><ellipse cx="80" cy="21" rx="10.5" ry="9.5" fill="#bdbab2" stroke="#93908a" stroke-width="1"/><line x1="63" y1="23" x2="97" y2="19" stroke="#6b4a2a" stroke-width="2.6" stroke-linecap="round"/>
+            <path d="M57 65 Q65 59 73 63 M87 63 Q95 59 103 65" stroke="#ecebe5" stroke-width="3.4" fill="none" stroke-linecap="round"/><path d="M57 65 Q53 70 52 78 M103 65 Q107 70 108 78" stroke="#ecebe5" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+            <ellipse class="eye" cx="66" cy="72" rx="3.8" ry="2" fill="#242424"/>
+        <ellipse class="eye" cx="94" cy="72" rx="3.8" ry="2" fill="#242424"/>
+            <path d="M80 75 L78 84 L82 85" fill="none" stroke="#c69879" stroke-width="1.4"/>
+            <path d="M58 84 Q60 100 68 110 Q72 134 80 140 Q88 134 92 110 Q100 100 102 84 Q94 97 80 98 Q66 97 58 84 Z" fill="#e6e3db"/>
+        <path d="M67 89 Q80 83 93 89 Q86 92 80 90 Q74 92 67 89 Z" fill="#e6e3db"/>
+            <path class="mouth" d="M74 92 Q80 95 86 92" fill="none" stroke="#cdb9a6" stroke-width="2.2" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M71 90 Q80 99 89 90" fill="none" stroke="#cdb9a6" stroke-width="2.5" stroke-linecap="round"/>
+            
+            
+    <g class="think-dots" opacity="0">
+      <circle cx="122" cy="30" r="3.2" fill="#8a8f98"/>
+      <circle cx="132" cy="25" r="2.5" fill="#8a8f98"/>
+      <circle cx="140" cy="21" r="1.8" fill="#8a8f98"/>
+    </g>
+          </g>
+          
+    <g class="sketch-lines">
+      <line x1="18" y1="150" x2="33" y2="146"/>
+      <line x1="16" y1="156" x2="37" y2="151"/>
+      <line x1="20" y1="162" x2="33" y2="159"/>
+    </g>
+        </g>
+    </svg></div><figcaption><b>鬼谷子</b><span>山中的謀略家。先觀察、等時機，再開口。</span></figcaption></figure></div>
+  </div>
+</section>
+
+<section id="start">
+  <div class="wrap">
+    <p class="eyebrow">三步開始</p>
+    <h2>一分鐘就能上手</h2>
+    <ol class="steps">
+      <li><b>裝好、打開</b><span>助手會出現在螢幕右下角，可以拖到你喜歡的位置。</span></li>
+      <li><b>按「📋 對話清單」</b><span>再按「＋ 加入對話」，點你要盯的那個 Claude 對話。</span></li>
+      <li><b>開啟「即時提醒」</b><span>清單上方的黃色提示按「開啟」，之後就能在泡泡上直接回答 Claude。</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="get" id="get">
+  <div class="wrap">
+    <p class="eyebrow">免費下載</p>
+    <h2>把他們請到你的桌面</h2>
+    <div class="dl">
+      <a class="btn main" href="https://github.com/bca41258185-hash/desktop-assistant/releases/download/v0.1.0/DesktopMaster-Setup-0.1.0.exe">安裝版<small>DesktopMaster-Setup-0.1.0.exe</small></a>
+      <a class="btn alt" href="https://github.com/bca41258185-hash/desktop-assistant/releases/download/v0.1.0/DesktopMaster-0.1.0-win.exe">免安裝版<small>DesktopMaster-0.1.0-win.exe</small></a>
+    </div>
+    <div class="notes">
+      <div class="card">
+        <h3>第一次打開時</h3>
+        <ul>
+          <li>這個程式沒有購買數位簽章，Windows 可能跳出「已保護您的電腦」。</li>
+          <li>按「其他資訊」，再按「仍要執行」就可以了。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>需要什麼</h3>
+        <ul>
+          <li>Windows 10 或 11。</li>
+          <li>Claude 桌面版的 Code 分頁，或 Claude Code。</li>
+          <li>「即時提醒」需要電腦上有 Node.js；沒有也能用，只是提醒會慢一點、不能在泡泡上回答。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>你的資料</h3>
+        <ul>
+          <li>只讀取你電腦裡的 Claude 對話紀錄，不會修改它們。</li>
+          <li>所有內容都留在你的電腦，不會上傳到任何地方。</li>
+          <li>開啟「即時提醒」會在 Claude 的設定加一小段，隨時可以關掉還原。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>原始碼：<a href="https://github.com/bca41258185-hash/desktop-assistant">github.com/bca41258185-hash/desktop-assistant</a></p>
+    <p>角色為歷史人物的 Q 版造型；助手的看法與閒聊是原創台詞，名言則附有原典出處。</p>
+  </div>
+</footer>
+
+</body>
+</html>

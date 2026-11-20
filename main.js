@@ -5,6 +5,10 @@ const { app, BrowserWindow, ipcMain, dialog, screen, Menu, shell, clipboard } = 
 const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
+
+// 設定與資料一律放在 %APPDATA%\desktop-assistant（不隨打包後的產品名稱改變），
+// 這樣開發版、安裝版、免安裝版用的是同一份設定，更新或換版本都不會遺失。
+app.setPath('userData', path.join(app.getPath('appData'), 'desktop-assistant'));
 const { createProvider } = require('./providers');
 const { createAiWatcher, defaultRoots } = require('./ai-watch');
 const hooksInstaller = require('./ai-watch/hooks-installer');
@@ -899,6 +903,25 @@ function onAiUpdate(list) {
   }
 }
 
+// 把鉤子腳本複製到使用者資料夾裡的固定位置，Claude 的設定指向這一份。
+// 這樣不管程式是安裝版、免安裝版（每次開啟都解壓到不同的暫存資料夾）還是之後更新、搬家，
+// 路徑都不會變；程式更新時這一份也會跟著換新。
+function ensureHookScript() {
+  const src = path.join(__dirname, 'hooks', 'claude-hook.js');
+  const dst = path.join(aiHooksDir(), 'claude-hook.js');
+  try {
+    fs.mkdirSync(aiHooksDir(), { recursive: true });
+    const want = fs.readFileSync(src);
+    let have = null;
+    try { have = fs.readFileSync(dst); } catch (e) { /* 還沒有 */ }
+    if (!have || !have.equals(want)) fs.writeFileSync(dst, want);
+    return dst;
+  } catch (e) {
+    console.error('複製鉤子腳本失敗:', e.message);
+    return src;
+  }
+}
+
 // 鉤子腳本與桌寵交換資料的資料夾（userData/ai-hooks）
 function aiHooksDir() {
   return path.join(app.getPath('userData'), 'ai-hooks');
@@ -1154,7 +1177,7 @@ function registerIpc() {
     try {
       writeWatchProjects();
       const r = hooksInstaller.install({
-        scriptPath: path.join(__dirname, 'hooks', 'claude-hook.js'),
+        scriptPath: ensureHookScript(),
         dataDir: aiHooksDir()
       });
       setupAiWatch();   // 讓監看器知道即時提醒已開啟
@@ -1428,6 +1451,7 @@ app.whenReady().then(() => {
   setupAiWatch();
   touchAlive();
   setInterval(touchAlive, 5000);
+  ensureHookScript();   // 程式更新後，固定位置那份鉤子腳本也跟著換新
   setInterval(remarkTick, 10000);
   setInterval(chatTick, 10000);
   // 開發測試：啟動 8 秒後直接播一段閒聊（不必等大家都閒下來）

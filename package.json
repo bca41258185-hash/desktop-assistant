@@ -1,11 +1,12 @@
 {
   "name": "desktop-assistant",
   "version": "0.1.0",
-  "description": "桌面助手寵物 — Electron + Node 桌面小幫手 MVP（桌寵、資料夾監看、AI 聊天、工作進度）",
+  "description": "桌面大師——幾位 Q 版古代思想家站在桌面角落，幫你盯著 Claude 的對話",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "dist:win": "electron-builder --win nsis portable --x64 --publish never"
   },
   "author": "",
   "license": "MIT",
@@ -13,6 +14,42 @@
     "chokidar": "^3.6.0"
   },
   "devDependencies": {
-    "electron": "^31.7.7"
+    "electron": "^31.7.7",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "local.desktopmaster.app",
+    "productName": "桌面大師",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "ai-watch/**/*",
+      "hooks/**/*",
+      "data/**/*",
+      "providers/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "DesktopMaster-Setup-${version}.exe",
+      "shortcutName": "桌面大師",
+      "uninstallDisplayName": "桌面大師"
+    },
+    "portable": {
+      "artifactName": "DesktopMaster-${version}-win.exe"
+    }
   }
 }
