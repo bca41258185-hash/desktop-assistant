@@ -361,3 +361,6 @@ html, body {
 /* 不畫筆記本橫線的泡泡（字級或內容和橫線行距對不上時） */
 .bubble.plain { background: #faf8f1; }
 .bubble.plain.sticky.reply { background: #fff8e6; }
+
+/* 角色外圍一圈很淡的亮邊：深色背景上，黑帽子、黑衣服才看得出輪廓 */
+#petArt svg { filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.55)); }
