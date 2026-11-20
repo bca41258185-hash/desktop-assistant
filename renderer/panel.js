@@ -382,6 +382,7 @@ const aiHookBtn = document.getElementById('aiHookBtn');
 const aiHookHint = document.getElementById('aiHookHint');
 let aiState = { enabled: true, roots: null, watchProjects: [], hooks: {}, projects: [] };
 let aiHookMsg = '';
+let whoPickerFor = '';   // 目前展開「換誰來盯」選單的對話 id
 
 function renderAiConfig() {
   // 進階設定裡：追蹤整個資料夾的清單
@@ -608,19 +609,41 @@ function renderAi() {
       body.appendChild(el('div', 'ai-row-time', timeAgo(s.lastActivity)));
     }
     row.appendChild(body);
-    // 由哪位助手盯這個對話：點一下換下一位
+    // 由哪位助手盯這個對話：點一下展開一排頭像，直接點要換成誰
     const order = window.CHAR_ORDER || [];
     const who = (window.CHARACTERS || {})[r.characterId];
+    let whoPicker = null;
     if (r.removable && who && order.length > 1) {
-      const by = el('button', 'ai-row-who', who.nameZh + ' 盯');
-      by.title = '點一下，換另一位助手來盯這個對話';
-      by.addEventListener('click', async (e) => {
+      const open = whoPickerFor === r.id;
+      const by = el('button', 'ai-row-who' + (open ? ' open' : ''), who.nameZh + ' 盯 ' + (open ? '▴' : '▾'));
+      by.title = '點一下，選另一位助手來盯這個對話';
+      by.addEventListener('click', (e) => {
         e.stopPropagation();
-        const next = order[(order.indexOf(r.characterId) + 1) % order.length];
-        aiState = await window.api.setAiSessionCharacter(r.id, next);
+        whoPickerFor = open ? '' : r.id;
         renderAi();
       });
       row.appendChild(by);
+      if (open) {
+        whoPicker = el('div', 'ai-who-picker');
+        whoPicker.appendChild(el('div', 'ai-who-title', '要請誰來盯這個對話？'));
+        const grid = el('div', 'ai-who-grid');
+        order.forEach((cid) => {
+          const c = window.CHARACTERS[cid];
+          const b = el('button', 'ai-who-item' + (cid === r.characterId ? ' selected' : ''));
+          const art = el('span', 'ai-who-art');
+          art.innerHTML = c.svg;                      // 角色造型是程式內建的 SVG，不是外來內容
+          b.appendChild(art);
+          b.appendChild(el('span', 'ai-who-name', c.nameZh));
+          b.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            whoPickerFor = '';
+            if (cid !== r.characterId) aiState = await window.api.setAiSessionCharacter(r.id, cid);
+            renderAi();
+          });
+          grid.appendChild(b);
+        });
+        whoPicker.appendChild(grid);
+      }
     }
     // 等你回答的那一列可以點：直接開到那個對話
     if (s && s.status === 'waiting' && window.api.focusClaude) {
@@ -640,6 +663,7 @@ function renderAi() {
       row.appendChild(rm);
     }
     aiList.appendChild(row);
+    if (whoPicker) aiList.appendChild(whoPicker);
   });
 }
 
