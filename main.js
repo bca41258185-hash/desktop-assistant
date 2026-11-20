@@ -515,7 +515,12 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
   } else if (kind === 'waiting') {
     setPetPose('idle');
     // 等你回覆的泡泡也留著，點一下就跳到 Claude
-    speak({ text: 'Claude 在等你回答', ai: true, sticky: true, action: 'reply' });
+    // 點泡泡會直接開到這一個對話；同時追蹤好幾個時註明是哪一個
+    const multi = composeTargets().length > 1 && s.title && s.title !== '（尚無指令）';
+    speak({
+      text: 'Claude 在等你回答', attribution: multi ? '來自：' + clip(s.title, 24) : '',
+      ai: true, sticky: true, action: 'reply', sessionId: sessionIdOf(s)
+    });
   } else if (kind === 'done') {
     if (s.interrupted) {
       setPetPose('idle');
@@ -704,7 +709,16 @@ function registerIpc() {
   ipcMain.on('pet:menu', () => showPetMenu());
   ipcMain.on('pet:compose-open', () => openCompose());
   ipcMain.on('pet:compose-send', (e, { text, targetId }) => { sendCompose(text, targetId); });
-  ipcMain.on('claude:focus', () => focusClaudeWindow());
+  ipcMain.on('claude:focus', (e, sessionId) => {
+    // 知道是哪個對話就用官方連結直接開到那一個；不知道才只把 Claude 視窗叫出來
+    let meta = null;
+    try { meta = sessionId ? desktopSessionMeta().get(String(sessionId)) : null; } catch (err) { /* 沒有桌面版資料 */ }
+    if (meta && /^local_[A-Za-z0-9-]+$/.test(meta.localId || '')) {
+      shell.openExternal('claude://code/continue?session=' + meta.localId).catch(() => focusClaudeWindow());
+    } else {
+      focusClaudeWindow();
+    }
+  });
   // 使用者開始在泡泡上打字：請鉤子繼續等
   ipcMain.on('pet:typing', (e, requestId) => {
     if (!pendingReplies.has(requestId)) return;
@@ -838,7 +852,7 @@ function registerIpc() {
       defaultId: 1,
       cancelId: 1,
       title: '開啟即時提醒',
-      message: '要讓 Claude 在「需要你允許」和「做完」時，立刻通知大師嗎？',
+      message: '要讓 Claude 在「等你回答」和「做完」時，立刻通知大師嗎？',
       detail:
         '・不會影響 Claude 的運作，也不會記錄你打的內容或 Claude 的回覆。\n' +
         '・只對你加入追蹤的對話有作用。\n' +

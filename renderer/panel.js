@@ -405,7 +405,7 @@ function renderAiConfig() {
   }
   aiHookBtn.textContent = h.installed ? '關閉' : (h.partial ? '重新開啟' : '開啟');
   aiHookHint.textContent = aiHookMsg || (h.installed
-    ? 'Claude 一需要你、或一做完，大師馬上提醒。沒反應時，把那個對話關掉重開一次。'
+    ? 'Claude 一需要你、或一做完，大師馬上提醒。沒反應時，到 Claude 把那個對話關掉，再重新打開。'
     : '開啟後提醒更快更準。會在 Claude 的設定檔加一小段，隨時可以關閉還原。');
 }
 
@@ -548,7 +548,7 @@ function renderAi() {
   renderAiConfig();
   aiList.innerHTML = '';
   if (!aiState.enabled) {
-    aiList.appendChild(el('p', 'empty big', '追蹤已關閉。到「更多 → 設定 → 進階」可以打開。'));
+    aiList.appendChild(el('p', 'empty big', '追蹤已關閉。到「更多 → 換角色／設定 → 進階設定」可以打開。'));
     return;
   }
   // 即時提醒還沒開：在最上面放一條看得見的提示（開關本體在進階設定裡，新手找不到）
@@ -599,7 +599,7 @@ function renderAi() {
     }
     row.appendChild(body);
     if (r.removable) {
-      const rm = el('button', 'ai-row-remove', '✕');
+      const rm = el('button', 'ai-row-remove', '取消追蹤');
       rm.title = '不再追蹤這個對話';
       rm.addEventListener('click', async () => {
         aiState = await window.api.removeAiSession(r.id);

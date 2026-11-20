@@ -35,6 +35,7 @@ const bubbleChoicesEl = document.getElementById('bubbleChoices');
 const bubbleTargetsEl = document.getElementById('bubbleTargets');
 const bubbleSkipEl = document.getElementById('bubbleSkip');
 let composeTargetId = '';
+let replySessionId = '';   // 「等你回答」的泡泡是哪一個對話（點了就開到那個對話）
 if (bubbleSkipEl) {
   bubbleSkipEl.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -170,13 +171,14 @@ function showBubble(payload) {
     bubbleSkipEl.hidden = stickyAction !== 'choice';
     bubbleSkipEl.dataset.requestId = stickyAction === 'choice' ? (payload.requestId || '') : '';
   }
+  replySessionId = stickyAction === 'reply' ? (payload.sessionId || '') : '';
   bubbleEl.classList.toggle('sticky', sticky);
   bubbleEl.classList.toggle('confirm', stickyAction === 'confirm');
   bubbleEl.classList.toggle('compose', stickyAction === 'compose');
   bubbleEl.classList.toggle('reply', stickyAction === 'reply' || stickyAction === 'choice');
   if (bubbleHintEl) {
     const canReplyHere = stickyAction === 'confirm' && !!payload.inputPlaceholder && !!payload.requestId;
-    bubbleHintEl.textContent = stickyAction === 'reply' ? '點一下，去 Claude 回答'
+    bubbleHintEl.textContent = stickyAction === 'reply' ? '點一下，打開那個對話去回答'
       : stickyAction === 'compose' ? '不說了就點一下泡泡'
         : canReplyHere ? '不回覆就點一下泡泡' : '知道了就點一下泡泡';
     bubbleHintEl.hidden = !sticky || stickyAction === 'choice';
@@ -207,7 +209,7 @@ bubbleEl.addEventListener('click', () => {
   const rid = bubbleInputEl ? bubbleInputEl.dataset.requestId : '';
   if (rid && window.api.answerChoice) window.api.answerChoice(rid, 'pass');
   hideBubble();
-  if (action === 'reply' && window.api.focusClaude) window.api.focusClaude();
+  if (action === 'reply' && window.api.focusClaude) window.api.focusClaude(replySessionId);
 });
 // Claude 已經不再等你（例如你已在 Claude 裡回覆）→ 自動收起「等你回覆」的泡泡
 if (window.api.onDismissReply) {

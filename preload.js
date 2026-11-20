@@ -10,7 +10,7 @@ contextBridge.exposeInMainWorld('api', {
   showPetMenu: () => ipcRenderer.send('pet:menu'),
   openCompose: () => ipcRenderer.send('pet:compose-open'),
   composeSend: (text, targetId) => ipcRenderer.send('pet:compose-send', { text, targetId }),
-  focusClaude: () => ipcRenderer.send('claude:focus'),
+  focusClaude: (sessionId) => ipcRenderer.send('claude:focus', sessionId),
   answerChoice: (requestId, choice, text) => ipcRenderer.send('pet:choice', { requestId, choice, text }),
   notifyTyping: (requestId) => ipcRenderer.send('pet:typing', requestId),
   onInputExpire: (cb) => ipcRenderer.on('pet:input-expire', (_e, id) => cb(id)),
