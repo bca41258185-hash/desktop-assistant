@@ -384,6 +384,20 @@ function clip(text, n) {
   return t.length > n ? t.slice(0, n) + '…' : t;
 }
 
+// 把「Claude 想用某個工具」說成白話（不出現 Bash、Edit 這類名稱）
+function permissionQuestion(tool, summary) {
+  const what = clip(summary, 40);
+  const quoted = what ? `「${what}」` : '';
+  switch (tool) {
+    case 'Bash': case 'PowerShell': return `Claude 想在電腦上執行${quoted || '一個指令'}，要讓它做嗎？`;
+    case 'Edit': case 'MultiEdit': case 'NotebookEdit': return `Claude 想修改檔案${quoted}，要讓它改嗎？`;
+    case 'Write': return `Claude 想寫入檔案${quoted}，要讓它寫嗎？`;
+    case 'Read': return `Claude 想讀取檔案${quoted}，要讓它讀嗎？`;
+    case 'WebFetch': case 'WebSearch': return `Claude 想上網查資料${quoted}，要讓它查嗎？`;
+    default: return `Claude 想做一件需要你同意的事${quoted}，要讓它做嗎？`;
+  }
+}
+
 // --- 在泡泡上回答 Claude 的權限詢問 ---
 const pendingPermissions = new Set();   // 還在等使用者回答的請求 id
 const pendingReplies = new Set();       // 做完後等使用者回覆的請求 id
@@ -467,8 +481,7 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
       return;
     }
     speak({
-      text: `可以用 ${request.tool} 嗎？`,
-      attribution: request.summary,
+      text: permissionQuestion(request.tool, request.summary),
       ai: true, sticky: true, action: 'choice', requestId: request.id,
       choices: [{ id: 'allow', label: '允許' }, { id: 'deny', label: '拒絕' }],
       inputPlaceholder: '或告訴 Claude 改怎麼做…'
@@ -499,7 +512,7 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
   } else if (kind === 'waiting') {
     setPetPose('idle');
     // 等你回覆的泡泡也留著，點一下就跳到 Claude
-    speak({ text: s.waitingMessage || 'Claude 可能在等你按允許', ai: true, sticky: true, action: 'reply' });
+    speak({ text: 'Claude 在等你回答', ai: true, sticky: true, action: 'reply' });
   } else if (kind === 'done') {
     if (s.interrupted) {
       setPetPose('idle');
@@ -582,7 +595,7 @@ async function sendCompose(text) {
 // 角色頭上的小狀態標籤：等你 > 進行中 > 剛完成（10 分鐘內）；都沒有就不顯示
 function petStatusOf(list) {
   const all = [].concat(...(list || []).map((p) => p.sessions || []));
-  if (all.some((s) => s.status === 'waiting')) return { text: '等你確認', cls: 'waiting' };
+  if (all.some((s) => s.status === 'waiting')) return { text: '等你回答', cls: 'waiting' };
   const working = all.filter((s) => s.status === 'working').length;
   if (working) return { text: working > 1 ? `${working} 段進行中` : '進行中', cls: 'working' };
   if (all.some((s) => s.status === 'done' && Date.now() - s.lastActivity < 10 * 60 * 1000)) return { text: '完成', cls: 'done' };
@@ -810,7 +823,7 @@ function registerIpc() {
     const file = hooksInstaller.settingsPath();
     const { response } = await dialog.showMessageBox(panelWindow, {
       type: 'question',
-      buttons: ['開啟', '取消'],
+      buttons: ['開啟提醒', '先不要'],
       defaultId: 1,
       cancelId: 1,
       title: '開啟即時提醒',
@@ -838,7 +851,7 @@ function registerIpc() {
   ipcMain.handle('ai:hooks-uninstall', async () => {
     const { response } = await dialog.showMessageBox(panelWindow, {
       type: 'question',
-      buttons: ['關閉提醒', '取消'],
+      buttons: ['關閉提醒', '先不要'],
       defaultId: 1,
       cancelId: 1,
       title: '關閉即時提醒',

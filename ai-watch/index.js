@@ -427,7 +427,7 @@ function createAiWatcher(options) {
       const tool = req.tool_name || ev.tool_name || '';
       s.lastActivity = Math.max(s.lastActivity, at);
       const questions = Array.isArray(req.questions) && req.questions.length ? req.questions : null;
-      s.waitingMessage = questions ? 'Claude 有問題要問你' : `需要你允許使用 ${tool}`;
+      s.waitingMessage = questions ? 'Claude 有問題要問你' : 'Claude 在等你同意';
       s.status = 'waiting';
       s.notifiedWaiting = true;
       onEvent({ kind: 'permission', session: publicSession(s), request: Object.assign({ id: String(ev.request_id), tool, summary: String(req.summary || '') }, questions ? { questions } : {}) });

@@ -133,7 +133,10 @@ function showBubble(payload) {
   bubbleEl.classList.toggle('compose', stickyAction === 'compose');
   bubbleEl.classList.toggle('reply', stickyAction === 'reply' || stickyAction === 'choice');
   if (bubbleHintEl) {
-    bubbleHintEl.textContent = stickyAction === 'reply' ? '點一下去回覆' : stickyAction === 'compose' ? '點泡泡取消' : '點一下確認';
+    const canReplyHere = stickyAction === 'confirm' && !!payload.inputPlaceholder && !!payload.requestId;
+    bubbleHintEl.textContent = stickyAction === 'reply' ? '點一下，到 Claude 回答'
+      : stickyAction === 'compose' ? '不說了就點一下泡泡'
+        : canReplyHere ? '不回覆就點一下泡泡' : '知道了就點一下泡泡';
     bubbleHintEl.hidden = !sticky || stickyAction === 'choice';
   }
   stickyOpen = sticky;

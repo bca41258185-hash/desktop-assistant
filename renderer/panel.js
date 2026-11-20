@@ -519,9 +519,9 @@ aiHookBtn.addEventListener('click', async () => {
 
 const AI_STATUS = {
   working: { text: '進行中', cls: 'working' },
-  waiting: { text: '等你', cls: 'waiting' },
+  waiting: { text: '等你回答', cls: 'waiting' },
   done: { text: '完成', cls: 'done' },
-  idle: { text: '閒置', cls: 'idle' }
+  idle: { text: '休息中', cls: 'idle' }
 };
 
 function timeAgo(ms) {
@@ -571,14 +571,14 @@ function renderAi() {
 
   rows.forEach((r) => {
     const s = r.s;
-    const st = s ? (AI_STATUS[s.status] || AI_STATUS.idle) : { text: '沒有動靜', cls: 'idle' };
+    const st = s ? (AI_STATUS[s.status] || AI_STATUS.idle) : { text: '休息中', cls: 'idle' };
     const row = el('div', 'ai-row ' + st.cls);
     row.appendChild(el('span', 'ai-row-status ' + st.cls, s && s.interrupted && s.status === 'done' ? '已中斷' : st.text));
     const body = el('div', 'ai-row-body');
     body.appendChild(el('div', 'ai-row-title', (s && s.title && s.title !== '（尚無指令）') ? s.title : r.title));
     let line = '';
     if (s) {
-      if (s.status === 'waiting') line = s.waitingMessage || '可能在等你按允許';
+      if (s.status === 'waiting') line = 'Claude 在等你回答，看桌寵的泡泡';
       else if (s.status === 'done') line = s.lastText || '';
       else if (s.status === 'working') line = s.lastAction || s.lastPrompt || '';
       if (line) body.appendChild(el('div', 'ai-row-line', line));
