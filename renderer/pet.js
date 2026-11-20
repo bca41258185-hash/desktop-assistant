@@ -30,12 +30,17 @@ function setPose(pose) {
 const bubbleTextEl = bubbleEl.querySelector('.bubble-text') || bubbleEl;
 const bubbleAttrEl = bubbleEl.querySelector('.bubble-attr');
 const bubbleImgEl = bubbleEl.querySelector('.bubble-img');
+const bubbleOkEl = document.getElementById('bubbleOk');
 let bubbleTimer = null;
+let stickyOpen = false;
 function showBubble(payload) {
   let text = '';
   let attr = '';
   let image = '';
   let duration = 6000;
+  const sticky = !!(payload && payload.sticky);
+  // 等使用者確認的泡泡還在時，只有 AI 對話的新訊息能取代它（名言、提醒不行）
+  if (stickyOpen && !(payload && payload.ai)) return;
   if (payload && typeof payload === 'object') {
     text = payload.text || payload.zh || '';
     attr = payload.attribution || payload.sourceZh || '';
@@ -60,12 +65,22 @@ function showBubble(payload) {
   // 先請主行程把視窗展開，再顯示泡泡；泡泡消失後收回，只留角色大小
   if (window.api.setBubbleOpen) window.api.setBubbleOpen(true);
   bubbleEl.classList.add('show');
+  bubbleEl.classList.toggle('sticky', sticky);
+  if (bubbleOkEl) bubbleOkEl.hidden = !sticky;
+  stickyOpen = sticky;
   if (bubbleTimer) clearTimeout(bubbleTimer);
-  bubbleTimer = setTimeout(() => {
-    bubbleEl.classList.remove('show');
-    if (window.api.setBubbleOpen) window.api.setBubbleOpen(false);
-  }, duration);
+  bubbleTimer = sticky ? null : setTimeout(hideBubble, duration);
 }
+
+function hideBubble() {
+  stickyOpen = false;
+  if (bubbleTimer) clearTimeout(bubbleTimer);
+  bubbleTimer = null;
+  bubbleEl.classList.remove('show', 'sticky');
+  if (bubbleOkEl) bubbleOkEl.hidden = true;
+  if (window.api.setBubbleOpen) window.api.setBubbleOpen(false);
+}
+if (bubbleOkEl) bubbleOkEl.addEventListener('click', hideBubble);
 
 // 視窗被推回螢幕內時，角色反向位移以維持在原位
 const stageEl = document.getElementById('stage');

@@ -382,31 +382,31 @@ function onAiEvent({ kind, session: s, image, fromUser }) {
   // 圖片不節流：連續好幾張時一律顯示最新的一張
   if (kind !== 'image' && t - (aiLastBubble.get(key) || 0) < 4000) return;
   aiLastBubble.set(key, t);
-  // 剛顯示圖片的幾秒內，「開始」等文字訊息不要蓋掉圖片
-  if (kind !== 'image' && t - (aiLastBubble.get(s.id + ':image') || 0) < 8000 && kind !== 'waiting') {
-    if (kind === 'start') setPetPose('think');
-    if (kind === 'done') setPetPose('happy');
+  // 剛顯示圖片的幾秒內，「開始」不要蓋掉圖片（等你確認、完成比較重要，照樣顯示）
+  if (kind === 'start' && t - (aiLastBubble.get(s.id + ':image') || 0) < 8000) {
+    setPetPose('think');
     return;
   }
 
   // 泡泡只說發生了什麼，不寫專案／對話名稱（字大、空間小，名稱只是雜訊）
   if (kind === 'image') {
     if (petWindow && !petWindow.isDestroyed()) {
-      petWindow.webContents.send('pet:speak', { text: '我在看的圖', image, duration: 15000 });
+      petWindow.webContents.send('pet:speak', { text: '我在看的圖', image, duration: 15000, ai: true });
     }
   } else if (kind === 'start') {
     setPetPose('think');
-    speak(`開始處理：${clip(s.lastPrompt, 30)}`);
+    speak({ text: `開始處理：${clip(s.lastPrompt, 30)}`, ai: true });
   } else if (kind === 'waiting') {
     setPetPose('idle');
-    speak(s.waitingMessage || 'Claude 可能在等你按允許');
+    speak({ text: s.waitingMessage || 'Claude 可能在等你按允許', ai: true });
   } else if (kind === 'done') {
     if (s.interrupted) {
       setPetPose('idle');
-      speak('已中斷');
+      speak({ text: '已中斷', ai: true });
     } else {
       setPetPose('happy');
-      speak(`完成了：${clip(s.lastText, 34) || s.lastAction}`);
+      // 「完成」要等使用者按確認才消失，不會自己不見，也不會被名言／提醒蓋掉
+      speak({ text: `完成了：${clip(s.lastText, 34) || s.lastAction}`, ai: true, sticky: true });
     }
   }
 }

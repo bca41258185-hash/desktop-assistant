@@ -231,6 +231,23 @@ html, body {
 .bubble.has-img .bubble-text { font-size: 26px; }
 .bubble.has-attr { max-width: 500px; padding-bottom: 8px; }
 
+/* 需要確認的泡泡（完成通知）：可以點，帶一顆「確認」鈕 */
+.bubble.sticky { pointer-events: auto; }
+.bubble-ok {
+  display: block;
+  margin: 8px 0 2px auto;
+  padding: 4px 22px;
+  font: inherit;
+  font-size: 22px;
+  color: #fff;
+  background: #3a3a36;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.bubble-ok:hover { background: #55554f; }
+.bubble-ok[hidden] { display: none; }
+
 /* 折角 */
 .bubble::before {
   content: "";
