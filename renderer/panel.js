@@ -405,7 +405,7 @@ function renderAiConfig() {
   }
   aiHookBtn.textContent = h.installed ? '關閉' : (h.partial ? '重新開啟' : '開啟');
   aiHookHint.textContent = aiHookMsg || (h.installed
-    ? 'Claude 一需要你、或一做完，桌寵馬上提醒。沒反應時，把那段對話關掉重開一次。'
+    ? 'Claude 一需要你、或一做完，桌寵馬上提醒。沒反應時，把那個對話關掉重開一次。'
     : '開啟後提醒更快更準。會在 Claude 的設定檔加一小段，隨時可以關閉還原。');
 }
 
@@ -445,7 +445,7 @@ function renderPicker() {
     if (!list.length) return;
     const head = el('li', 'ai-picker-group');
     head.appendChild(el('span', 'ai-picker-group-name', name));
-    head.appendChild(el('span', 'ai-picker-group-count', list.length + ' 段'));
+    head.appendChild(el('span', 'ai-picker-group-count', list.length + ' 個'));
     aiPickerList.appendChild(head);
     list.forEach((s) => addPickerRow(s));
   };
@@ -471,7 +471,7 @@ function renderPicker() {
     });
     addGroup(name, ordered);
   });
-  if (!q && older) aiPickerList.appendChild(el('li', 'empty', `找不到？在上面打幾個字，可以找到更早的 ${older} 段對話。`));
+  if (!q && older) aiPickerList.appendChild(el('li', 'empty', `找不到？在上面打幾個字，可以找到更早的 ${older} 個對話。`));
 }
 
 function addPickerRow(s) {
@@ -587,7 +587,7 @@ function renderAi() {
     row.appendChild(body);
     if (r.removable) {
       const rm = el('button', 'ai-row-remove', '✕');
-      rm.title = '不再追蹤這段對話';
+      rm.title = '不再追蹤這個對話';
       rm.addEventListener('click', async () => {
         aiState = await window.api.removeAiSession(r.id);
         renderAi();

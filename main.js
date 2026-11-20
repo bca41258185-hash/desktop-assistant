@@ -532,35 +532,42 @@ function sessionIdOf(s) {
   return path.basename(String((s && s.id) || ''), '.jsonl');
 }
 
-// 要送給哪一段對話：追蹤中的對話裡，等你的 > 進行中的 > 最近有動靜的
-function composeTarget() {
-  const live = [].concat(...(aiSnapshot || []).map((p) => p.sessions || []));
+// 可以送話過去的對話：所有追蹤中的對話，等你的 > 進行中的 > 最近有動靜的；第一個是預設
+function composeTargets() {
   const rank = { waiting: 0, working: 1, done: 2, idle: 3 };
+  const out = new Map();
+  const live = [].concat(...(aiSnapshot || []).map((p) => p.sessions || []));
   live.sort((a, b) => (rank[a.status] - rank[b.status]) || (b.lastActivity - a.lastActivity));
-  if (live.length) {
-    const s = live[0];
-    return { id: sessionIdOf(s), title: (s.title && s.title !== '（尚無指令）') ? s.title : '對話', status: s.status };
-  }
-  const w = aiSessions()[0];
-  return w ? { id: w.id, title: w.title || '對話', status: 'idle' } : null;
+  live.forEach((s) => out.set(sessionIdOf(s), {
+    id: sessionIdOf(s), title: (s.title && s.title !== '（尚無指令）') ? s.title : '對話', status: s.status
+  }));
+  aiSessions().forEach((w) => { if (!out.has(w.id)) out.set(w.id, { id: w.id, title: w.title || '對話', status: 'idle' }); });
+  return [...out.values()];
+}
+
+function composeTarget(id) {
+  const list = composeTargets();
+  return list.find((t) => t.id === id) || list[0] || null;
 }
 
 function openCompose() {
-  const t = composeTarget();
-  if (!t) {
-    speak({ text: '先點我兩下，按「＋ 加入對話」選一段對話。', duration: 8000 });
+  const list = composeTargets();
+  if (!list.length) {
+    speak({ text: '先點我兩下，按「＋ 加入對話」選一個對話。', duration: 8000 });
     return;
   }
   speak({
-    text: '要跟 Claude 說什麼？',
-    attribution: '送到：' + clip(t.title, 22),
+    text: list.length > 1 ? '要跟哪個對話說？說什麼？' : '要跟 Claude 說什麼？',
+    // 只有一個對話時直接寫出名稱；有好幾個時列出來讓使用者點選
+    attribution: list.length > 1 ? '' : '送到：' + clip(list[0].title, 30),
+    targets: list.length > 1 ? list.slice(0, 5).map((t) => ({ id: t.id, title: clip(t.title, 26) })) : [],
     ai: true, sticky: true, action: 'compose', inputPlaceholder: '打字，按 Enter 送出'
   });
 }
 
-async function sendCompose(text) {
+async function sendCompose(text, targetId) {
   text = String(text || '').trim().slice(0, 4000);
-  const t = composeTarget();
+  const t = composeTarget(targetId);
   if (!text || !t) return;
   const say = (msg) => speak({ text: msg, ai: true, duration: 7000 });
   try {
@@ -693,7 +700,7 @@ function registerIpc() {
   ipcMain.on('panel:toggle', () => togglePanel());
   ipcMain.on('pet:menu', () => showPetMenu());
   ipcMain.on('pet:compose-open', () => openCompose());
-  ipcMain.on('pet:compose-send', (e, text) => { sendCompose(text); });
+  ipcMain.on('pet:compose-send', (e, { text, targetId }) => { sendCompose(text, targetId); });
   ipcMain.on('claude:focus', () => focusClaudeWindow());
   // 使用者開始在泡泡上打字：請鉤子繼續等
   ipcMain.on('pet:typing', (e, requestId) => {

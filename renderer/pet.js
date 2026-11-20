@@ -32,6 +32,17 @@ const bubbleAttrEl = bubbleEl.querySelector('.bubble-attr');
 const bubbleImgEl = bubbleEl.querySelector('.bubble-img');
 const bubbleHintEl = document.getElementById('bubbleHint');
 const bubbleChoicesEl = document.getElementById('bubbleChoices');
+const bubbleTargetsEl = document.getElementById('bubbleTargets');
+const bubbleSkipEl = document.getElementById('bubbleSkip');
+let composeTargetId = '';
+if (bubbleSkipEl) {
+  bubbleSkipEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const id = bubbleSkipEl.dataset.requestId;
+    if (id && window.api.answerChoice) window.api.answerChoice(id, 'pass');
+    hideBubble();
+  });
+}
 const bubbleInputEl = document.getElementById('bubbleInput');
 const bubbleTextInput = document.getElementById('bubbleTextInput');
 if (bubbleInputEl) {
@@ -42,7 +53,7 @@ if (bubbleInputEl) {
     const id = bubbleInputEl.dataset.requestId;
     if (text && stickyAction === 'compose') {       // 主動說話：不屬於任何一個等待中的詢問
       hideBubble();
-      if (window.api.composeSend) window.api.composeSend(text);
+      if (window.api.composeSend) window.api.composeSend(text, composeTargetId);
       return;
     }
     if (!text || !id) return;
@@ -124,9 +135,34 @@ function showBubble(payload) {
     const canType = sticky && !!payload.inputPlaceholder && (!!payload.requestId || stickyAction === 'compose');
     bubbleInputEl.hidden = !canType;
     bubbleInputEl.dataset.requestId = canType ? (payload.requestId || '') : '';
-    if (stickyAction === 'compose') setTimeout(() => bubbleTextInput.focus(), 150);
     bubbleTextInput.value = '';
     bubbleTextInput.placeholder = canType ? payload.inputPlaceholder : '';
+    if (stickyAction === 'compose') setTimeout(() => bubbleTextInput.focus(), 150);
+  }
+  // 主動說話：有好幾個對話時，列出來讓使用者點要送到哪一個（預設第一個）
+  if (bubbleTargetsEl) {
+    const targets = stickyAction === 'compose' && Array.isArray(payload.targets) ? payload.targets : [];
+    bubbleTargetsEl.innerHTML = '';
+    composeTargetId = targets.length ? targets[0].id : '';
+    targets.forEach((t, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'bubble-target' + (i === 0 ? ' on' : '');
+      b.textContent = t.title;
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        composeTargetId = t.id;
+        bubbleTargetsEl.querySelectorAll('.bubble-target').forEach((x) => x.classList.toggle('on', x === b));
+        bubbleTextInput.focus();
+      });
+      bubbleTargetsEl.appendChild(b);
+    });
+    bubbleTargetsEl.hidden = !targets.length;
+  }
+  // 選擇題／允許拒絕：給一個「先不回答」的出口（Claude 那邊的詢問還在，之後可以去那裡回答）
+  if (bubbleSkipEl) {
+    bubbleSkipEl.hidden = stickyAction !== 'choice';
+    bubbleSkipEl.dataset.requestId = stickyAction === 'choice' ? (payload.requestId || '') : '';
   }
   bubbleEl.classList.toggle('sticky', sticky);
   bubbleEl.classList.toggle('confirm', stickyAction === 'confirm');
@@ -153,6 +189,8 @@ function hideBubble() {
   if (bubbleHintEl) bubbleHintEl.hidden = true;
   if (bubbleChoicesEl) bubbleChoicesEl.hidden = true;
   if (bubbleInputEl) bubbleInputEl.hidden = true;
+  if (bubbleTargetsEl) bubbleTargetsEl.hidden = true;
+  if (bubbleSkipEl) bubbleSkipEl.hidden = true;
   if (window.api.setBubbleOpen) window.api.setBubbleOpen(false);
 }
 // 點泡泡本身就是確認；等你回覆的泡泡點了會把 Claude 視窗叫到最前面

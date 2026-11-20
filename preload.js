@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   togglePanel: () => ipcRenderer.send('panel:toggle'),
   showPetMenu: () => ipcRenderer.send('pet:menu'),
   openCompose: () => ipcRenderer.send('pet:compose-open'),
-  composeSend: (text) => ipcRenderer.send('pet:compose-send', text),
+  composeSend: (text, targetId) => ipcRenderer.send('pet:compose-send', { text, targetId }),
   focusClaude: () => ipcRenderer.send('claude:focus'),
   answerChoice: (requestId, choice, text) => ipcRenderer.send('pet:choice', { requestId, choice, text }),
   notifyTyping: (requestId) => ipcRenderer.send('pet:typing', requestId),

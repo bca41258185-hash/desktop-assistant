@@ -325,3 +325,20 @@ html, body {
 }
 .compose-btn:hover { background: #fff; border-color: #d9902a; }
 .bubble.sticky.compose { border-color: #9db7dd; cursor: default; }
+
+/* 主動說話：選要送到哪個對話 */
+.bubble-targets { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 2px; }
+.bubble-targets[hidden] { display: none; }
+.bubble-target {
+  font: inherit; font-size: 20px; text-align: left; padding: 6px 10px; cursor: pointer;
+  color: #3a3a36; background: #fff; border: 2px solid #d8d2c2; border-radius: 8px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bubble-target.on { border-color: #3b7dd8; background: #eaf2fd; font-weight: 700; }
+.bubble-target.on::before { content: "✓ "; color: #3b7dd8; }
+/* 先不回答 */
+.bubble-skip {
+  display: block; margin: 6px 0 0 auto; padding: 2px 6px; font: inherit; font-size: 17px;
+  color: #7a7a70; background: transparent; border: none; text-decoration: underline; cursor: pointer;
+}
+.bubble-skip[hidden] { display: none; }
