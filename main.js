@@ -118,8 +118,8 @@ function effectiveSettings() {
 // ---------------------------------------------------------------------------
 function createPetWindow() {
   petWindow = new BrowserWindow({
-    width: 250,
-    height: 400,
+    width: 290,
+    height: 440,
     frame: false,
     transparent: true,
     resizable: false,
@@ -146,8 +146,8 @@ function createPetWindow() {
   // 預設放在主螢幕右下角
   const { workArea } = screen.getPrimaryDisplay();
   petWindow.setPosition(
-    workArea.x + workArea.width - 270,
-    workArea.y + workArea.height - 420
+    workArea.x + workArea.width - 310,
+    workArea.y + workArea.height - 460
   );
 }
 

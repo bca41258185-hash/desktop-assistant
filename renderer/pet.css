@@ -14,8 +14,8 @@ html, body {
 
 #stage {
   position: relative;
-  width: 250px;
-  height: 400px;
+  width: 290px;
+  height: 440px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -155,16 +155,16 @@ html, body {
   flex: 0 0 auto;
   align-self: center;
   height: auto !important;
-  max-width: 212px;
+  max-width: 250px;
   overflow: visible;
   margin-bottom: 10px;
-  padding: 11px 15px;
+  padding: 8px 12px;
   background:
-    repeating-linear-gradient(to bottom, transparent 0, transparent 17px, rgba(120, 130, 120, 0.14) 18px),
+    repeating-linear-gradient(to bottom, transparent 0, transparent 23px, rgba(120, 130, 120, 0.14) 24px),
     #faf8f1;
   color: #2b2b28;
-  font-size: 13.5px;
-  line-height: 1.55;
+  font-size: 17px;
+  line-height: 1.4;
   border: 1px solid #d8d2c2;
   border-radius: 4px;
   box-shadow: 0 5px 16px rgba(60, 60, 50, 0.22);
@@ -180,14 +180,14 @@ html, body {
 .bubble-text { display: block; }
 .bubble-attr {
   display: block;
-  margin-top: 6px;
-  font-size: 11px;
+  margin-top: 3px;
+  font-size: 13px;
   line-height: 1.4;
   color: #6b6a62;
   font-style: italic;
 }
 .bubble-attr[hidden] { display: none; }
-.bubble.has-attr { max-width: 228px; padding-bottom: 10px; }
+.bubble.has-attr { max-width: 262px; padding-bottom: 7px; }
 
 /* 折角 */
 .bubble::before {

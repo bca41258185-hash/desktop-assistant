@@ -35,13 +35,29 @@ function isOurs(h) {
   return !!(h && typeof h.command === 'string' && h.command.includes(MARKER));
 }
 
+// 記住原檔的格式（Windows 記事本／PowerShell 常留下 BOM、CRLF），寫回時照原樣，
+// 讓「安裝 → 移除」後檔案與原本逐位元組相同。
+const FORMAT = Symbol('format');
+
+function detectFormat(raw) {
+  const bom = raw.charCodeAt(0) === 0xfeff;
+  const body = bom ? raw.slice(1) : raw;
+  const eol = /\r\n/.test(body) ? '\r\n' : '\n';
+  const m = body.match(/^[{[][ \t]*\r?\n([ \t]+)\S/);
+  const indent = m ? m[1] : 2;
+  const finalNewline = /\n$/.test(body);
+  return { bom, eol, indent, finalNewline };
+}
+
 function readSettings(file) {
   if (!fs.existsSync(file)) return {};
   const raw = fs.readFileSync(file, 'utf8');
-  if (!raw.trim()) return {};
+  const body = raw.replace(/^﻿/, '');   // JSON.parse 不接受 BOM
+  if (!body.trim()) return {};
   try {
-    const obj = JSON.parse(raw);
+    const obj = JSON.parse(body);
     if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('不是物件');
+    Object.defineProperty(obj, FORMAT, { value: detectFormat(raw) });
     return obj;
   } catch (e) {
     throw new Error(`無法解析 ${file}（${e.message}），為避免損毀設定，未做任何修改。`);
@@ -51,7 +67,12 @@ function readSettings(file) {
 function writeSettings(file, obj) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = file + '.tmp-desktop-assistant';
-  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n');
+  const fmt = obj[FORMAT] || { bom: false, eol: '\n', indent: 2, finalNewline: true };
+  let text = JSON.stringify(obj, null, fmt.indent);
+  if (fmt.eol !== '\n') text = text.replace(/\n/g, fmt.eol);
+  if (fmt.finalNewline) text += fmt.eol;
+  if (fmt.bom) text = '﻿' + text;
+  fs.writeFileSync(tmp, text);
   fs.renameSync(tmp, file);
 }
 
@@ -68,8 +89,11 @@ function stripOurs(settings) {
   let removed = 0;
   const hooks = settings.hooks;
   if (!hooks || typeof hooks !== 'object') return 0;
+  // 只刪「因為移除本程式鉤子而變空」的容器；使用者原本就有的空陣列／空 hooks 保留
+  const before = removed;
   for (const ev of Object.keys(hooks)) {
     if (!Array.isArray(hooks[ev])) continue;
+    const had = removed;
     hooks[ev] = hooks[ev]
       .map((group) => {
         if (!group || !Array.isArray(group.hooks)) return group;
@@ -78,9 +102,9 @@ function stripOurs(settings) {
         return kept.length === group.hooks.length ? group : Object.assign({}, group, { hooks: kept });
       })
       .filter((group) => !(group && Array.isArray(group.hooks) && group.hooks.length === 0));
-    if (hooks[ev].length === 0) delete hooks[ev];
+    if (hooks[ev].length === 0 && removed > had) delete hooks[ev];
   }
-  if (Object.keys(hooks).length === 0) delete settings.hooks;
+  if (Object.keys(hooks).length === 0 && removed > before) delete settings.hooks;
   return removed;
 }
 

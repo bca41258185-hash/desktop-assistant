@@ -89,9 +89,11 @@ function createAiWatcher(options) {
   // Claude Code 預先過濾：只看資料夾名稱，不讀內容
   function claudeDirMayMatch(file) {
     if (!projects) return true;
-    const dir = path.basename(path.dirname(file));
+    // Windows 磁碟代號大小寫可能不同（d:\ 與 D:\ 會編成 d-- / D--），比對時不分大小寫
+    const fold = (s) => (process.platform === 'win32' ? s.toLowerCase() : s);
+    const dir = fold(path.basename(path.dirname(file)));
     return projects.some((p) => {
-      const enc = claudeDirName(path.resolve(p));
+      const enc = fold(claudeDirName(path.resolve(p)));
       return dir === enc || dir.startsWith(enc + '-');
     });
   }

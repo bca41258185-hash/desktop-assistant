@@ -25,6 +25,9 @@ function setup(tool) {
   };
 }
 
+// Claude Code 紀錄資料夾名稱（與 ai-watch 相同規則；Windows 上 /p 會解析成 D:p → D--p）
+const enc = (p) => path.resolve(p).replace(/[^a-zA-Z0-9]/g, '-');
+
 function append(file, entries) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.appendFileSync(file, entries.map((e) => JSON.stringify(e)).join('\n') + '\n');
@@ -72,7 +75,7 @@ test('Claude Code：指令 → 改檔 → 完成', () => {
 
 test('Claude Code：工具呼叫久未回傳 → 可能在等你確認；之後恢復', () => {
   const t = setup('claude');
-  const file = path.join(t.root, '-p', 's.jsonl');
+  const file = path.join(t.root, enc('/p'), 's.jsonl');
   append(file, [
     { type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: '跑測試' } },
     { type: 'assistant', cwd: '/p', timestamp: t.iso(), message: { role: 'assistant', content: [{ type: 'tool_use', id: 'b1', name: 'Bash', input: { command: 'npm test' } }] } }
@@ -91,7 +94,7 @@ test('Claude Code：工具呼叫久未回傳 → 可能在等你確認；之後�
 
 test('Claude Code：沒有結束標記時，文字回覆後安靜一段時間視為完成', () => {
   const t = setup('claude');
-  const file = path.join(t.root, '-p', 's.jsonl');
+  const file = path.join(t.root, enc('/p'), 's.jsonl');
   append(file, [
     { type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: '解釋一下' } },
     { type: 'assistant', cwd: '/p', timestamp: t.iso(), message: { role: 'assistant', content: [{ type: 'text', text: '說明如下' }] } }
@@ -105,7 +108,7 @@ test('Claude Code：沒有結束標記時，文字回覆後安靜一段時間視
 
 test('Claude Code：系統插入內容、子代理、使用者中斷、半行寫入', () => {
   const t = setup('claude');
-  const file = path.join(t.root, '-p', 's.jsonl');
+  const file = path.join(t.root, enc('/p'), 's.jsonl');
   append(file, [
     { type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: '<command-name>/clear</command-name>' } },
     { type: 'user', cwd: '/p', isMeta: true, timestamp: t.iso(), message: { role: 'user', content: 'meta' } }
@@ -133,7 +136,7 @@ test('Claude Code：系統插入內容、子代理、使用者中斷、半行寫
 
 test('啟動時載入舊紀錄：不發通知，狀態直接定案；格式錯誤的行略過', () => {
   const t = setup('claude');
-  const file = path.join(t.root, '-p', 's.jsonl');
+  const file = path.join(t.root, enc('/p'), 's.jsonl');
   const earlier = new Date(Date.parse(t.iso()) - 60 * 1000).toISOString();
   append(file, [
     { type: 'user', cwd: '/p', timestamp: earlier, message: { role: 'user', content: '舊指令' } },
@@ -196,7 +199,7 @@ test('Codex：明確的核准請求 → 立即通知等待', () => {
 
 test('監看器從頭到尾都不寫入紀錄檔', () => {
   const t = setup('claude');
-  const file = path.join(t.root, '-p', 's.jsonl');
+  const file = path.join(t.root, enc('/p'), 's.jsonl');
   append(file, [{ type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: 'hi' } }]);
   const before = fs.readFileSync(file);
   const mtime = fs.statSync(file).mtimeMs;
@@ -243,17 +246,17 @@ test('指定專案：其他專案的 Claude 紀錄不讀；子資料夾算在專
     t.w._onAdd('claude', f, false);
     return f;
   };
-  mk('-other-project', '/other/project', '別的專案');
-  mk('-work-villa-site', path.join(proj, 'site'), '子資料夾');
+  mk(enc('/other/project'), '/other/project', '別的專案');
+  mk(enc(proj) + '-site', path.join(proj, 'site'), '子資料夾');
   // 中文資料夾名稱編碼後都是「-」，可能撞名：/work/villa 與 /work/villa？ 都編成 -work-villa-
-  mk('-work-villa-', '/work/villa？', '撞名的另一個專案');
-  mk('-work-villa', proj, '本專案');
+  mk(enc(proj) + '-', '/work/villa？', '撞名的另一個專案');
+  mk(enc(proj), proj, '本專案');
   assert.deepStrictEqual(t.events.map((e) => e.session.lastPrompt).sort(), ['子資料夾', '本專案'].sort());
 });
 
 test('指定專案：未指定任何專案時完全不讀', async () => {
   const t = setupWith({ projects: [] });
-  const f = path.join(t.root, '-p', 's.jsonl');
+  const f = path.join(t.root, enc('/p'), 's.jsonl');
   append(f, [{ type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: 'x' } }]);
   t.w.start();
   await new Promise((r) => setTimeout(r, 300));
@@ -285,7 +288,7 @@ test('指定專案：Codex 以檔頭 session_meta 判斷；空檔先暫緩，寫
 
 test('啟動時的舊對話之後才有新內容：舊指令不補發通知，只通知新的', () => {
   const t = setupWith({ projects: ['/p'], recentMs: 1000 });
-  const f = path.join(t.root, '-p', 's.jsonl');
+  const f = path.join(t.root, enc('/p'), 's.jsonl');
   append(f, [{ type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: '很久以前的指令' } }]);
   const old = new Date(Date.parse(t.iso()) - 3600 * 1000);
   fs.utimesSync(f, old, old);
@@ -305,7 +308,7 @@ test('鉤子：需要你允許 → 立即通知並附工具名；有鉤子後不
   fs.writeFileSync(hookFile, JSON.stringify({ event: 'Stop', cwd: '/p', transcript_path: 'old' }) + '\n');
   t.w._readHookEvents('skip');            // 啟動前的舊事件略過
 
-  const f = path.join(t.root, '-p', 's.jsonl');
+  const f = path.join(t.root, enc('/p'), 's.jsonl');
   append(f, [
     { type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: '刪掉暫存資料夾' } },
     { type: 'assistant', cwd: '/p', timestamp: t.iso(), message: { role: 'assistant', content: [{ type: 'tool_use', id: 'b1', name: 'Bash', input: { command: 'rm -rf tmp' } }] } }
@@ -412,4 +415,25 @@ test('安裝鉤子：設定檔格式錯誤時完全不修改；設定檔不存�
   const fresh = path.join(dir, 'sub', 'settings.json');
   installer.install({ file: fresh, scriptPath: '/a/hooks/claude-hook.js', dataDir: '/d' });
   assert.strictEqual(installer.status(fresh).installed, true);
+});
+
+test('安裝→移除：Windows 常見格式（BOM、CRLF、4 格／Tab 縮排、無結尾換行、使用者原有鉤子）逐位元組還原', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'settings-fmt-'));
+  const cases = [
+    // \u5DF2\u77E5\u9650\u5236\uFF1A\u539F\u6A94\u82E5\u6709\u300C\u7A7A\u7684\u300Dhooks \u7269\u4EF6\u6216\u7A7A\u4E8B\u4EF6\u9663\u5217\uFF0C\u79FB\u9664\u5F8C\u6703\u4E00\u8D77\u6D88\u5931\uFF08\u5C0D Claude Code \u7B49\u6548\uFF09
+    '\uFEFF{\r\n    "theme": "dark",\r\n    "permissions": {\r\n        "allow": []\r\n    }\r\n}\r\n',
+    '{\n\t"model": "opus",\n\t"hooks": {\n\t\t"PreToolUse": [\n\t\t\t{\n\t\t\t\t"matcher": "Bash",\n\t\t\t\t"hooks": [\n\t\t\t\t\t{\n\t\t\t\t\t\t"type": "command",\n\t\t\t\t\t\t"command": "echo hi"\n\t\t\t\t\t}\n\t\t\t\t]\n\t\t\t}\n\t\t]\n\t}\n}',
+    '{\n  "theme": "light"\n}\n'
+  ];
+  cases.forEach((orig, i) => {
+    const file = path.join(dir, `s${i}.json`);
+    fs.writeFileSync(file, orig);
+    installer.install({ file, scriptPath: 'D:\\建築 設計\\desktop-assistant\\hooks\\claude-hook.js', dataDir: 'C:\\Users\\me\\AppData\\Roaming\\desktop-assistant\\ai-hooks' });
+    const mid = fs.readFileSync(file, 'utf8');
+    assert.strictEqual(installer.status(file).installed, true);
+    assert.strictEqual(mid.startsWith('\uFEFF'), orig.startsWith('\uFEFF'), '保留 BOM 與否');
+    assert.strictEqual(/\r\n/.test(mid), /\r\n/.test(orig), '保留換行格式');
+    installer.uninstall({ file });
+    assert.strictEqual(fs.readFileSync(file, 'utf8'), orig, `第 ${i} 例未逐位元組還原`);
+  });
 });
