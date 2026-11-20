@@ -13,7 +13,7 @@ const os = require('os');
 
 const EVENTS = ['UserPromptSubmit', 'Notification', 'Stop', 'PermissionRequest'];
 // 每個鉤子的逾時（秒）。PermissionRequest 要等使用者在泡泡上按允許／拒絕，所以給得長
-const TIMEOUTS = { PermissionRequest: 90 };
+const TIMEOUTS = { PermissionRequest: 660 };
 const MARKER = 'hooks/claude-hook.js';
 
 function claudeDir() {

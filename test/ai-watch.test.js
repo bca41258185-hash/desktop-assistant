@@ -394,7 +394,7 @@ test('安裝鉤子：保留原有設定與其他鉤子、先備份、重複安�
     const ours = s.hooks[ev].flatMap((g) => g.hooks).filter((h) => h.command.includes('hooks/claude-hook.js'));
     assert.strictEqual(ours.length, 1);
     assert.ok(ours[0].command.includes('/new/place/'));
-    assert.strictEqual(ours[0].timeout, ev === 'PermissionRequest' ? 90 : 5);
+    assert.strictEqual(ours[0].timeout, ev === 'PermissionRequest' ? 660 : 5);
   }
   assert.strictEqual(installer.status(file).installed, true);
 

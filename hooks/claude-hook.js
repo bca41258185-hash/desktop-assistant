@@ -7,7 +7,7 @@
 // 安全原則（這支腳本在每次 Claude Code 事件時都會執行）：
 //  - 一律 exit 0；除了下面這個例外，stdout 不輸出任何東西 → 不阻擋、不改變 Claude 的行為
 //  - 例外（PermissionRequest）：使用者開啟「在泡泡上回答」且桌寵開著時，等使用者在泡泡上按
-//    允許／拒絕（最多 60 秒）再把決定回給 Claude；沒回答就不輸出，由 Claude 自己的畫面詢問。
+//    允許／拒絕（最多 10 分鐘）再把決定回給 Claude；沒回答就不輸出，由 Claude 自己的畫面詢問。
 //    （UserPromptSubmit 的 stdout 會被加進 Claude 的上下文，所以必須保持安靜）。
 //  - 只記錄「指定專案」內或「指定對話」（session ID）的事件；其他對話直接略過、不寫任何東西。
 //  - 不記錄你輸入的指令內容與 Claude 的回覆，只記事件種類、時間、對話檔路徑。
@@ -21,7 +21,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const PERMISSION_WAIT_MS = 60 * 1000;   // 權限詢問最多等使用者 60 秒，之後交回 Claude 自己的詢問畫面
+// 最多等使用者 10 分鐘。等待期間 Claude 自己的詢問畫面照常可用（兩邊誰先回答算誰的），
+// 桌寵發現對話不再等待時也會主動放掉，所以等久一點不會卡住任何東西。
+const PERMISSION_WAIT_MS = 10 * 60 * 1000;
 const MAX_BYTES = 1024 * 1024;   // 事件檔超過 1MB 就換新，避免無限成長
 
 function norm(p) {
@@ -125,7 +127,13 @@ function waitForAnswer(reqFile, toolInput) {
   const ansFile = reqFile.replace(/\.json$/, '.answer.json');
   const deadline = Date.now() + PERMISSION_WAIT_MS;
   return new Promise((resolve) => {
-    const finish = (out) => {
+    const finish = (out, why) => {
+      // 除錯用的小紀錄：只記時間與結果，不記內容
+      try {
+        fs.appendFileSync(path.join(path.dirname(path.dirname(reqFile)), 'permission-debug.log'),
+          `${new Date().toISOString()} hook ${path.basename(reqFile, '.json')} ${why} waited=${Math.round((Date.now() - (deadline - PERMISSION_WAIT_MS)) / 1000)}s
+`);
+      } catch (e) { /* ignore */ }
       try { fs.unlinkSync(reqFile); } catch (e) { /* ignore */ }
       try { fs.unlinkSync(ansFile); } catch (e) { /* ignore */ }
       if (out) process.stdout.write(JSON.stringify(out));
@@ -138,12 +146,12 @@ function waitForAnswer(reqFile, toolInput) {
         const decision = { behavior: 'allow' };
         // 選擇題：把使用者選的答案放回工具輸入（題目文字 → 選項文字）
         if (ans.answers && typeof ans.answers === 'object') decision.updatedInput = Object.assign({}, toolInput, { answers: ans.answers });
-        return finish({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision } });
+        return finish({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision } }, decision.updatedInput ? 'allow+answers' : 'allow');
       }
       if (ans && ans.choice === 'deny') {
-        return finish({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'deny', message: '使用者在桌面大師上按了「拒絕」。' } } });
+        return finish({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'deny', message: '使用者在桌面大師上按了「拒絕」。' } } }, 'deny');
       }
-      if (ans || Date.now() > deadline) return finish(null);
+      if (ans || Date.now() > deadline) return finish(null, ans ? 'pass' : 'timeout');
       setTimeout(tick, 200);
     };
     tick();

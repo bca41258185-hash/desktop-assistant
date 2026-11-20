@@ -399,12 +399,23 @@ function touchAlive() {
 }
 
 // choice：'allow'｜'deny'｜'pass'（不回答，交回 Claude 自己的詢問畫面）
+function permLog(msg) {
+  try { fs.appendFileSync(path.join(aiHooksDir(), 'permission-debug.log'), `${new Date().toISOString()} app ${msg}
+`); } catch (e) { /* ignore */ }
+}
+
 function answerPermission(id, choice, answers) {
+  permLog(`${id} answer=${choice}${answers ? '+answers' : ''} pending=${pendingPermissions.has(id)}`);
   pendingQuestions.delete(id);
   if (!/^[\w-]+$/.test(String(id || '')) || !pendingPermissions.delete(id)) return;
   try {
     const dir = path.join(aiHooksDir(), 'permission');
-    if (!fs.existsSync(path.join(dir, id + '.json'))) return;   // 鉤子已經結束（逾時）
+    if (!fs.existsSync(path.join(dir, id + '.json'))) {
+      // 鉤子已經結束（等太久）：答案送不過去了，直接帶使用者到 Claude 去回答
+      permLog(`${id} expired`);
+      if (choice !== 'pass') focusClaudeWindow();
+      return;
+    }
     fs.writeFileSync(path.join(dir, id + '.answer.json'), JSON.stringify(answers ? { choice, answers } : { choice }));
   } catch (e) {
     console.error('寫入權限回答失敗:', e.message);
@@ -413,6 +424,7 @@ function answerPermission(id, choice, answers) {
 
 function onAiEvent({ kind, session: s, image, fromUser, request }) {
   if (kind === 'permission') {
+    permLog(`${request.id} shown tool=${request.tool}`);
     pendingPermissions.add(request.id);
     setPetPose('idle');
     if (Array.isArray(request.questions) && request.questions.length) {
@@ -563,6 +575,7 @@ function registerIpc() {
   ipcMain.on('pet:menu', () => showPetMenu());
   ipcMain.on('claude:focus', () => focusClaudeWindow());
   ipcMain.on('pet:choice', (e, { requestId, choice }) => {
+    permLog(`${requestId} clicked ${choice}`);
     // Claude 的選擇題：記下這題的答案，還有下一題就繼續問，問完一次回覆
     const st = pendingQuestions.get(requestId);
     if (st) {
