@@ -10,6 +10,7 @@
 <body>
   <nav class="tabs">
     <button class="tab active" data-tab="chat">聊天</button>
+    <button class="tab" data-tab="ai">AI 專案</button>
     <button class="tab" data-tab="folders">資料夾</button>
     <button class="tab" data-tab="tasks">任務</button>
     <button class="tab" data-tab="quotes">名言</button>
@@ -54,6 +55,15 @@
     <ul class="task-list" id="taskList"></ul>
   </section>
 
+
+  <!-- AI 專案：Claude Code / Codex 對話進度（唯讀） -->
+  <section class="panel-view" id="view-ai">
+    <div class="section-head">
+      <h2>AI 專案進度 <span id="aiBadge" class="progress-badge"></span></h2>
+    </div>
+    <p class="hint">即時讀取本機 Claude Code 與 Codex 的對話紀錄，只看不改。雲端（網頁版）的對話不在本機，看不到。</p>
+    <div class="ai-list" id="aiList"></div>
+  </section>
 
   <!-- 名言：目前大師的查證引言（與問候語分開） -->
   <section class="panel-view" id="view-quotes">
@@ -103,6 +113,10 @@
       <input type="number" id="setQuoteInterval" min="0" step="1" />
     </label>
     <p class="hint">也可在桌寵上按右鍵，或到「名言」分頁點選，立即讓大師說一句。</p>
+    <label class="ctx-row">
+      <input type="checkbox" id="setAiWatch" />
+      監看 Claude Code／Codex 對話進度（唯讀，只在本機處理）
+    </label>
 
     <button id="saveSettings" class="primary">儲存設定</button>
     <span id="saveStatus" class="save-status"></span>

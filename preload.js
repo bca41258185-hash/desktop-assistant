@@ -27,6 +27,10 @@ contextBridge.exposeInMainWorld('api', {
   listChanges: () => ipcRenderer.invoke('changes:list'),
   onChanges: (cb) => ipcRenderer.on('changes:update', (_e, list) => cb(list)),
 
+  // --- AI 專案（Claude Code / Codex 進度，唯讀） ---
+  listAi: () => ipcRenderer.invoke('ai:list'),
+  onAiUpdate: (cb) => ipcRenderer.on('ai:update', (_e, list) => cb(list)),
+
   // --- 設定 ---
   getSettings: () => ipcRenderer.invoke('config:get-settings'),
   saveSettings: (s) => ipcRenderer.invoke('config:save-settings', s),

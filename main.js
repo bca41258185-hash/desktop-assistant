@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
 const { createProvider } = require('./providers');
+const { createAiWatcher } = require('./ai-watch');
 const { CHARACTERS, DEFAULT_ID, categoryOf } = require('./renderer/characters');
 
 // 名言資料：讀取 data/ 下所有 quotes*.json（每個職業一個檔，方便擴充）
@@ -43,6 +44,8 @@ let quoteTimer = null;
 let lastQuoteIndex = -1;
 let config = null;
 let QUOTES_BY_ID = loadQuotes();
+let aiWatcher = null;             // AI 專案監看（Claude Code / Codex）
+let aiSnapshot = [];
 
 // ---------------------------------------------------------------------------
 // 設定讀寫（存於 app.getPath('userData')，絕不放進 repo）
@@ -57,7 +60,8 @@ const CONFIG_DEFAULTS = {
     model: '',
     reminderIntervalMinutes: 30,
     quoteIntervalMinutes: 20,      // 名言氣泡間隔（0＝關閉）
-    characterId: DEFAULT_ID        // 目前選用的大師（'ando' | 'gehry' | ...）
+    characterId: DEFAULT_ID,       // 目前選用的大師（'ando' | 'gehry' | ...）
+    aiWatch: true                  // 監看 Claude Code / Codex 對話進度（唯讀）
   }
 };
 
@@ -325,6 +329,57 @@ function setupQuoteTimer() {
 // ---------------------------------------------------------------------------
 // IPC
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// AI 專案監看：即時反映 Claude Code / Codex 的對話進度（唯讀，只讀對話紀錄檔）
+// ---------------------------------------------------------------------------
+const aiLastBubble = new Map();   // sessionId+kind -> 時間，避免同一事件連續洗版
+
+function clip(text, n) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  return t.length > n ? t.slice(0, n) + '…' : t;
+}
+
+function onAiEvent({ kind, session: s }) {
+  const key = s.id + ':' + kind;
+  const t = Date.now();
+  if (t - (aiLastBubble.get(key) || 0) < 4000) return;
+  aiLastBubble.set(key, t);
+
+  if (kind === 'start') {
+    setPetPose('think');
+    speak(`${s.label} 開始處理「${s.projectName}」：${clip(s.lastPrompt, 26)}`);
+  } else if (kind === 'waiting') {
+    setPetPose('idle');
+    speak(`「${s.projectName}」的 ${s.label} 可能在等你確認（或指令執行較久）`);
+  } else if (kind === 'done') {
+    if (s.interrupted) {
+      setPetPose('idle');
+      speak(`「${s.projectName}」的 ${s.label} 已中斷`);
+    } else {
+      setPetPose('happy');
+      speak(`「${s.projectName}」完成了：${clip(s.lastText, 30) || s.lastAction}`);
+    }
+  }
+}
+
+function onAiUpdate(list) {
+  aiSnapshot = list;
+  if (panelWindow && !panelWindow.isDestroyed()) {
+    panelWindow.webContents.send('ai:update', list);
+  }
+}
+
+function setupAiWatch() {
+  const want = config.settings.aiWatch !== false;
+  if (want && !aiWatcher) {
+    aiWatcher = createAiWatcher({ onEvent: onAiEvent, onUpdate: onAiUpdate }).start();
+  } else if (!want && aiWatcher) {
+    aiWatcher.stop();
+    aiWatcher = null;
+    onAiUpdate([]);
+  }
+}
+
 function registerIpc() {
   // 桌寵拖曳：依位移移動視窗
   ipcMain.on('pet:move-by', (e, { dx, dy }) => {
@@ -365,6 +420,13 @@ function registerIpc() {
   // --- 變更紀錄 ---
   ipcMain.handle('changes:list', () => recentChanges);
 
+  // --- AI 專案 ---
+  ipcMain.handle('ai:list', () => ({
+    enabled: !!aiWatcher,
+    roots: aiWatcher ? aiWatcher.roots : null,
+    projects: aiSnapshot
+  }));
+
   // --- 設定 ---
   ipcMain.handle('config:get-settings', () => {
     const s = config.settings;
@@ -378,6 +440,7 @@ function registerIpc() {
         ? 0
         : (Number(s.quoteIntervalMinutes) || 20),
       characterId: currentCharacterId(),
+      aiWatch: s.aiWatch !== false,
       // 提示 UI：哪些值被環境變數覆蓋
       env: {
         apiKey: !!process.env.OPENAI_API_KEY,
@@ -402,11 +465,13 @@ function registerIpc() {
       quoteIntervalMinutes: (incoming.quoteIntervalMinutes === 0 || incoming.quoteIntervalMinutes === '0')
         ? 0
         : (Number(incoming.quoteIntervalMinutes) || 20),
-      characterId: nextCharacter
+      characterId: nextCharacter,
+      aiWatch: incoming.aiWatch !== false
     };
     saveConfig();
     setupReminder();
     setupQuoteTimer();
+    setupAiWatch();
     if (changedCharacter) setPetCharacter(nextCharacter, true);
     return { ok: true };
   });
@@ -544,6 +609,7 @@ app.whenReady().then(() => {
   for (const folder of config.folders) watchFolder(folder);
   setupReminder();
   setupQuoteTimer();
+  setupAiWatch();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createPetWindow();
@@ -555,6 +621,7 @@ app.on('before-quit', () => {
   for (const w of watchers.values()) w.close();
   if (reminderTimer) clearInterval(reminderTimer);
   if (quoteTimer) clearInterval(quoteTimer);
+  if (aiWatcher) aiWatcher.stop();
 });
 
 // 桌寵常駐，不因關閉面板而退出；全部視窗關閉才退出（Windows/Linux）。

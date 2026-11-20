@@ -268,6 +268,7 @@ const setQuoteInterval = document.getElementById('setQuoteInterval');
 const envHint = document.getElementById('envHint');
 const saveStatus = document.getElementById('saveStatus');
 const charPicker = document.getElementById('charPicker');
+const setAiWatch = document.getElementById('setAiWatch');
 
 // 目前選用的大師（供儲存設定時一併帶上）
 let selectedCharId = (window.CHAR_DEFAULT || 'ando');
@@ -336,6 +337,7 @@ async function loadSettings() {
   setReminder.value = s.reminderIntervalMinutes;
   if (setQuoteInterval) setQuoteInterval.value = s.quoteIntervalMinutes;
   selectedCharId = s.characterId || selectedCharId;
+  if (setAiWatch) setAiWatch.checked = s.aiWatch !== false;
   renderCharPicker();
 
   const overrides = [];
@@ -355,11 +357,108 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
     apiKey: setApiKey.value,
     reminderIntervalMinutes: Number(setReminder.value) || 0,
     quoteIntervalMinutes: Number(setQuoteInterval && setQuoteInterval.value),
-    characterId: selectedCharId
+    characterId: selectedCharId,
+    aiWatch: setAiWatch ? setAiWatch.checked : true
   });
+  loadAi();
   saveStatus.textContent = '已儲存 ✓';
   setTimeout(() => (saveStatus.textContent = ''), 2000);
 });
+
+// ---------------------------------------------------------------------------
+// AI 專案：Claude Code / Codex 對話進度（資料由主行程推送，這裡只負責顯示）
+// ---------------------------------------------------------------------------
+const aiList = document.getElementById('aiList');
+const aiBadge = document.getElementById('aiBadge');
+let aiState = { enabled: true, roots: null, projects: [] };
+
+const AI_STATUS = {
+  working: { text: '進行中', cls: 'working' },
+  waiting: { text: '可能在等你', cls: 'waiting' },
+  done: { text: '完成', cls: 'done' },
+  idle: { text: '閒置', cls: 'idle' }
+};
+
+function timeAgo(ms) {
+  if (!ms) return '';
+  const sec = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (sec < 60) return '剛剛';
+  if (sec < 3600) return Math.floor(sec / 60) + ' 分鐘前';
+  if (sec < 86400) return Math.floor(sec / 3600) + ' 小時前';
+  return Math.floor(sec / 86400) + ' 天前';
+}
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function renderAi() {
+  aiList.innerHTML = '';
+  const projects = aiState.projects || [];
+  const active = projects.reduce((n, p) =>
+    n + p.sessions.filter((s) => s.status === 'working' || s.status === 'waiting').length, 0);
+  aiBadge.textContent = active ? `${active} 個進行中` : '';
+
+  if (!aiState.enabled) {
+    aiList.appendChild(el('p', 'empty', '已關閉監看。可到「設定」頁開啟。'));
+    return;
+  }
+  if (!projects.length) {
+    aiList.appendChild(el('p', 'empty', '最近 24 小時沒有 Claude Code 或 Codex 的對話。開始一段對話後，這裡會即時更新。'));
+    if (aiState.roots) {
+      aiList.appendChild(el('p', 'hint', `監看位置：${aiState.roots.claude}、${aiState.roots.codex}`));
+    }
+    return;
+  }
+  projects.forEach((p) => {
+    const card = el('div', 'ai-project');
+    const head = el('div', 'ai-project-head');
+    head.appendChild(el('span', 'ai-project-name', p.name));
+    head.appendChild(el('span', 'ai-project-path', p.project));
+    card.appendChild(head);
+
+    p.sessions.forEach((s) => {
+      const row = el('div', 'ai-session');
+      const top = el('div', 'ai-session-top');
+      top.appendChild(el('span', 'ai-tool ' + s.tool, s.label));
+      const st = AI_STATUS[s.status] || AI_STATUS.idle;
+      top.appendChild(el('span', 'ai-status ' + st.cls, s.interrupted && s.status === 'done' ? '已中斷' : st.text));
+      top.appendChild(el('span', 'ai-title', s.title));
+      top.appendChild(el('span', 'ai-time', timeAgo(s.lastActivity)));
+      row.appendChild(top);
+
+      if (s.lastPrompt) row.appendChild(el('div', 'ai-line', '指令：' + s.lastPrompt));
+      if (s.status === 'done' && s.lastText) row.appendChild(el('div', 'ai-line', '回覆：' + s.lastText));
+      else if (s.lastAction) row.appendChild(el('div', 'ai-line', '動作：' + s.lastAction));
+
+      if (s.files && s.files.length) {
+        const files = el('div', 'ai-files');
+        s.files.slice(0, 6).forEach((f) => {
+          const chip = el('span', 'ai-file', f.split(/[\\/]/).pop());
+          chip.title = f;
+          files.appendChild(chip);
+        });
+        row.appendChild(files);
+      }
+      card.appendChild(row);
+    });
+    aiList.appendChild(card);
+  });
+}
+
+async function loadAi() {
+  aiState = await window.api.listAi();
+  renderAi();
+}
+
+window.api.onAiUpdate((projects) => {
+  aiState.projects = projects;
+  renderAi();
+});
+setInterval(renderAi, 30000);   // 更新「幾分鐘前」
 
 // ---------------------------------------------------------------------------
 // 初始載入
@@ -370,4 +469,5 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
   renderTasks(await window.api.listTasks());
   await loadSettings();
   await loadQuotes(selectedCharId);
+  await loadAi();
 })();

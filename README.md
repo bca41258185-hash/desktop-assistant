@@ -65,7 +65,20 @@
 - 定時提醒氣泡（間隔可設定，預設 30 分鐘），顯示目前進度，例如「今天 3/5 完成」。
 - 任務可切換完成／未完成。
 
-### 6. 介面語言
+### 6. AI 專案進度（Claude Code／Codex，唯讀）
+- 即時讀取本機 **Claude Code**（`~/.claude/projects/`）與 **Codex**（`~/.codex/sessions/`）寫下的對話紀錄，依專案資料夾分組，顯示在面板「AI 專案」分頁：目前狀態、最後一句指令、正在做的動作或最後回覆、改過的檔案。
+- 桌寵會跟著反應：
+  - 送出指令時 → 思考姿勢＋「Claude Code 開始處理『專案名』：…」
+  - 工具呼叫超過 20 秒沒有結果 → 「可能在等你確認（或指令執行較久）」；Codex 若在紀錄中寫入核准請求，則立即提醒
+  - 回合結束 → 開心姿勢＋「完成了：…」；使用者中斷則提示「已中斷」
+- **只看不改**：只以唯讀方式讀取紀錄檔新增的內容，不寫入任何檔案，也不修改 Claude Code／Codex 的設定。內容只在本機處理，不會送到任何 AI 服務。
+- 可在「設定」頁關閉。若設定了 `CLAUDE_CONFIG_DIR` 或 `CODEX_HOME` 環境變數，會改監看對應位置。
+- 限制：
+  - 雲端（網頁版）Claude Code 的對話不在本機，看不到。
+  - 「在等你確認權限」對 Claude Code 是依「工具呼叫久未回傳」推測，長時間執行的指令也會觸發。
+  - 對話紀錄格式並非公開規格，工具改版後可能需要調整 `ai-watch/claude.js`、`ai-watch/codex.js`；解析失敗的行會被略過，不會讓程式崩潰。
+
+### 7. 介面語言
 - 所有介面文字皆為繁體中文（zh-TW）。
 
 ---
@@ -87,6 +100,16 @@ npm start
 啟動後右下角會出現桌寵，點一下即可開啟控制面板。
 
 > Linux 註記：若在無桌面環境（headless）或缺少相依系統函式庫的環境執行 Electron，可能需要安裝相關套件（例如 `libgtk-3-0`、`libnss3`、`libasound2` 等），或在有圖形介面的桌面環境中執行。
+
+---
+
+## 測試
+
+```bash
+npm test
+```
+
+以模擬的 Claude Code／Codex 紀錄檔驗證狀態轉換（開始、等待、完成、中斷、半行寫入、啟動時不誤發通知、不寫入紀錄檔等）。
 
 ---
 
@@ -127,6 +150,11 @@ OPENAI_API_KEY=sk-xxx OPENAI_MODEL=gpt-4o-mini npm start
 │   ├── quotes.json             # 建築大師名言（原文、翻譯、出處）
 │   └── quotes-philosophers.json# 哲學家名言（原文／文言、翻譯／白話、篇章出處）
 ├── main.js                 # 主行程：視窗、IPC、資料夾監看、設定讀寫、提醒、名言、AI 呼叫
+├── ai-watch/
+│   ├── index.js            # AI 專案監看核心：追蹤紀錄檔新增內容、維護對話狀態、依專案分組
+│   ├── claude.js           # Claude Code 紀錄解析器
+│   └── codex.js            # Codex 紀錄解析器
+├── test/ai-watch.test.js   # AI 專案監看單元測試（npm test）
 ├── preload.js              # contextBridge 暴露的最小化 API（renderer 不開啟 nodeIntegration）
 ├── providers/
 │   ├── index.js            # 供應商工廠
