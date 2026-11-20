@@ -363,6 +363,7 @@ function createAiWatcher(options) {
       title: s.customTitle || s.aiTitle || s.title || '（尚無指令）', status: s.status, interrupted: !!s.interrupted,
       lastPrompt: shorten(s.lastPrompt, 120), lastAction: s.lastAction,
       lastText: shorten(s.lastText, 200), files: s.files.slice(0, 8),
+      lastTextFull: String(s.lastText || '').slice(0, 600),   // 保留換行，給桌寵取「第一行」用
       waitingMessage: s.waitingMessage, viaHooks: s.viaHooks,
       turns: s.turns, lastActivity: s.lastActivity
     };

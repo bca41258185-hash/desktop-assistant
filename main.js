@@ -369,6 +369,15 @@ function setupQuoteTimer() {
 // ---------------------------------------------------------------------------
 const aiLastBubble = new Map();   // sessionId+kind -> 時間，避免同一事件連續洗版
 
+// 給泡泡用的一句話：取回覆的第一行、去掉 Markdown 符號，只留第一句；太長才截斷
+function petLine(text, n) {
+  const first = String(text || '').split('\n').map((l) => l.trim()).find((l) => l && !/^[-=*_#>|\s]+$/.test(l)) || '';
+  const plain = first.replace(/^[#>*\s-]+/, '').replace(/[*_`]/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').trim();
+  const m = /^(.+?[。！？!?])/.exec(plain);
+  const sentence = m && m[1].length <= n ? m[1] : plain;
+  return sentence.length > n ? sentence.slice(0, n - 1) + '…' : sentence;
+}
+
 function clip(text, n) {
   const t = String(text || '').replace(/\s+/g, ' ').trim();
   return t.length > n ? t.slice(0, n) + '…' : t;
@@ -433,7 +442,7 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
     pendingReplies.add(id);
     setPetPose('happy');
     speak({
-      text: `完成了：${clip(s.lastText, 34) || s.lastAction}`,
+      text: petLine(s.lastTextFull || s.lastText, 44) || '完成了',
       ai: true, sticky: true, action: 'confirm', requestId: id, inputPlaceholder: '回覆 Claude…'
     });
     // 20 秒內沒有開始打字，鉤子會自己結束；輸入框也跟著收起來
@@ -496,7 +505,7 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
     } else {
       setPetPose('happy');
       // 「完成」要等使用者按確認才消失，不會自己不見，也不會被名言／提醒蓋掉
-      speak({ text: `完成了：${clip(s.lastText, 34) || s.lastAction}`, ai: true, sticky: true });
+      speak({ text: petLine(s.lastTextFull || s.lastText, 44) || '完成了', ai: true, sticky: true });
     }
   }
 }

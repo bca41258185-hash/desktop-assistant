@@ -192,7 +192,8 @@ function waitForReply(reqFile) {
       let ans = null;
       try { ans = JSON.parse(fs.readFileSync(ansFile, 'utf8')); } catch (e) { /* 還沒回答 */ }
       if (ans && ans.choice === 'reply' && typeof ans.message === 'string' && ans.message.trim()) {
-        return finish({ decision: 'block', reason: '使用者透過桌面大師（桌寵）傳來新的訊息，請當成使用者的下一則訊息來處理：\n' + ans.message.trim() }, 'reply');
+        return finish({ decision: 'block', reason: '使用者透過桌面大師（桌寵）傳來新的訊息，請當成使用者的下一則訊息來處理：\n' + ans.message.trim() +
+          '\n\n（你的回覆會顯示在桌寵的小泡泡上：第一行請用一句 30 字以內的完整句子直接講結論，細節寫在後面。）' }, 'reply');
       }
       if (ans) return finish(null, 'pass');
       const waited = Date.now() - started;
