@@ -6,23 +6,33 @@ const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
 const { createProvider } = require('./providers');
-const { CHARACTERS, DEFAULT_ID } = require('./renderer/characters');
+const { CHARACTERS, DEFAULT_ID, categoryOf } = require('./renderer/characters');
 
+// 名言資料：讀取 data/ 下所有 quotes*.json（每個職業一個檔，方便擴充）
 function loadQuotes() {
+  const map = {};
+  const dir = path.join(__dirname, 'data');
+  let files = [];
   try {
-    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'quotes.json'), 'utf-8'));
-    const list = Array.isArray(raw) ? raw : (raw.quotes || []);
-    const map = {};
-    for (const q of list) {
-      if (!q || !q.id || !q.zh) continue;
-      if (!map[q.id]) map[q.id] = [];
-      map[q.id].push(q);
-    }
-    return map;
+    files = fs.readdirSync(dir).filter((f) => /^quotes.*\.json$/.test(f)).sort();
   } catch (e) {
-    console.error('載入名言失敗:', e.message);
-    return {};
+    console.error('讀取名言資料夾失敗:', e.message);
+    return map;
   }
+  for (const f of files) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8'));
+      const list = Array.isArray(raw) ? raw : (raw.quotes || []);
+      for (const q of list) {
+        if (!q || !q.id || !q.zh) continue;
+        if (!map[q.id]) map[q.id] = [];
+        map[q.id].push(q);
+      }
+    } catch (e) {
+      console.error(`載入名言失敗（${f}）:`, e.message);
+    }
+  }
+  return map;
 }
 let petWindow = null;
 let panelWindow = null;
@@ -272,7 +282,8 @@ function setupReminder() {
 // 名言：目前大師的查證引言（與角色問候語分開）
 // ---------------------------------------------------------------------------
 function quotesFor(id) {
-  return QUOTES_BY_ID[id] || QUOTES_BY_ID[DEFAULT_ID] || [];
+  // 沒有收錄名言的角色回傳空陣列，避免誤顯示其他人的名言
+  return QUOTES_BY_ID[id] || [];
 }
 
 function speakQuote(quote) {
@@ -493,11 +504,12 @@ function registerIpc() {
 
     // 進入思考姿勢
     setPetPose('think');
+    const cat = categoryOf(c.id);
     const systemPrompt =
-      `你是「大師」，一位沉穩、有涵養的建築工作室導師。` +
+      `你是「大師」，${cat.persona}。` +
       `此刻你以 ${c.nameZh}（${c.nameEn}）的風格與語氣與使用者對話。` +
       `請一律使用繁體中文，用字精煉、文化而不賣弄，不使用網路流行語或誇張口氣，` +
-      `像一位受人敬重的建築前輩，給予簡潔、到位而帶有工作室氣息的回應。` +
+      `${cat.style}。` +
       `避免逐字引用任何名人名言，以自己的語氣表達即可。`;
 
     try {

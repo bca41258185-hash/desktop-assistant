@@ -211,9 +211,10 @@ function renderQuotes(payload) {
     zh.className = 'quote-zh';
     zh.textContent = '「' + q.zh + '」';
 
+    // 外文名言顯示原文；文言名言（lang: lzh）則顯示白話解釋
     const orig = document.createElement('div');
     orig.className = 'quote-orig';
-    orig.textContent = q.original || '';
+    orig.textContent = q.original || (q.gloss ? '白話：' + q.gloss : '');
 
     const src = document.createElement('div');
     src.className = 'quote-src';
@@ -236,7 +237,7 @@ function renderQuotes(payload) {
     actions.appendChild(speakBtn);
 
     li.appendChild(zh);
-    if (q.original) li.appendChild(orig);
+    if (orig.textContent) li.appendChild(orig);
     li.appendChild(src);
     li.appendChild(actions);
     quoteList.appendChild(li);
@@ -271,12 +272,40 @@ const charPicker = document.getElementById('charPicker');
 // 目前選用的大師（供儲存設定時一併帶上）
 let selectedCharId = (window.CHAR_DEFAULT || 'ando');
 
-// 繪製大師選擇器（每張卡 = 縮圖 + 繁中名 + 英文名）
+// 繪製大師選擇器：上方為職業分類標籤，下方為該類別的角色卡（縮圖 + 繁中名 + 英文名）
+let pickerCategory = null;   // 目前顯示的類別；預設跟隨已選角色
+
 function renderCharPicker() {
   const chars = window.CHARACTERS || {};
-  const order = window.CHAR_ORDER || Object.keys(chars);
+  const cats = window.CHAR_CATEGORIES ||
+    [{ id: 'all', label: '全部', order: window.CHAR_ORDER || Object.keys(chars) }];
+  if (!pickerCategory || !cats.some((c) => c.id === pickerCategory)) {
+    const cur = chars[selectedCharId];
+    pickerCategory = (cur && cur.category) || cats[0].id;
+  }
   charPicker.innerHTML = '';
-  order.forEach((id) => {
+
+  if (cats.length > 1) {
+    const tabs = document.createElement('div');
+    tabs.className = 'char-cats';
+    cats.forEach((cat) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'char-cat' + (cat.id === pickerCategory ? ' active' : '');
+      b.textContent = `${cat.label}（${cat.order.length}）`;
+      b.addEventListener('click', () => {
+        pickerCategory = cat.id;
+        renderCharPicker();
+      });
+      tabs.appendChild(b);
+    });
+    charPicker.appendChild(tabs);
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'char-grid';
+  const cat = cats.find((c) => c.id === pickerCategory) || cats[0];
+  cat.order.forEach((id) => {
     const c = chars[id];
     if (!c) return;
     const card = document.createElement('div');
@@ -293,8 +322,9 @@ function renderCharPicker() {
         el.classList.toggle('selected', el.dataset.id === id));
       await window.api.setCharacter(id);   // 立即切換桌寵並持久化
     });
-    charPicker.appendChild(card);
+    grid.appendChild(card);
   });
+  charPicker.appendChild(grid);
 }
 
 async function loadSettings() {

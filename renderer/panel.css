@@ -180,11 +180,36 @@ button.primary:hover, button#chatSend:hover { background: var(--graphite-hi); }
 
 /* --- 大師選擇器 --- */
 .char-picker {
+  margin: 4px 0 4px;
+  flex-shrink: 0;
+}
+.char-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.char-cat {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.char-cat.active {
+  border-color: var(--graphite);
+  color: var(--ink);
+  font-weight: 700;
+}
+.char-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin: 4px 0 4px;
-  flex-shrink: 0;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 2px;
 }
 .char-card {
   border: 1px solid var(--line);

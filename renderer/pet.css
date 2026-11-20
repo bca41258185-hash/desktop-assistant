@@ -94,9 +94,8 @@ html, body {
   74%, 86%           { opacity: 0.9; }
 }
 
-/* 有眼鏡的角色（貝聿銘、蓋瑞）：手勢時順勢「推一下眼鏡」 */
-#pet[data-character="pei"] .glasses,
-#pet[data-character="gehry"] .glasses {
+/* 有眼鏡的角色（.glasses）：手勢時順勢「推一下眼鏡」 */
+#pet .glasses {
   transform-box: fill-box;
   transform-origin: center;
   animation: glassesPush 7s ease-in-out infinite;
@@ -215,5 +214,5 @@ html, body {
 
 @media (prefers-reduced-motion: reduce) {
   .pet-body, .shadow, .eye, .gesture-arm, .sketch-lines,
-  #pet[data-character] .glasses { animation: none !important; }
+  #pet .glasses { animation: none !important; }
 }

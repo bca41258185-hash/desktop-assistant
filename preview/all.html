@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <title>六位大師預覽</title>
+  <title>大師造型預覽</title>
   <style>
     body{
       margin:0;
@@ -15,6 +15,8 @@
       padding:28px 28px 40px;
     }
     h1{font-size:20px;letter-spacing:2px;margin:0 0 20px;font-weight:700}
+    h2{font-size:16px;letter-spacing:1px;margin:28px 0 14px;font-weight:700}
+    .grid{margin-bottom:8px}
     .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:980px}
     .card{background:#faf8f1;border:1px solid #d9d3c4;border-radius:10px;padding:14px;text-align:center}
     .art{height:230px;display:flex;align-items:flex-end;justify-content:center}
@@ -25,12 +27,20 @@
   </style>
 </head>
 <body>
-  <h1>桌面大師 — 六位普立茲克建築大師 Q 版造型</h1>
-  <div class="grid" id="grid"></div>
+  <h1>桌面大師 — Q 版造型總覽</h1>
+  <div id="root"></div>
+  <script src="../renderer/characters-philosophers.js"></script>
   <script src="../renderer/characters.js"></script>
   <script>
-    const grid = document.getElementById('grid');
-    (window.CHAR_ORDER || []).forEach((id) => {
+    const root = document.getElementById('root');
+    (window.CHAR_CATEGORIES || []).forEach((cat) => {
+      const h = document.createElement('h2');
+      h.textContent = `${cat.label}（${cat.order.length} 位）`;
+      root.appendChild(h);
+      const grid = document.createElement('div');
+      grid.className = 'grid';
+      root.appendChild(grid);
+      cat.order.forEach((id) => {
       const c = window.CHARACTERS[id];
       const card = document.createElement('div');
       card.className = 'card';
@@ -39,6 +49,7 @@
         `<div class="nm">${c.nameZh}<span>${c.nameEn}</span></div>` +
         `<div class="gr">「${c.greeting}」</div>`;
       grid.appendChild(card);
+      });
     });
   </script>
 </body>

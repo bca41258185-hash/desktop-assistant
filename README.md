@@ -1,30 +1,37 @@
 # 桌面大師（Desktop Masters）
 
-一個用 **Electron + Node** 打造的桌面小幫手（桌寵）。螢幕上有一位可愛的 Q 版「建築大師」，能陪你工作、幫你監看資料夾變化、連接 AI 聊天，並協助追蹤今日工作進度。
+一個用 **Electron + Node** 打造的桌面小幫手（桌寵）。螢幕上有一位可愛的 Q 版「大師」（建築大師或哲學家），能陪你工作、幫你監看資料夾變化、連接 AI 聊天，並協助追蹤今日工作進度。
 
 > 本版本為最小可行版本（MVP）：以 Linux / Windows 皆可用為目標，直接 `npm install && npm start` 即可執行。
 
-> **說明**：桌寵為六位普立茲克建築獎得主的 **Q 版致敬漫畫造型**，純屬 **私人個人娛樂用途**。造型僅取公開可辨識的外型特徵（髮型、眼鏡、衣著）與代表性的建築符號，皆以純 inline SVG 手繪、非寫實、不含任何照片、商標或官方肖像，**亦不代表任何形式的官方授權或背書**。
+> **說明**：桌寵為六位普立茲克建築獎得主與十五位歷史哲學家的 **Q 版致敬漫畫造型**，純屬 **私人個人娛樂用途**。造型僅取公開可辨識的外型特徵（髮型、眼鏡、衣著）與代表性的建築符號，皆以純 inline SVG 手繪、非寫實、不含任何照片、商標或官方肖像，**亦不代表任何形式的官方授權或背書**。
 
 ---
 
 ## 功能特色
 
-### 1. 桌寵（六位大師可切換）
+### 1. 桌寵（依職業分類，21 位大師可切換）
 - 透明、無邊框、永遠置頂、可拖曳的小視窗。
 - 角色以純 inline SVG 繪製，**不使用任何外部圖檔、字型或照片**。
-- 內建六位 Q 版建築大師，可在「設定」頁即時切換（免重啟），預設為 **安藤忠雄**：
+- 角色依「職業」分類，在「設定」頁上方切換類別、點選角色即可即時更換（免重啟），預設為 **安藤忠雄**。
+- **建築大師（6 位）**：
   - 安藤忠雄 Tadao Ando（清水混凝土方塊）
   - 法蘭克蓋瑞 Frank Gehry（揉皺金屬片）
   - 札哈哈迪 Zaha Hadid（流動參數化曲面）
   - 貝聿銘 I. M. Pei（玻璃金字塔）
   - 雷姆庫哈斯 Rem Koolhaas（CCTV 懸挑環圈）
   - 妹島和世 Kazuyo Sejima（輕薄白色曲面涼棚）
-- 六位共用同一套動畫系統，由 `#pet` 上的 `data-pose` 控制：
+- **哲學家（15 位）**：皆為過世數百至兩千多年的歷史人物，造型與引文均無著作權、肖像權疑慮。
+  - 先秦諸子：孔子（竹簡）、孟子（規矩）、荀子（藍草染缸）、老子（水紋）、莊子（蝴蝶）、墨子（木鳶）、韓非子（墨繩懸錘）
+  - 明代：王陽明（山中之花）
+  - 古希臘羅馬：蘇格拉底（陶杯）、亞里斯多德（書卷）、馬可·奧理略（蠟板）、塞內卡（書信）
+  - 近代歐洲：笛卡兒（座標軸）、康德（星空）、尼采（山峰）
+- 所有角色共用同一套動畫系統，由 `#pet` 上的 `data-pose` 控制：
   - **idle（待機）**：呼吸起伏、眨眼，並每隔數秒出現一次招牌手勢與「空中速寫」線條（有眼鏡者會順勢推一下眼鏡）。
   - **think（思考）**：等待 AI 回覆時傾頭、冒出「…」、招牌元素緩慢脈動。
   - **happy（開心）**：勾選完成任務時歡呼彈跳＋換成笑臉，約 2–3 秒後自動回到 idle。
 - 每位大師切換時會以自己的語氣說一句原創問候語（非引用名言）。
+- AI 聊天的人格會依類別調整：建築大師為「建築工作室導師」，哲學家為「哲學導師」。
 - 點一下角色即可開啟／關閉控制面板。
 - 桌寵視窗保持小巧（約 240px 寬）；控制面板則是另一個較大的視窗。
 
@@ -37,9 +44,12 @@
 - **重要原則：絕不刪除、搬移或改名任何使用者檔案。本版本只監看與通知。**
 
 ### 3. 大師名言
-- 資料在 `data/quotes.json`：六位大師各 5 則查證過的真實引言（原文＋繁中翻譯＋出處與網址），與角色的原創問候語分開。
+- 資料放在 `data/` 下，每個職業一個檔案（app 會自動讀取所有 `quotes*.json`）：
+  - `data/quotes.json`：六位建築大師各 5 則查證過的真實引言（原文＋繁中翻譯＋出處與網址）。
+  - `data/quotes-philosophers.json`：十五位哲學家各 5 則，引自原典並標註篇章（例：《論語·衛靈公》、Apology 38a、Meditations 5.20）。外文以原文（希臘文、拉丁文、法文、德文）收錄並附繁中譯文；文言則附白話解釋。
+- 名言與角色的原創問候語分開。
 - 桌寵可依設定的間隔（預設 20 分鐘）在氣泡中說一句目前角色的名言（中文＋出處）；在桌寵上按右鍵，或到「名言」分頁點選，也可立即說出。
-- 「名言」分頁列出目前大師的翻譯、原文與來源。
+- 「名言」分頁列出目前大師的翻譯、原文（或白話）與來源。
 
 ### 4. AI 聊天連接
 - 採可插拔的供應商架構，位於 `providers/` 資料夾。
@@ -113,7 +123,9 @@ OPENAI_API_KEY=sk-xxx OPENAI_MODEL=gpt-4o-mini npm start
 ```
 .
 ├── package.json            # 相依套件與 start 腳本（"start": "electron ."）
-├── data/quotes.json        # 六位大師各 5 則查證名言（原文、翻譯、出處）
+├── data/
+│   ├── quotes.json             # 建築大師名言（原文、翻譯、出處）
+│   └── quotes-philosophers.json# 哲學家名言（原文／文言、翻譯／白話、篇章出處）
 ├── main.js                 # 主行程：視窗、IPC、資料夾監看、設定讀寫、提醒、名言、AI 呼叫
 ├── preload.js              # contextBridge 暴露的最小化 API（renderer 不開啟 nodeIntegration）
 ├── providers/
@@ -121,12 +133,21 @@ OPENAI_API_KEY=sk-xxx OPENAI_MODEL=gpt-4o-mini npm start
 │   ├── openai-compatible.js# OpenAI 相容 HTTP 供應商
 │   └── stub.js             # 佔位供應商（本地／Ollama，尚未實作）
 └── renderer/
-    ├── characters.js                     # 六位大師的 Q 版 inline SVG、名稱與問候語（桌寵與面板共用）
+    ├── characters.js                     # 角色登錄中心＋建築大師 SVG、職業分類（桌寵、面板、主行程共用）
+    ├── characters-philosophers.js        # 哲學家角色包（15 位 SVG、問候語、AI 人格設定）
     ├── pet.html / pet.css / pet.js       # 桌寵視窗（角色切換、姿勢、氣泡）
     └── panel.html / panel.css / panel.js # 控制面板視窗（含大師選擇器）
 ```
 
-另有 `preview/`（非 app 執行相依）：可用瀏覽器開啟 `preview/all.html` 一次檢視六位大師造型，方便截圖。
+另有 `preview/`（非 app 執行相依）：可用瀏覽器開啟 `preview/all.html`，依職業分組一次檢視所有大師造型，方便截圖。
+
+### 新增其他職業
+
+角色以「職業角色包」擴充，不需改動動畫或視窗程式：
+
+1. 仿照 `renderer/characters-philosophers.js` 新增一個角色包檔案，回傳 `{ category: { id, label, persona, style }, characters, order }`。角色 SVG 須沿用共用的 class（`.pet-body`、`.head`、`.eye`、`.mouth`、`.mouth-happy`、`.gesture-arm`、`.motif` 等）才能套用動畫。
+2. 在 `renderer/pet.html`、`renderer/panel.html`、`preview/all.html` 中，於 `characters.js` **之前**加入該檔的 `<script>`；並在 `characters.js` 的 Node 分支 `require` 該檔（主行程使用）。
+3. 名言放在 `data/quotes-<職業>.json`，格式同現有檔案。
 
 安全性設計：`contextIsolation: true`、`nodeIntegration: false`，renderer 僅能透過 `preload.js` 暴露的 `window.api` 與主行程溝通。
 
@@ -144,6 +165,7 @@ OPENAI_API_KEY=sk-xxx OPENAI_MODEL=gpt-4o-mini npm start
 - 以 [electron-builder](https://www.electron.build/) 打包成 Windows 安裝檔。
 - 更多 AI 供應商（真正的本地 Ollama、Anthropic Claude、Google 等）。
 - 檔案整理動作（搬移／分類／改名），但一律**需使用者明確確認**後才執行。
+- 更多職業角色包（例如科學家、藝術家、作家）。
 - 桌寵更多表情與互動、多螢幕支援、開機自動啟動。
 - 變更紀錄匯出、任務依日期分組與統計。
 

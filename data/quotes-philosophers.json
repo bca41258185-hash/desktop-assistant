@@ -1,0 +1,755 @@
+{
+  "description": "Quotations by fifteen historical philosophers, cited to chapter/section of the original works (all public domain). Western quotes are given in the original language with a Traditional Chinese translation; classical Chinese quotes (lang: lzh) carry a modern-Chinese gloss. Greetings in characters-philosophers.js are original and not quotations.",
+  "quotes": [
+    {
+      "id": "confucius",
+      "zh": "學而時習之，不亦說乎？有朋自遠方來，不亦樂乎？人不知而不慍，不亦君子乎？",
+      "gloss": "學了之後時時溫習實踐，不是很愉快嗎？有朋友從遠方來，不是很快樂嗎？別人不了解我卻不惱怒，不也是君子嗎？",
+      "source": "《論語·學而》",
+      "sourceZh": "《論語·學而》",
+      "url": "https://ctext.org/analects/xue-er/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "confucius",
+      "zh": "工欲善其事，必先利其器。",
+      "gloss": "工匠想把工作做好，一定要先把工具磨利。",
+      "source": "《論語·衛靈公》",
+      "sourceZh": "《論語·衛靈公》",
+      "url": "https://ctext.org/analects/wei-ling-gong/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "confucius",
+      "zh": "溫故而知新，可以為師矣。",
+      "gloss": "溫習舊知識而能從中有新的體會，就可以當老師了。",
+      "source": "《論語·為政》",
+      "sourceZh": "《論語·為政》",
+      "url": "https://ctext.org/analects/wei-zheng/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "confucius",
+      "zh": "知之為知之，不知為不知，是知也。",
+      "gloss": "知道就說知道，不知道就說不知道，這才是真正的知。",
+      "source": "《論語·為政》",
+      "sourceZh": "《論語·為政》",
+      "url": "https://ctext.org/analects/wei-zheng/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "confucius",
+      "zh": "己所不欲，勿施於人。",
+      "gloss": "自己不想要的，不要加在別人身上。",
+      "source": "《論語·衛靈公》",
+      "sourceZh": "《論語·衛靈公》",
+      "url": "https://ctext.org/analects/wei-ling-gong/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "laozi",
+      "zh": "九層之臺，起於累土；千里之行，始於足下。",
+      "gloss": "九層的高臺，從一筐筐堆起的土開始；千里的遠行，從腳下第一步開始。",
+      "source": "《道德經》第六十四章",
+      "sourceZh": "《道德經》第六十四章",
+      "url": "https://ctext.org/dao-de-jing/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "laozi",
+      "zh": "鑿戶牖以為室，當其無，有室之用。",
+      "gloss": "開鑿門窗造成房屋，正因為有中空之處，房屋才有用。",
+      "source": "《道德經》第十一章",
+      "sourceZh": "《道德經》第十一章",
+      "url": "https://ctext.org/dao-de-jing/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "laozi",
+      "zh": "知人者智，自知者明。",
+      "gloss": "能了解別人是聰明，能了解自己才是明智。",
+      "source": "《道德經》第三十三章",
+      "sourceZh": "《道德經》第三十三章",
+      "url": "https://ctext.org/dao-de-jing/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "laozi",
+      "zh": "天下難事，必作於易；天下大事，必作於細。",
+      "gloss": "天下的難事，必定從容易處做起；天下的大事，必定從細微處做起。",
+      "source": "《道德經》第六十三章",
+      "sourceZh": "《道德經》第六十三章",
+      "url": "https://ctext.org/dao-de-jing/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "laozi",
+      "zh": "上善若水。水善利萬物而不爭。",
+      "gloss": "最高的善就像水，水善於滋養萬物而不與之相爭。",
+      "source": "《道德經》第八章",
+      "sourceZh": "《道德經》第八章",
+      "url": "https://ctext.org/dao-de-jing/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "zhuangzi",
+      "zh": "吾生也有涯，而知也無涯。",
+      "gloss": "我的生命是有限的，而知識是無限的。",
+      "source": "《莊子·養生主》",
+      "sourceZh": "《莊子·養生主》",
+      "url": "https://ctext.org/zhuangzi/nourishing-the-lord-of-life/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "zhuangzi",
+      "zh": "以無厚入有閒，恢恢乎其於遊刃必有餘地矣。",
+      "gloss": "用沒有厚度的刀刃切入有空隙的骨節，寬寬綽綽，運刀必定綽有餘地。",
+      "source": "《莊子·養生主》",
+      "sourceZh": "《莊子·養生主》",
+      "url": "https://ctext.org/zhuangzi/nourishing-the-lord-of-life/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "zhuangzi",
+      "zh": "人皆知有用之用，而莫知無用之用也。",
+      "gloss": "人們都知道有用的用處，卻不知道無用的用處。",
+      "source": "《莊子·人間世》",
+      "sourceZh": "《莊子·人間世》",
+      "url": "https://ctext.org/zhuangzi/man-in-the-world-associated-with/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "zhuangzi",
+      "zh": "井蛙不可以語於海者，拘於虛也；夏蟲不可以語於冰者，篤於時也。",
+      "gloss": "不能和井底之蛙談大海，因為牠受限於居處；不能和夏天的蟲談冰，因為牠受限於時令。",
+      "source": "《莊子·秋水》",
+      "sourceZh": "《莊子·秋水》",
+      "url": "https://ctext.org/zhuangzi/floods-of-autumn/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "zhuangzi",
+      "zh": "天地有大美而不言。",
+      "gloss": "天地有最偉大的美，卻從不言說。",
+      "source": "《莊子·知北遊》",
+      "sourceZh": "《莊子·知北遊》",
+      "url": "https://ctext.org/zhuangzi/knowledge-rambling-in-the-north/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "mencius",
+      "zh": "不以規矩，不能成方員。",
+      "gloss": "不用圓規和曲尺，就畫不出方形和圓形。",
+      "source": "《孟子·離婁上》",
+      "sourceZh": "《孟子·離婁上》",
+      "url": "https://ctext.org/mengzi/li-lou-i/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "mencius",
+      "zh": "盡信書，則不如無書。",
+      "gloss": "完全相信書上所說，還不如沒有書。",
+      "source": "《孟子·盡心下》",
+      "sourceZh": "《孟子·盡心下》",
+      "url": "https://ctext.org/mengzi/jin-xin-ii/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "mencius",
+      "zh": "天時不如地利，地利不如人和。",
+      "gloss": "有利的時機比不上有利的地勢，有利的地勢比不上人心團結。",
+      "source": "《孟子·公孫丑下》",
+      "sourceZh": "《孟子·公孫丑下》",
+      "url": "https://ctext.org/mengzi/gong-sun-chou-ii/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "mencius",
+      "zh": "有為者辟若掘井，掘井九軔而不及泉，猶為棄井也。",
+      "gloss": "做事好比挖井，挖了很深卻沒挖到泉水，仍然等於是一口廢井。",
+      "source": "《孟子·盡心上》",
+      "sourceZh": "《孟子·盡心上》",
+      "url": "https://ctext.org/mengzi/jin-xin-i/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "mencius",
+      "zh": "生於憂患，而死於安樂也。",
+      "gloss": "憂患使人生存發展，安逸享樂使人衰亡。",
+      "source": "《孟子·告子下》",
+      "sourceZh": "《孟子·告子下》",
+      "url": "https://ctext.org/mengzi/gaozi-ii/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "mozi",
+      "zh": "天下從事者，不可以無法儀。無法儀而其事能成者，無有也。",
+      "gloss": "天下做事的人，不能沒有法度標準；沒有法度而能把事做成的，從來沒有。",
+      "source": "《墨子·法儀》",
+      "sourceZh": "《墨子·法儀》",
+      "url": "https://ctext.org/mozi/on-the-necessity-of-standards/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "mozi",
+      "zh": "百工為方以矩，為圓以規，直以繩，衡以水，正以縣。無巧工不巧工，皆以此五者為法。",
+      "gloss": "各種工匠畫方形用曲尺，畫圓形用圓規，取直用墨繩，測平用水準，取正用懸錘；無論手藝巧拙，都以這五樣為標準。",
+      "source": "《墨子·法儀》",
+      "sourceZh": "《墨子·法儀》",
+      "url": "https://ctext.org/mozi/on-the-necessity-of-standards/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "mozi",
+      "zh": "染於蒼則蒼，染於黃則黃。所入者變，其色亦變。",
+      "gloss": "絲放進青色染缸就變青，放進黃色染缸就變黃；所入的染料不同，顏色也跟著改變。",
+      "source": "《墨子·所染》",
+      "sourceZh": "《墨子·所染》",
+      "url": "https://ctext.org/mozi/on-dyeing/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "mozi",
+      "zh": "志不彊者智不達，言不信者行不果。",
+      "gloss": "意志不堅強，智慧就不能通達；說話不守信，行動就不會有結果。",
+      "source": "《墨子·修身》",
+      "sourceZh": "《墨子·修身》",
+      "url": "https://ctext.org/mozi/self-cultivation/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "mozi",
+      "zh": "視人之國若視其國，視人之家若視其家，視人之身若視其身。",
+      "gloss": "看待別人的國家像自己的國家，看待別人的家像自己的家，看待別人像看待自己。",
+      "source": "《墨子·兼愛中》",
+      "sourceZh": "《墨子·兼愛中》",
+      "url": "https://ctext.org/mozi/universal-love-ii/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "xunzi",
+      "zh": "不積蹞步，無以至千里；不積小流，無以成江海。",
+      "gloss": "不累積一步半步，就無法走到千里之外；不匯聚細小水流，就無法成為江海。",
+      "source": "《荀子·勸學》",
+      "sourceZh": "《荀子·勸學》",
+      "url": "https://ctext.org/xunzi/quan-xue/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "xunzi",
+      "zh": "青，取之於藍，而青於藍；冰，水為之，而寒於水。",
+      "gloss": "靛青從藍草提煉而出，顏色卻比藍草更深；冰由水凝結而成，卻比水更冷。",
+      "source": "《荀子·勸學》",
+      "sourceZh": "《荀子·勸學》",
+      "url": "https://ctext.org/xunzi/quan-xue/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "xunzi",
+      "zh": "鍥而舍之，朽木不折；鍥而不舍，金石可鏤。",
+      "gloss": "刻一下就放棄，連朽木也刻不斷；持續刻下去不停，金石也能雕出花紋。",
+      "source": "《荀子·勸學》",
+      "sourceZh": "《荀子·勸學》",
+      "url": "https://ctext.org/xunzi/quan-xue/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "xunzi",
+      "zh": "木受繩則直，金就礪則利。",
+      "gloss": "木材經過墨繩校正就能取直，金屬刀具在磨刀石上磨過就能鋒利。",
+      "source": "《荀子·勸學》",
+      "sourceZh": "《荀子·勸學》",
+      "url": "https://ctext.org/xunzi/quan-xue/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "xunzi",
+      "zh": "道雖邇，不行不至；事雖小，不為不成。",
+      "gloss": "路程雖近，不走就到不了；事情雖小，不做就成不了。",
+      "source": "《荀子·修身》",
+      "sourceZh": "《荀子·修身》",
+      "url": "https://ctext.org/xunzi/xiu-shen/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "hanfeizi",
+      "zh": "千丈之堤，以螻蟻之穴潰；百尺之室，以突隙之煙焚。",
+      "gloss": "千丈長的堤防，會因螻蟻的小洞而潰決；百尺高的房屋，會因煙囪縫隙冒出的火星而焚毀。",
+      "source": "《韓非子·喻老》",
+      "sourceZh": "《韓非子·喻老》",
+      "url": "https://ctext.org/hanfeizi/yu-lao/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "hanfeizi",
+      "zh": "世異則事異。",
+      "gloss": "時代不同，事情的做法也就不同。",
+      "source": "《韓非子·五蠹》",
+      "sourceZh": "《韓非子·五蠹》",
+      "url": "https://ctext.org/hanfeizi/wu-du/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "hanfeizi",
+      "zh": "事因於世，而備適於事。",
+      "gloss": "做事要依據時代，措施要適應事情。",
+      "source": "《韓非子·五蠹》",
+      "sourceZh": "《韓非子·五蠹》",
+      "url": "https://ctext.org/hanfeizi/wu-du/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "hanfeizi",
+      "zh": "巧詐不如拙誠。",
+      "gloss": "巧妙的欺詐，不如笨拙的誠實。",
+      "source": "《韓非子·說林上》",
+      "sourceZh": "《韓非子·說林上》",
+      "url": "https://ctext.org/hanfeizi/shuo-lin-shang/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "hanfeizi",
+      "zh": "法不阿貴，繩不撓曲。",
+      "gloss": "法令不偏袒權貴，墨繩不遷就彎曲的木頭。",
+      "source": "《韓非子·有度》",
+      "sourceZh": "《韓非子·有度》",
+      "url": "https://ctext.org/hanfeizi/you-du/zh",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "wangyangming",
+      "zh": "知是行之始，行是知之成。",
+      "gloss": "知是行的開端，行是知的完成。",
+      "source": "王守仁《傳習錄》上卷",
+      "sourceZh": "王守仁《傳習錄》上卷",
+      "url": "https://zh.wikisource.org/wiki/傳習錄",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "wangyangming",
+      "zh": "知而不行，只是未知。",
+      "gloss": "知道了卻不去做，其實就是還不知道。",
+      "source": "王守仁《傳習錄》上卷",
+      "sourceZh": "王守仁《傳習錄》上卷",
+      "url": "https://zh.wikisource.org/wiki/傳習錄",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "wangyangming",
+      "zh": "人須在事上磨，方立得住。",
+      "gloss": "人必須在實際做事中磨練，才能站得穩。",
+      "source": "王守仁《傳習錄》上卷",
+      "sourceZh": "王守仁《傳習錄》上卷",
+      "url": "https://zh.wikisource.org/wiki/傳習錄",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "wangyangming",
+      "zh": "你未看此花時，此花與汝心同歸於寂；你來看此花時，則此花顏色一時明白起來。",
+      "gloss": "你沒看這朵花時，花和你的心一同沉寂；你來看它時，花的顏色一下子就鮮明起來。",
+      "source": "王守仁《傳習錄》下卷",
+      "sourceZh": "王守仁《傳習錄》下卷",
+      "url": "https://zh.wikisource.org/wiki/傳習錄",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "wangyangming",
+      "zh": "破山中賊易，破心中賊難。",
+      "gloss": "打敗山裡的盜賊容易，打敗心中的盜賊困難。",
+      "source": "王守仁〈與楊仕德薛尚謙書〉",
+      "sourceZh": "王守仁〈與楊仕德薛尚謙書〉",
+      "url": "https://zh.wikisource.org/wiki/王文成全書/卷04",
+      "year": null,
+      "lang": "lzh"
+    },
+    {
+      "id": "socrates",
+      "original": "ὁ δὲ ἀνεξέταστος βίος οὐ βιωτὸς ἀνθρώπῳ",
+      "zh": "未經省察的人生，不值得活。",
+      "source": "Plato, Apology 38a",
+      "sourceZh": "柏拉圖《申辯篇》38a",
+      "url": "http://www.perseus.tufts.edu/hopper/text?doc=Plat.+Apol.+38a",
+      "year": null,
+      "lang": "grc"
+    },
+    {
+      "id": "socrates",
+      "original": "ἃ μὴ οἶδα οὐδὲ οἴομαι εἰδέναι",
+      "zh": "我不知道的事，我也不自以為知道。",
+      "source": "Plato, Apology 21d",
+      "sourceZh": "柏拉圖《申辯篇》21d",
+      "url": "http://www.perseus.tufts.edu/hopper/text?doc=Plat.+Apol.+21d",
+      "year": null,
+      "lang": "grc"
+    },
+    {
+      "id": "socrates",
+      "original": "μάλα γὰρ φιλοσόφου τοῦτο τὸ πάθος, τὸ θαυμάζειν· οὐ γὰρ ἄλλη ἀρχὴ φιλοσοφίας ἢ αὕτη",
+      "zh": "驚奇正是哲學家的感受，哲學沒有別的起點，就是驚奇。",
+      "source": "Plato, Theaetetus 155d",
+      "sourceZh": "柏拉圖《泰阿泰德篇》155d",
+      "url": "http://www.perseus.tufts.edu/hopper/text?doc=Plat.+Theaet.+155d",
+      "year": null,
+      "lang": "grc"
+    },
+    {
+      "id": "socrates",
+      "original": "οὐ τὸ ζῆν περὶ πλείστου ποιητέον, ἀλλὰ τὸ εὖ ζῆν",
+      "zh": "最該重視的不是活著，而是活得好。",
+      "source": "Plato, Crito 48b",
+      "sourceZh": "柏拉圖《克力同篇》48b",
+      "url": "http://www.perseus.tufts.edu/hopper/text?doc=Plat.+Crito+48b",
+      "year": null,
+      "lang": "grc"
+    },
+    {
+      "id": "socrates",
+      "original": "μέγιστον τῶν κακῶν τυγχάνει ὂν τὸ ἀδικεῖν",
+      "zh": "行不義，是最大的惡。",
+      "source": "Plato, Gorgias 469b",
+      "sourceZh": "柏拉圖《高爾吉亞篇》469b",
+      "url": "http://www.perseus.tufts.edu/hopper/text?doc=Plat.+Gorg.+469b",
+      "year": null,
+      "lang": "grc"
+    },
+    {
+      "id": "aristotle",
+      "original": "Πάντες ἄνθρωποι τοῦ εἰδέναι ὀρέγονται φύσει.",
+      "zh": "求知是人類的天性。",
+      "source": "Aristotle, Metaphysics 980a21",
+      "sourceZh": "亞里斯多德《形上學》980a21",
+      "url": "http://www.perseus.tufts.edu/hopper/text?doc=Aristot.+Met.+1.980a",
+      "year": null,
+      "lang": "grc"
+    },
+    {
+      "id": "aristotle",
+      "original": "μία γὰρ χελιδὼν ἔαρ οὐ ποιεῖ, οὐδὲ μία ἡμέρα",
+      "zh": "一隻燕子帶不來春天，一天也不行。",
+      "source": "Aristotle, Nicomachean Ethics 1098a18",
+      "sourceZh": "亞里斯多德《尼各馬可倫理學》1098a18",
+      "url": "http://www.perseus.tufts.edu/hopper/text?doc=Aristot.+Nic.+Eth.+1098a",
+      "year": null,
+      "lang": "grc"
+    },
+    {
+      "id": "aristotle",
+      "original": "ἃ γὰρ δεῖ μαθόντας ποιεῖν, ταῦτα ποιοῦντες μανθάνομεν, οἷον οἰκοδομοῦντες οἰκοδόμοι γίνονται",
+      "zh": "該學會才能做的事，我們是透過去做而學會的；例如人蓋房子，才成為建築師。",
+      "source": "Aristotle, Nicomachean Ethics 1103a32",
+      "sourceZh": "亞里斯多德《尼各馬可倫理學》1103a32",
+      "url": "http://www.perseus.tufts.edu/hopper/text?doc=Aristot.+Nic.+Eth.+1103a",
+      "year": null,
+      "lang": "grc"
+    },
+    {
+      "id": "aristotle",
+      "original": "ὁ ἄνθρωπος φύσει πολιτικὸν ζῷον",
+      "zh": "人天生是城邦的動物。",
+      "source": "Aristotle, Politics 1253a2",
+      "sourceZh": "亞里斯多德《政治學》1253a2",
+      "url": "http://www.perseus.tufts.edu/hopper/text?doc=Aristot.+Pol.+1.1253a",
+      "year": null,
+      "lang": "grc"
+    },
+    {
+      "id": "aristotle",
+      "original": "πεπαιδευμένου γάρ ἐστιν ἐπὶ τοσοῦτον τἀκριβὲς ἐπιζητεῖν καθ᾽ ἕκαστον γένος, ἐφ᾽ ὅσον ἡ τοῦ πράγματος φύσις ἐπιδέχεται",
+      "zh": "有教養的人，在每一類事物上只追求該事物本性所容許的精確程度。",
+      "source": "Aristotle, Nicomachean Ethics 1094b23",
+      "sourceZh": "亞里斯多德《尼各馬可倫理學》1094b23",
+      "url": "http://www.perseus.tufts.edu/hopper/text?doc=Aristot.+Nic.+Eth.+1094b",
+      "year": null,
+      "lang": "grc"
+    },
+    {
+      "id": "aurelius",
+      "original": "ὁ κόσμος ἀλλοίωσις, ὁ βίος ὑπόληψις.",
+      "zh": "宇宙即變化，人生即看法。",
+      "source": "Marcus Aurelius, Meditations 4.3",
+      "sourceZh": "馬可·奧理略《沉思錄》4.3",
+      "url": "http://www.perseus.tufts.edu/hopper/text?doc=M.+Ant.+4.3",
+      "year": null,
+      "lang": "grc"
+    },
+    {
+      "id": "aurelius",
+      "original": "Ἔνδον βλέπε· ἔνδον ἡ πηγὴ τοῦ ἀγαθοῦ",
+      "zh": "向內看，善的泉源在你之內。",
+      "source": "Marcus Aurelius, Meditations 7.59",
+      "sourceZh": "馬可·奧理略《沉思錄》7.59",
+      "url": "http://www.perseus.tufts.edu/hopper/text?doc=M.+Ant.+7.59",
+      "year": null,
+      "lang": "grc"
+    },
+    {
+      "id": "aurelius",
+      "original": "Μηκέτι ὅλως περὶ τοῦ οἷόν τινα εἶναι τὸν ἀγαθὸν ἄνδρα διαλέγεσθαι, ἀλλὰ εἶναι τοιοῦτον.",
+      "zh": "別再談論一個好人應該是什麼樣子，去成為那樣的人。",
+      "source": "Marcus Aurelius, Meditations 10.16",
+      "sourceZh": "馬可·奧理略《沉思錄》10.16",
+      "url": "http://www.perseus.tufts.edu/hopper/text?doc=M.+Ant.+10.16",
+      "year": null,
+      "lang": "grc"
+    },
+    {
+      "id": "aurelius",
+      "original": "Ὄρθρου, ὅταν δυσόκνως ἐξεγείρῃ, πρόχειρον ἔστω· ὅτι ἐπὶ ἀνθρώπου ἔργον ἐγείρομαι",
+      "zh": "清晨賴床不想起來時，提醒自己：我起身，是為了去做一個人該做的工作。",
+      "source": "Marcus Aurelius, Meditations 5.1",
+      "sourceZh": "馬可·奧理略《沉思錄》5.1",
+      "url": "http://www.perseus.tufts.edu/hopper/text?doc=M.+Ant.+5.1",
+      "year": null,
+      "lang": "grc"
+    },
+    {
+      "id": "aurelius",
+      "original": "τὸ ἐμποδίζον τῇ πράξει πρὸ ἔργου γίνεται καὶ τὸ τῆς ὁδοῦ ταύτης ἐνιστάμενον ὁδηγεῖ",
+      "zh": "阻礙行動的，反而推進了行動；擋在路上的，反而成了路。",
+      "source": "Marcus Aurelius, Meditations 5.20",
+      "sourceZh": "馬可·奧理略《沉思錄》5.20",
+      "url": "http://www.perseus.tufts.edu/hopper/text?doc=M.+Ant.+5.20",
+      "year": null,
+      "lang": "grc"
+    },
+    {
+      "id": "seneca",
+      "original": "Omnia, Lucili, aliena sunt, tempus tantum nostrum est.",
+      "zh": "路基里烏斯，一切都不屬於我們，唯有時間是我們自己的。",
+      "source": "Seneca, Epistulae Morales 1.3",
+      "sourceZh": "塞內卡《道德書簡》第 1 封",
+      "url": "https://www.thelatinlibrary.com/sen/seneca.ep1.shtml",
+      "year": null,
+      "lang": "la"
+    },
+    {
+      "id": "seneca",
+      "original": "Non exiguum temporis habemus, sed multum perdidimus.",
+      "zh": "我們擁有的時間並不少，而是浪費了太多。",
+      "source": "Seneca, De Brevitate Vitae 1.3",
+      "sourceZh": "塞內卡《論生命之短暫》1.3",
+      "url": "https://www.thelatinlibrary.com/sen/sen.brevita.shtml",
+      "year": null,
+      "lang": "la"
+    },
+    {
+      "id": "seneca",
+      "original": "Homines dum docent discunt.",
+      "zh": "人在教別人的同時，自己也在學習。",
+      "source": "Seneca, Epistulae Morales 7.8",
+      "sourceZh": "塞內卡《道德書簡》第 7 封",
+      "url": "https://www.thelatinlibrary.com/sen/seneca.ep1.shtml",
+      "year": null,
+      "lang": "la"
+    },
+    {
+      "id": "seneca",
+      "original": "Ignoranti quem portum petat nullus suus ventus est.",
+      "zh": "對不知道要駛往哪個港口的人來說，沒有一陣風是順風。",
+      "source": "Seneca, Epistulae Morales 71.3",
+      "sourceZh": "塞內卡《道德書簡》第 71 封",
+      "url": "https://www.thelatinlibrary.com/sen/seneca.ep8.shtml",
+      "year": null,
+      "lang": "la"
+    },
+    {
+      "id": "seneca",
+      "original": "Non quia difficilia sunt non audemus, sed quia non audemus difficilia sunt.",
+      "zh": "不是因為事情困難我們才不敢做，而是因為我們不敢做，事情才變得困難。",
+      "source": "Seneca, Epistulae Morales 104.26",
+      "sourceZh": "塞內卡《道德書簡》第 104 封",
+      "url": "https://www.thelatinlibrary.com/sen/seneca.ep17-18.shtml",
+      "year": null,
+      "lang": "la"
+    },
+    {
+      "id": "descartes",
+      "original": "Je pense, donc je suis.",
+      "zh": "我思，故我在。",
+      "source": "Descartes, Discours de la méthode, IV (1637)",
+      "sourceZh": "笛卡兒《談談方法》第四部，1637",
+      "url": "https://www.gutenberg.org/ebooks/13846",
+      "year": 1637,
+      "lang": "fr"
+    },
+    {
+      "id": "descartes",
+      "original": "Le bon sens est la chose du monde la mieux partagée.",
+      "zh": "良知是世上分配得最平均的東西。",
+      "source": "Descartes, Discours de la méthode, I (1637)",
+      "sourceZh": "笛卡兒《談談方法》第一部，1637",
+      "url": "https://www.gutenberg.org/ebooks/13846",
+      "year": 1637,
+      "lang": "fr"
+    },
+    {
+      "id": "descartes",
+      "original": "Car ce n'est pas assez d'avoir l'esprit bon, mais le principal est de l'appliquer bien.",
+      "zh": "光有好頭腦是不夠的，最重要的是好好運用它。",
+      "source": "Descartes, Discours de la méthode, I (1637)",
+      "sourceZh": "笛卡兒《談談方法》第一部，1637",
+      "url": "https://www.gutenberg.org/ebooks/13846",
+      "year": 1637,
+      "lang": "fr"
+    },
+    {
+      "id": "descartes",
+      "original": "Le second, de diviser chacune des difficultés que j'examinerais, en autant de parcelles qu'il se pourrait, et qu'il serait requis pour les mieux résoudre.",
+      "zh": "第二條：把我要檢查的每一個難題，盡可能、也依解決所需，分成許多小部分。",
+      "source": "Descartes, Discours de la méthode, II (1637)",
+      "sourceZh": "笛卡兒《談談方法》第二部，1637",
+      "url": "https://www.gutenberg.org/ebooks/13846",
+      "year": 1637,
+      "lang": "fr"
+    },
+    {
+      "id": "descartes",
+      "original": "Ainsi voit-on que les bâtiments qu'un seul architecte a entrepris et achevés ont coutume d'être plus beaux et mieux ordonnés que ceux que plusieurs ont tâché de raccommoder.",
+      "zh": "由一位建築師獨自規劃並完成的建築，通常比許多人設法修修補補的建築更美、更有秩序。",
+      "source": "Descartes, Discours de la méthode, II (1637)",
+      "sourceZh": "笛卡兒《談談方法》第二部，1637",
+      "url": "https://www.gutenberg.org/ebooks/13846",
+      "year": 1637,
+      "lang": "fr"
+    },
+    {
+      "id": "kant",
+      "original": "Zwei Dinge erfüllen das Gemüth mit immer neuer und zunehmender Bewunderung und Ehrfurcht, je öfter und anhaltender sich das Nachdenken damit beschäftigt: der bestirnte Himmel über mir und das moralische Gesetz in mir.",
+      "zh": "有兩樣東西，越是經常而持久地思索，就越使心靈充滿常新而日增的驚嘆與敬畏：我頭上的星空，和我心中的道德法則。",
+      "source": "Kant, Kritik der praktischen Vernunft, Beschluss (1788)",
+      "sourceZh": "康德《實踐理性批判》結論，1788",
+      "url": "https://www.gutenberg.org/ebooks/49543",
+      "year": 1788,
+      "lang": "de"
+    },
+    {
+      "id": "kant",
+      "original": "Sapere aude! Habe Muth dich deines eigenen Verstandes zu bedienen!",
+      "zh": "勇於求知！要有勇氣運用你自己的理智！",
+      "source": "Kant, Beantwortung der Frage: Was ist Aufklärung? (1784)",
+      "sourceZh": "康德〈答「何謂啟蒙？」之問〉，1784",
+      "url": "https://de.wikisource.org/wiki/Beantwortung_der_Frage:_Was_ist_Aufkl%C3%A4rung%3F",
+      "year": 1784,
+      "lang": "de"
+    },
+    {
+      "id": "kant",
+      "original": "Gedanken ohne Inhalt sind leer, Anschauungen ohne Begriffe sind blind.",
+      "zh": "沒有內容的思想是空的，沒有概念的直觀是盲的。",
+      "source": "Kant, Kritik der reinen Vernunft, A51/B75 (1781)",
+      "sourceZh": "康德《純粹理性批判》A51/B75，1781",
+      "url": "https://projekt-gutenberg.org/authors/immanuel-kant/books/immanuel-kant-kritik-der-reinen-vernunft-2-auflage/",
+      "year": 1781,
+      "lang": "de"
+    },
+    {
+      "id": "kant",
+      "original": "Handle nur nach derjenigen Maxime, durch die du zugleich wollen kannst, daß sie ein allgemeines Gesetz werde.",
+      "zh": "只依照你同時願意它成為普遍法則的那個準則去行動。",
+      "source": "Kant, Grundlegung zur Metaphysik der Sitten (1785)",
+      "sourceZh": "康德《道德形上學之基礎》，1785",
+      "url": "https://projekt-gutenberg.org/authors/immanuel-kant/books/grundlegung-zur-metaphysik-der-sitten/",
+      "year": 1785,
+      "lang": "de"
+    },
+    {
+      "id": "kant",
+      "original": "aus so krummem Holze, als woraus der Mensch gemacht ist, kann nichts ganz Gerades gezimmert werden.",
+      "zh": "用造成人類的那種彎曲木料，造不出完全筆直的東西。",
+      "source": "Kant, Idee zu einer allgemeinen Geschichte in weltbürgerlicher Absicht, Satz 6 (1784)",
+      "sourceZh": "康德〈世界公民觀點下的普遍歷史理念〉第六命題，1784",
+      "url": "https://projekt-gutenberg.org/authors/immanuel-kant/books/immanuel-kant-idee-zu-einer-allgemeinen-geschichte-in-weltbuergerlicher-absicht",
+      "year": 1784,
+      "lang": "de"
+    },
+    {
+      "id": "nietzsche",
+      "original": "Was mich nicht umbringt, macht mich stärker.",
+      "zh": "凡殺不死我的，使我更堅強。",
+      "source": "Nietzsche, Götzen-Dämmerung, Sprüche und Pfeile 8 (1889)",
+      "sourceZh": "尼采《偶像的黃昏》〈箴言與箭〉第 8 則，1889",
+      "url": "http://www.nietzschesource.org/#eKGWB/GD-Sprüche-8",
+      "year": 1889,
+      "lang": "de"
+    },
+    {
+      "id": "nietzsche",
+      "original": "Hat man sein warum? des Lebens, so verträgt man sich fast mit jedem wie?",
+      "zh": "一個人若有活下去的「為什麼」，幾乎就能忍受任何「怎麼樣」。",
+      "source": "Nietzsche, Götzen-Dämmerung, Sprüche und Pfeile 12 (1889)",
+      "sourceZh": "尼采《偶像的黃昏》〈箴言與箭〉第 12 則，1889",
+      "url": "http://www.nietzschesource.org/#eKGWB/GD-Sprüche-12",
+      "year": 1889,
+      "lang": "de"
+    },
+    {
+      "id": "nietzsche",
+      "original": "Ohne Musik wäre das Leben ein Irrthum.",
+      "zh": "沒有音樂，人生將是一個錯誤。",
+      "source": "Nietzsche, Götzen-Dämmerung, Sprüche und Pfeile 33 (1889)",
+      "sourceZh": "尼采《偶像的黃昏》〈箴言與箭〉第 33 則，1889",
+      "url": "http://www.nietzschesource.org/#eKGWB/GD-Sprüche-33",
+      "year": 1889,
+      "lang": "de"
+    },
+    {
+      "id": "nietzsche",
+      "original": "man muss noch Chaos in sich haben, um einen tanzenden Stern gebären zu können.",
+      "zh": "人必須在自己內心保有混沌，才能誕生一顆跳舞的星星。",
+      "source": "Nietzsche, Also sprach Zarathustra, Vorrede 5 (1883)",
+      "sourceZh": "尼采《查拉圖斯特拉如是說》序言第 5 節，1883",
+      "url": "http://www.nietzschesource.org/#eKGWB/Za-I-Vorrede-5",
+      "year": 1883,
+      "lang": "de"
+    },
+    {
+      "id": "nietzsche",
+      "original": "Die Architektur ist eine Art Macht-Beredsamkeit in Formen.",
+      "zh": "建築是一種以形式展現的權力雄辯。",
+      "source": "Nietzsche, Götzen-Dämmerung, Streifzüge eines Unzeitgemässen 11 (1889)",
+      "sourceZh": "尼采《偶像的黃昏》〈不合時宜者的漫遊〉第 11 則，1889",
+      "url": "http://www.nietzschesource.org/#eKGWB/GD-Streifzüge-11",
+      "year": 1889,
+      "lang": "de"
+    }
+  ]
+}
