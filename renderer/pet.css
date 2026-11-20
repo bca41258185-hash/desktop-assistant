@@ -174,10 +174,10 @@ html, body {
   transition: opacity 0.2s ease, transform 0.2s ease;
   pointer-events: none;
   word-break: break-word;
-  white-space: pre-wrap;
 }
 .bubble.show { opacity: 1; transform: translateY(0) scale(1); }
-.bubble-text { display: block; }
+/* pre-wrap 只套在文字本身：套在整個泡泡會把 HTML 的換行縮排算成空行 */
+.bubble-text { display: block; white-space: pre-wrap; }
 .bubble-attr {
   display: block;
   margin-top: 4px;
