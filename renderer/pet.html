@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+  <title>桌面助手</title>
+  <link rel="stylesheet" href="pet.css" />
+</head>
+<body>
+  <div id="stage">
+    <!-- 說話氣泡 -->
+    <div id="bubble" class="bubble"></div>
+
+    <!-- 角色：純 SVG，無外部圖檔 -->
+    <div id="pet" class="pet" title="拖曳可移動，點一下開啟面板">
+      <svg viewBox="0 0 120 120" width="120" height="120" aria-hidden="true">
+        <!-- 影子 -->
+        <ellipse id="shadow" cx="60" cy="112" rx="34" ry="6" fill="rgba(0,0,0,0.18)" />
+        <!-- 身體 -->
+        <g id="body">
+          <circle cx="60" cy="60" r="44" fill="#7cc5ff" stroke="#4aa3e8" stroke-width="3" />
+          <!-- 腮紅 -->
+          <circle cx="38" cy="70" r="7" fill="#ff9db0" opacity="0.7" />
+          <circle cx="82" cy="70" r="7" fill="#ff9db0" opacity="0.7" />
+          <!-- 眼睛（blink 由 CSS scaleY 控制） -->
+          <g class="eyes">
+            <circle class="eye" cx="46" cy="54" r="6" fill="#2b2b2b" />
+            <circle class="eye" cx="74" cy="54" r="6" fill="#2b2b2b" />
+            <circle cx="48" cy="52" r="2" fill="#fff" />
+            <circle cx="76" cy="52" r="2" fill="#fff" />
+          </g>
+          <!-- 嘴巴 -->
+          <path d="M52 74 Q60 82 68 74" fill="none" stroke="#2b2b2b" stroke-width="3" stroke-linecap="round" />
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <script src="pet.js"></script>
+</body>
+</html>

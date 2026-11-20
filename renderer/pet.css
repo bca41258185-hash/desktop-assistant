@@ -1,0 +1,94 @@
+/* 桌寵視窗：透明背景，角色置中偏下，氣泡在上方 */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+  cursor: default;
+}
+
+#stage {
+  position: relative;
+  width: 220px;
+  height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* --- 角色 --- */
+.pet {
+  width: 120px;
+  height: 120px;
+  cursor: grab;
+  animation: bounce 2.4s ease-in-out infinite;
+  -webkit-user-drag: none;
+}
+.pet:active { cursor: grabbing; }
+
+#body { transform-origin: 60px 60px; }
+
+/* 眨眼：壓縮眼睛 Y 軸 */
+.eyes .eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: blink 4.5s ease-in-out infinite;
+}
+
+/* 輕微上下彈跳 */
+@keyframes bounce {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  50%      { transform: translateY(-8px) scale(0.99, 1.01); }
+}
+
+/* 影子隨彈跳微縮 */
+#shadow { animation: shadowPulse 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes shadowPulse {
+  0%, 100% { transform: scale(1); opacity: 0.18; }
+  50%      { transform: scale(0.82); opacity: 0.12; }
+}
+
+@keyframes blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95%           { transform: scaleY(0.1); }
+}
+
+/* --- 說話氣泡 --- */
+.bubble {
+  max-width: 200px;
+  margin-bottom: 8px;
+  padding: 10px 14px;
+  background: #ffffff;
+  color: #2b2b2b;
+  font-size: 14px;
+  line-height: 1.5;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  position: relative;
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.bubble.show {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+/* 氣泡小尾巴 */
+.bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  transform: translateX(-50%);
+  border: 8px solid transparent;
+  border-top-color: #ffffff;
+  border-bottom: 0;
+}

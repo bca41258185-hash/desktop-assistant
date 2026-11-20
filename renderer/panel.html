@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+  <title>桌面助手</title>
+  <link rel="stylesheet" href="panel.css" />
+</head>
+<body>
+  <nav class="tabs">
+    <button class="tab active" data-tab="chat">聊天</button>
+    <button class="tab" data-tab="folders">資料夾</button>
+    <button class="tab" data-tab="tasks">任務</button>
+    <button class="tab" data-tab="settings">設定</button>
+  </nav>
+
+  <!-- 聊天 -->
+  <section class="panel-view active" id="view-chat">
+    <div class="chat-log" id="chatLog"></div>
+    <label class="ctx-row">
+      <input type="checkbox" id="withContext" />
+      帶上近期資料夾變更作為上下文
+    </label>
+    <div class="chat-input">
+      <textarea id="chatInput" rows="2" placeholder="輸入訊息，按 Enter 送出（Shift+Enter 換行）"></textarea>
+      <button id="chatSend">送出</button>
+    </div>
+  </section>
+
+  <!-- 資料夾 -->
+  <section class="panel-view" id="view-folders">
+    <div class="section-head">
+      <h2>監看中的資料夾</h2>
+      <button id="pickFolders">+ 加入資料夾</button>
+    </div>
+    <p class="hint">本版本為「唯讀監看」：只會通知變更，絕不會刪除、搬移或改名任何檔案。</p>
+    <ul class="folder-list" id="folderList"></ul>
+
+    <h2 class="mt">近期檔案變更</h2>
+    <ul class="change-list" id="changeList"></ul>
+  </section>
+
+  <!-- 任務 -->
+  <section class="panel-view" id="view-tasks">
+    <div class="section-head">
+      <h2>今日工作進度 <span id="taskProgress" class="progress-badge">0/0</span></h2>
+    </div>
+    <div class="task-add">
+      <input type="text" id="taskInput" placeholder="新增一項任務…" />
+      <button id="taskAdd">新增</button>
+    </div>
+    <ul class="task-list" id="taskList"></ul>
+  </section>
+
+  <!-- 設定 -->
+  <section class="panel-view" id="view-settings">
+    <h2>AI 供應商設定</h2>
+    <label class="field">
+      供應商
+      <select id="setProvider">
+        <option value="openai">OpenAI 相容（HTTP）</option>
+        <option value="stub">本地／Ollama（尚未實作，佔位）</option>
+      </select>
+    </label>
+    <label class="field">
+      Base URL
+      <input type="text" id="setBaseUrl" placeholder="https://api.openai.com/v1" />
+    </label>
+    <label class="field">
+      Model
+      <input type="text" id="setModel" placeholder="gpt-4o-mini" />
+    </label>
+    <label class="field">
+      API Key
+      <input type="password" id="setApiKey" placeholder="sk-..." autocomplete="off" />
+    </label>
+    <p class="hint" id="envHint"></p>
+
+    <h2 class="mt">提醒設定</h2>
+    <label class="field">
+      提醒間隔（分鐘，0 = 關閉）
+      <input type="number" id="setReminder" min="0" step="1" />
+    </label>
+
+    <button id="saveSettings" class="primary">儲存設定</button>
+    <span id="saveStatus" class="save-status"></span>
+
+    <p class="hint mt">
+      提示：也可用環境變數設定金鑰，啟動前設定
+      <code>OPENAI_API_KEY</code>、<code>OPENAI_BASE_URL</code>、<code>OPENAI_MODEL</code>（環境變數優先於此處設定）。金鑰只存在本機，不會進入 repo。
+    </p>
+  </section>
+
+  <script src="panel.js"></script>
+</body>
+</html>
