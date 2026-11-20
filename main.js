@@ -10,7 +10,10 @@ const { createAiWatcher, defaultRoots } = require('./ai-watch');
 const hooksInstaller = require('./ai-watch/hooks-installer');
 const { listClaudeSessions, desktopSessionMeta } = require('./ai-watch/claude-sessions');
 const compose = require('./ai-watch/compose');
-const { CHARACTERS, DEFAULT_ID, categoryOf } = require('./renderer/characters');
+const { remarkFor } = require('./data/remarks');
+const { CHARACTERS, ORDER: ACTIVE_CHARACTERS, DEFAULT_ID, categoryOf } = require('./renderer/characters');
+// 只有開放中的角色可以選；封存的角色（設定檔裡的舊值）一律換成預設角色
+const isActiveCharacter = (id) => ACTIVE_CHARACTERS.includes(id);
 
 // 名言資料：讀取 data/ 下所有 quotes*.json（每個職業一個檔，方便擴充）
 function loadQuotes() {
@@ -65,6 +68,7 @@ const CONFIG_DEFAULTS = {
     quoteIntervalMinutes: 20,      // 名言氣泡間隔（0＝關閉）
     characterId: DEFAULT_ID,       // 目前選用的大師（'ando' | 'gehry' | ...）
     aiWatch: true,                 // 監看 Claude Code / Codex 對話進度（唯讀）
+    aiRemarks: true,               // Claude 進行中時，角色依人物設定發表看法
     aiProjects: []                 // 只監看這些專案資料夾內的對話（空 = 不讀任何對話）
   }
 };
@@ -72,7 +76,7 @@ const CONFIG_DEFAULTS = {
 // 回傳有效且存在的角色 id（避免設定檔殘留無效值）
 function currentCharacterId() {
   const id = config && config.settings && config.settings.characterId;
-  return CHARACTERS[id] ? id : DEFAULT_ID;
+  return isActiveCharacter(id) ? id : DEFAULT_ID;
 }
 
 function configPath() {
@@ -524,8 +528,10 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
     // 等你回覆的泡泡也留著，點一下就跳到 Claude
     // 點泡泡會直接開到這一個對話；同時追蹤好幾個時註明是哪一個
     const multi = composeTargets().length > 1 && s.title && s.title !== '（尚無指令）';
+    // 沒裝即時提醒時這只是推測（工具很久沒回應），話不能說死
+    const sure = !!s.waitingMessage || s.viaHooks;
     speak({
-      text: 'Claude 在等你回答', attribution: multi ? '來自：' + clip(s.title, 24) : '',
+      text: sure ? 'Claude 在等你回答' : 'Claude 可能在等你回答（也可能只是做比較久）', attribution: multi ? '來自：' + clip(s.title, 24) : '',
       ai: true, sticky: true, action: 'reply', sessionId: sessionIdOf(s)
     });
   } else if (kind === 'done') {
@@ -614,6 +620,40 @@ async function sendCompose(text, targetId) {
   }
 }
 
+// --- 角色在 Claude 進行中時發表看法（依人物設定） ---
+const REMARK_FIRST_MS = 40 * 1000;          // 開始做事後多久說第一句
+const REMARK_GAP_MS = [150 * 1000, 240 * 1000];   // 之後每隔 2.5～4 分鐘說一句
+const REMARK_LONG_MS = 5 * 60 * 1000;       // 一個回合超過這麼久，會說一次「做很久了」的看法
+const remarkState = new Map();              // 對話 id → { since, nextAt, saidLong, last }
+
+function remarkTick() {
+  if (config.settings.aiRemarks === false) return;
+  const t = Date.now();
+  const working = [].concat(...(aiSnapshot || []).map((p) => p.sessions || [])).filter((s) => s.status === 'working');
+  // 已經不在進行中的對話：清掉記錄，下次重新計時
+  const ids = new Set(working.map((s) => s.id));
+  [...remarkState.keys()].forEach((id) => { if (!ids.has(id)) remarkState.delete(id); });
+  if (!working.length) return;
+  working.sort((a, b) => b.lastActivity - a.lastActivity);
+  const s = working[0];
+  let st = remarkState.get(s.id);
+  if (!st) {
+    st = { since: t, nextAt: t + REMARK_FIRST_MS, saidLong: false, last: '' };
+    remarkState.set(s.id, st);
+    return;
+  }
+  if (t < st.nextAt) return;
+  const longRunning = !st.saidLong && t - st.since > REMARK_LONG_MS;
+  // avoid：不連續說同一句。這位角色沒有台詞（已封存）時回傳空字串，就不說話
+  const line = remarkFor(currentCharacterId(), { lastAction: s.lastAction, longRunning, avoid: st.last });
+  st.nextAt = t + REMARK_GAP_MS[0] + Math.random() * (REMARK_GAP_MS[1] - REMARK_GAP_MS[0]);
+  if (!line) return;
+  if (longRunning) st.saidLong = true;
+  st.last = line;
+  // 一般泡泡（不是 ai 通知）：有等你回答／完成的泡泡開著時不會蓋掉它
+  speak({ text: line, duration: 9000 });
+}
+
 // 角色頭上的小狀態標籤：等你 > 進行中 > 剛完成（10 分鐘內）；都沒有就不顯示
 function petStatusOf(list) {
   const all = [].concat(...(list || []).map((p) => p.sessions || []));
@@ -681,6 +721,7 @@ function setupAiWatch() {
     projects: aiProjects(),
     sessions: aiSessions().map((s) => s.id),
     hookEventsFile: path.join(aiHooksDir(), 'hook-events.jsonl'),
+    hooksInstalled: !!hooksInstaller.status().installed,   // 裝了即時提醒就不再用時間猜「在等你」
     onEvent: onAiEvent,
     onUpdate: onAiUpdate
   }).start();
@@ -873,6 +914,7 @@ function registerIpc() {
         scriptPath: path.join(__dirname, 'hooks', 'claude-hook.js'),
         dataDir: aiHooksDir()
       });
+      setupAiWatch();   // 讓監看器知道即時提醒已開啟
       return { ok: true, backup: r.backup, state: aiState() };
     } catch (err) {
       return { ok: false, error: err.message, state: aiState() };
@@ -892,6 +934,7 @@ function registerIpc() {
     if (response !== 0) return { ok: false, canceled: true, state: aiState() };
     try {
       const r = hooksInstaller.uninstall();
+      setupAiWatch();   // 即時提醒關了：回到用時間推測
       return { ok: true, removed: r.removed, backup: r.backup, state: aiState() };
     } catch (err) {
       return { ok: false, error: err.message, state: aiState() };
@@ -912,6 +955,7 @@ function registerIpc() {
         : (Number(s.quoteIntervalMinutes) || 20),
       characterId: currentCharacterId(),
       aiWatch: s.aiWatch !== false,
+      aiRemarks: s.aiRemarks !== false,
       // 提示 UI：哪些值被環境變數覆蓋
       env: {
         apiKey: !!process.env.OPENAI_API_KEY,
@@ -922,7 +966,7 @@ function registerIpc() {
   });
 
   ipcMain.handle('config:save-settings', (e, incoming) => {
-    const nextCharacter = CHARACTERS[incoming.characterId]
+    const nextCharacter = isActiveCharacter(incoming.characterId)
       ? incoming.characterId
       : currentCharacterId();
     const changedCharacter = nextCharacter !== currentCharacterId();
@@ -937,7 +981,8 @@ function registerIpc() {
         ? 0
         : (Number(incoming.quoteIntervalMinutes) || 20),
       characterId: nextCharacter,
-      aiWatch: incoming.aiWatch !== false
+      aiWatch: incoming.aiWatch !== false,
+      aiRemarks: incoming.aiRemarks !== false
     };
     saveConfig();
     setupReminder();
@@ -949,7 +994,7 @@ function registerIpc() {
 
   // 切換大師：立即更新桌寵（不需重啟）、持久化、播放問候語
   ipcMain.handle('character:set', (e, id) => {
-    if (!CHARACTERS[id]) return { ok: false };
+    if (!isActiveCharacter(id)) return { ok: false };
     config.settings.characterId = id;
     saveConfig();
     setPetCharacter(id, true);
@@ -1132,6 +1177,7 @@ app.whenReady().then(() => {
   setupAiWatch();
   touchAlive();
   setInterval(touchAlive, 5000);
+  setInterval(remarkTick, 10000);
 
   // 第一次使用（還沒追蹤任何對話）：自動打開面板，並由桌寵說明怎麼操作
   if (!config.settings.welcomed && !aiSessions().length && !aiProjects().length) {

@@ -687,3 +687,41 @@ test('主動說話：Claude 做事途中打的話放進待送信箱，回合結�
   assert.strictEqual(run('abc').stdout, '', '送過就不再送');
   assert.throws(() => composeLib.queueMessage(dir, '../x', 'hi'));
 });
+
+test('角色看法：開放中的角色都有完整台詞；依 Claude 在做的事選句；不連續重複；封存角色不說話', () => {
+  const { REMARKS, remarkFor, kindOf } = require('../data/remarks');
+  const chars = require('../renderer/characters');
+  assert.deepStrictEqual(chars.ORDER.slice().sort(), ['laozi', 'mozi', 'zhuangzi'], '目前只開放三位');
+  assert.ok(chars.CHARACTERS.ando && chars.CHARACTERS.nietzsche, '封存的角色資料仍保留');
+  for (const id of chars.ORDER) {
+    assert.ok(REMARKS[id], '缺少 ' + id + ' 的台詞');
+    for (const k of ['edit', 'run', 'look', 'long', 'any']) assert.ok(REMARKS[id][k].length >= 2, id + ' 的 ' + k + ' 至少兩句');
+    assert.ok(REMARKS[id].any.every((l) => !l.includes('{x}')));
+  }
+  assert.deepStrictEqual(['修改 a.js', '寫入 b.md', '執行指令：npm test', '讀取 c.txt', '搜尋 foo', '查詢網路資料', '更新待辦清單'].map(kindOf),
+    ['edit', 'edit', 'run', 'look', 'look', 'look', 'any']);
+  const first = () => 0;
+  assert.ok(remarkFor('zhuangzi', { lastAction: '修改 main.js', rand: first }).includes('main.js'));
+  assert.ok(REMARKS.laozi.any.includes(remarkFor('laozi', { lastAction: '修改 檔案', rand: first })), '沒有檔名時改用通用句');
+  assert.ok(REMARKS.mozi.long.includes(remarkFor('mozi', { lastAction: '修改 a.js', longRunning: true })));
+  const one = remarkFor('mozi', { lastAction: '執行指令：x', rand: first });
+  assert.notStrictEqual(remarkFor('mozi', { lastAction: '執行指令：x', rand: first, avoid: one }), one);
+  assert.strictEqual(remarkFor('ando', { lastAction: '執行指令：x' }), '', '封存的角色不說話');
+  assert.strictEqual(Object.keys(require('../data/remarks-archived.json')).length, 18);
+});
+
+test('已安裝即時提醒時，跑很久的指令不會被時間推測誤報成「在等你」；Codex 沒有鉤子仍照舊推測', () => {
+  const mk = (extra) => {
+    const t = setupWith(Object.assign({ projects: ['/p'] }, extra));
+    const f = path.join(t.root, enc('/p'), 's.jsonl');
+    append(f, [
+      { type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: '跑測試' } },
+      { type: 'assistant', cwd: '/p', timestamp: t.iso(), message: { role: 'assistant', content: [{ type: 'tool_use', id: 'b1', name: 'Bash', input: { command: 'sleep 60' } }] } }
+    ]);
+    t.w._onAdd('claude', f, false);
+    t.advance(60 * 1000); t.w.tick();
+    return t.events.map((e) => e.kind);
+  };
+  assert.deepStrictEqual(mk({ hooksInstalled: true }), ['start']);
+  assert.deepStrictEqual(mk({ hooksInstalled: false }), ['start', 'waiting']);
+});

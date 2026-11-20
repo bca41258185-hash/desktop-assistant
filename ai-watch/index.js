@@ -114,6 +114,11 @@ function createAiWatcher(options) {
     setImmediate(() => { updateQueued = false; onUpdate(snapshot()); });
   }
 
+  // 這個對話是否有鉤子負責回報「在等你」（已安裝 Claude Code 鉤子，且是 Claude 的對話）
+  function hooksCover(s) {
+    return !!opt.hooksInstalled && s.tool === 'claude';
+  }
+
   function getSession(tool, file) {
     let s = sessions.get(file);
     if (!s) {
@@ -323,7 +328,7 @@ function createAiWatcher(options) {
     if (!s || s.status !== 'working') return;
     const quiet = now() - s.lastActivity;
     if (quiet > opt.idleMs) s.status = 'idle';
-    else if (s.pending.size > 0 && quiet > opt.waitingMs) { s.status = 'waiting'; s.notifiedWaiting = true; }
+    else if (s.pending.size > 0 && quiet > opt.waitingMs && !hooksCover(s)) { s.status = 'waiting'; s.notifiedWaiting = true; }
     else if (s.pending.size === 0 && s.lastKind === 'text' && quiet > opt.settleMs) s.status = 'done';
   }
 
@@ -334,7 +339,8 @@ function createAiWatcher(options) {
       const quiet = t - s.lastActivity;
       if (s.status === 'working') {
         // 有鉤子時以鉤子的「需要你允許」為準，不再用時間推測
-        if (s.pending.size > 0 && quiet > opt.waitingMs && !s.notifiedWaiting && !s.viaHooks) {
+        // （否則跑比較久的指令會被誤報成「在等你」）
+        if (s.pending.size > 0 && quiet > opt.waitingMs && !s.notifiedWaiting && !s.viaHooks && !hooksCover(s)) {
           s.status = 'waiting';
           s.notifiedWaiting = true;
           emit('waiting', s, false);

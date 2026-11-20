@@ -269,6 +269,7 @@ const envHint = document.getElementById('envHint');
 const saveStatus = document.getElementById('saveStatus');
 const charPicker = document.getElementById('charPicker');
 const setAiWatch = document.getElementById('setAiWatch');
+const setAiRemarks = document.getElementById('setAiRemarks');
 
 // 目前選用的大師（供儲存設定時一併帶上）
 let selectedCharId = (window.CHAR_DEFAULT || 'ando');
@@ -338,6 +339,7 @@ async function loadSettings() {
   if (setQuoteInterval) setQuoteInterval.value = s.quoteIntervalMinutes;
   selectedCharId = s.characterId || selectedCharId;
   if (setAiWatch) setAiWatch.checked = s.aiWatch !== false;
+  if (setAiRemarks) setAiRemarks.checked = s.aiRemarks !== false;
   renderCharPicker();
 
   const overrides = [];
@@ -358,7 +360,8 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
     reminderIntervalMinutes: Number(setReminder.value) || 0,
     quoteIntervalMinutes: Number(setQuoteInterval && setQuoteInterval.value),
     characterId: selectedCharId,
-    aiWatch: setAiWatch ? setAiWatch.checked : true
+    aiWatch: setAiWatch ? setAiWatch.checked : true,
+    aiRemarks: setAiRemarks ? setAiRemarks.checked : true
   });
   loadAi();
   saveStatus.textContent = '已儲存 ✓';

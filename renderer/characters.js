@@ -326,21 +326,34 @@
     CATEGORIES.push(Object.assign({}, p.category, { order: p.order }));
   });
 
-  const ORDER = CATEGORIES.flatMap((cat) => cat.order);
-  const DEFAULT_ID = 'ando';
+  // -------------------------------------------------------------------------
+  // 目前開放的角色。其他角色先「封存」：造型、名言、台詞都留著，只是不出現在選單裡。
+  // 要重新開放某位角色，把他的 id 加回 ACTIVE_IDS 即可。
+  // -------------------------------------------------------------------------
+  const ACTIVE_IDS = ['zhuangzi', 'laozi', 'mozi'];
+  const ALL_CATEGORIES = CATEGORIES.slice();
+  ALL_CATEGORIES.forEach((cat) => {
+    cat.archivedOrder = cat.order.filter((id) => !ACTIVE_IDS.includes(id));
+    cat.order = cat.order.filter((id) => ACTIVE_IDS.includes(id));
+  });
+  // 選單只列出還有開放角色的類別
+  const VISIBLE_CATEGORIES = ALL_CATEGORIES.filter((cat) => cat.order.length > 0);
+
+  const ORDER = VISIBLE_CATEGORIES.flatMap((cat) => cat.order);
+  const DEFAULT_ID = ORDER[0];
 
   function categoryOf(id) {
     const c = CHARACTERS[id];
-    return CATEGORIES.find((cat) => c && cat.id === c.category) || CATEGORIES[0];
+    return ALL_CATEGORIES.find((cat) => c && cat.id === c.category) || ALL_CATEGORIES[0];
   }
 
-  const api = { CHARACTERS, ORDER, DEFAULT_ID, CATEGORIES, categoryOf };
+  const api = { CHARACTERS, ORDER, DEFAULT_ID, CATEGORIES: VISIBLE_CATEGORIES, categoryOf };
 
   if (typeof window !== 'undefined') {
     window.CHARACTERS = CHARACTERS;
     window.CHAR_ORDER = ORDER;
     window.CHAR_DEFAULT = DEFAULT_ID;
-    window.CHAR_CATEGORIES = CATEGORIES;
+    window.CHAR_CATEGORIES = VISIBLE_CATEGORIES;
   }
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;
