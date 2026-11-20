@@ -405,7 +405,7 @@ function renderAiConfig() {
   }
   aiHookBtn.textContent = h.installed ? '關閉' : (h.partial ? '重新開啟' : '開啟');
   aiHookHint.textContent = aiHookMsg || (h.installed
-    ? 'Claude 一需要你、或一做完，桌寵馬上提醒。沒反應時，把那個對話關掉重開一次。'
+    ? 'Claude 一需要你、或一做完，大師馬上提醒。沒反應時，把那個對話關掉重開一次。'
     : '開啟後提醒更快更準。會在 Claude 的設定檔加一小段，隨時可以關閉還原。');
 }
 
@@ -437,7 +437,7 @@ function renderPicker() {
   const items = pickerItems.filter((s) => (q ? (s.title + ' ' + (s.group || '') + ' ' + (s.parentTitle || '') + ' ' + (s.firstPrompt || '')).toLowerCase().includes(q) : s.recent !== false));
   aiPickerList.innerHTML = '';
   if (!items.length) {
-    aiPickerList.appendChild(el('li', 'empty', q ? '找不到符合的對話。' : '最近三天沒有用過的 Claude 對話。'));
+    aiPickerList.appendChild(el('li', 'empty', q ? '找不到符合的對話。' : '最近三天沒有用過的 Claude 對話。先去 Claude 開一個對話、說一句話，再回來按「＋ 加入對話」。'));
     return;
   }
   const older = pickerItems.filter((s) => s.recent === false).length;
@@ -565,7 +565,7 @@ function renderAi() {
   live.forEach((s, id) => rows.push({ id, title: s.title, s, removable: false }));
 
   if (!rows.length) {
-    aiList.appendChild(el('p', 'empty big', '還沒有對話。按上面的「＋ 加入對話」選一段，桌寵就會幫你盯著。'));
+    aiList.appendChild(el('p', 'empty big', '還沒有對話。按上面的「＋ 加入對話」選一個，大師就會幫你盯著。'));
     return;
   }
   const order = { waiting: 0, working: 1, done: 2, idle: 3 };
@@ -580,7 +580,7 @@ function renderAi() {
     body.appendChild(el('div', 'ai-row-title', (s && s.title && s.title !== '（尚無指令）') ? s.title : r.title));
     let line = '';
     if (s) {
-      if (s.status === 'waiting') line = 'Claude 在等你回答，看桌寵的泡泡';
+      if (s.status === 'waiting') line = 'Claude 在等你回答，看大師頭上的泡泡';
       else if (s.status === 'done') line = s.lastText || '';
       else if (s.status === 'working') line = s.lastAction || s.lastPrompt || '';
       if (line) body.appendChild(el('div', 'ai-row-line', line));

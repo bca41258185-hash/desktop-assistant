@@ -147,7 +147,7 @@ function showBubble(payload) {
     if (targets.length) {
       const label = document.createElement('div');
       label.className = 'bubble-targets-label';
-      label.textContent = '送到打勾的對話（點別的可以換）：';
+      label.textContent = '要送到哪一個？點一下就換：';
       bubbleTargetsEl.appendChild(label);
     }
     targets.forEach((t, i) => {

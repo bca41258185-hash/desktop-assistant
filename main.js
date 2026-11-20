@@ -484,7 +484,7 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
       text: permissionQuestion(request.tool, request.summary),
       ai: true, sticky: true, action: 'choice', requestId: request.id,
       choices: [{ id: 'allow', label: '允許' }, { id: 'deny', label: '拒絕' }],
-      inputPlaceholder: '或告訴 Claude 改怎麼做…'
+      inputPlaceholder: '不要做這步，改成…（打字）'
     });
     return;
   }
@@ -553,7 +553,7 @@ function composeTarget(id) {
 function openCompose() {
   const list = composeTargets();
   if (!list.length) {
-    speak({ text: '先點我兩下，按「＋ 加入對話」選一個對話。', duration: 8000 });
+    speak({ text: '先按下面的「📋 面板」，再按「＋ 加入對話」。', duration: 10000 });
     return;
   }
   speak({
@@ -835,7 +835,7 @@ function registerIpc() {
       defaultId: 1,
       cancelId: 1,
       title: '開啟即時提醒',
-      message: '要讓 Claude 在「需要你允許」和「做完」時，立刻通知桌寵嗎？',
+      message: '要讓 Claude 在「需要你允許」和「做完」時，立刻通知大師嗎？',
       detail:
         '・不會影響 Claude 的運作，也不會記錄你打的內容或 Claude 的回覆。\n' +
         '・只對你加入追蹤的對話有作用。\n' +
@@ -1115,7 +1115,7 @@ app.whenReady().then(() => {
     saveConfig();
     setTimeout(() => {
       if (!panelWindow.isVisible()) panelWindow.show();
-      speak({ text: '點我兩下開面板，右鍵有選單。先按「＋ 加入對話」吧。', duration: 15000 });
+      speak({ text: '按下面的「📋 面板」，再按「＋ 加入對話」。', duration: 20000 });
     }, 7000);
   }
 
