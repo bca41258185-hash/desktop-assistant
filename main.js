@@ -348,6 +348,12 @@ function onAiEvent({ kind, session: s }) {
   if (t - (aiLastBubble.get(key) || 0) < 4000) return;
   aiLastBubble.set(key, t);
 
+  // 個別加入的對話用它的標題（與 Claude 桌面版側欄相同）稱呼，比資料夾名稱好認
+  const sid = path.basename(String(s.id || ''), '.jsonl');
+  if (aiSessions().some((x) => x.id === sid) && s.title && s.title !== '（尚無指令）') {
+    s = Object.assign({}, s, { projectName: clip(s.title, 18) });
+  }
+
   if (kind === 'start') {
     setPetPose('think');
     speak(`${s.label} 開始處理「${s.projectName}」：${clip(s.lastPrompt, 26)}`);
