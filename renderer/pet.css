@@ -357,3 +357,7 @@ html, body {
 /* 一般泡泡（名言、看法、閒聊）也可以點：點一下關掉 */
 .bubble.show { pointer-events: auto; cursor: pointer; }
 .bubble.show.sticky.reply, .bubble.show.sticky.compose { cursor: default; }
+
+/* 不畫筆記本橫線的泡泡（字級或內容和橫線行距對不上時） */
+.bubble.plain { background: #faf8f1; }
+.bubble.plain.sticky.reply { background: #fff8e6; }

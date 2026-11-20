@@ -127,6 +127,8 @@ function showBubble(payload) {
   if (payload && Array.isArray(payload.choices) && payload.choices.length > 2 && size === '32px') size = '';
   bubbleTextEl.style.fontSize = size;
   bubbleTextEl.style.lineHeight = size ? '1.4' : '';
+  // 底紋的橫線是配最大字級的行距畫的；字縮小、有圖、或是小泡泡時行距對不上，就不畫橫線
+  bubbleEl.classList.toggle('plain', !!size || !!image || !!(payload && (payload.chat || payload.choices || payload.inputPlaceholder)));
   if (bubbleAttrEl) {
     bubbleAttrEl.textContent = attr;
     bubbleAttrEl.hidden = !attr;
@@ -227,7 +229,7 @@ function hideBubble() {
   if (bubbleTimer) clearTimeout(bubbleTimer);
   bubbleTimer = null;
   stickyAction = '';
-  bubbleEl.classList.remove('show', 'sticky', 'confirm', 'reply', 'compose', 'chat');
+  bubbleEl.classList.remove('show', 'sticky', 'confirm', 'reply', 'compose', 'chat', 'plain');
   if (bubbleHintEl) bubbleHintEl.hidden = true;
   if (bubbleChoicesEl) bubbleChoicesEl.hidden = true;
   if (bubbleInputEl) bubbleInputEl.hidden = true;
