@@ -726,21 +726,33 @@ test('已安裝即時提醒時，跑很久的指令不會被時間推測誤報�
   assert.deepStrictEqual(mk({ hooksInstalled: false }), ['start', 'waiting']);
 });
 
-test('空閒閒聊：只挑「每位說話的人都在場」的對話；不連續重複；每段是不同人輪流說', () => {
-  const { CHATS, pickChat } = require('../data/chats');
+test('空閒閒聊：每段兩人輪流、每人至少五句；五種情境都有；只挑在場的人；不連續重複', () => {
+  const { CHATS, SCENES, scenesFor, pickChat } = require('../data/chats');
   const chars = require('../renderer/characters');
-  for (const lines of CHATS) {
-    assert.ok(lines.length >= 2 && lines.length <= 4);
-    assert.strictEqual(new Set(lines.map(([who]) => who)).size, 2, '每段剛好兩個人');
-    lines.forEach(([who, text], i) => {
-      assert.ok(chars.ORDER.includes(who), who + ' 必須是開放中的角色');
-      assert.ok(text && text.length <= 40, '一句不要太長，泡泡放得下');
-      if (i > 0) assert.notStrictEqual(who, lines[i - 1][0], '同一個人不連說兩句');
+  assert.deepStrictEqual(SCENES, ['done', 'longidle', 'night', 'morning', 'any']);
+  for (const c of CHATS) {
+    assert.ok(SCENES.includes(c.scene));
+    const who = c.lines.map(([w]) => w);
+    assert.strictEqual(new Set(who).size, 2, '每段剛好兩個人');
+    for (const id of new Set(who)) assert.ok(who.filter((w) => w === id).length >= 5, '每人至少五句');
+    c.lines.forEach(([w, text], i) => {
+      assert.ok(chars.ORDER.includes(w), w + ' 必須是開放中的角色');
+      assert.ok(text && text.length <= 40, '一句不要太長');
+      if (i > 0) assert.notStrictEqual(w, c.lines[i - 1][0], '同一個人不連說兩句');
     });
   }
+  // 三位角色兩兩之間，五種情境各至少一段
+  const pairs = [['laozi', 'zhuangzi'], ['mozi', 'zhuangzi'], ['laozi', 'mozi']];
+  for (const pair of pairs) for (const scene of SCENES) {
+    assert.ok(CHATS.some((c) => c.scene === scene && c.lines.every(([w]) => pair.includes(w))), pair.join('×') + ' 缺少 ' + scene);
+  }
+  assert.deepStrictEqual(scenesFor({ hour: 14, msSinceDone: 60000, msSinceActivity: 60000 }), ['done', 'any']);
+  assert.deepStrictEqual(scenesFor({ hour: 2, msSinceActivity: 30 * 60000 }), ['longidle', 'night', 'any']);
+  assert.deepStrictEqual(scenesFor({ hour: 8, msSinceActivity: 60000 }), ['morning', 'any']);
   assert.strictEqual(pickChat(['mozi']), null, '只有一位就不聊');
   const first = () => 0;
-  const c = pickChat(['mozi', 'laozi'], { rand: first });
-  assert.ok(c.lines.every(([who]) => who === 'mozi' || who === 'laozi'));
-  assert.notStrictEqual(pickChat(['mozi', 'laozi'], { rand: first, avoid: c.index }).index, c.index);
+  const night = pickChat(['mozi', 'laozi'], { rand: first, scenes: ['night', 'any'] });
+  assert.strictEqual(night.scene, 'night', '符合情境的優先');
+  assert.ok(night.lines.every(([w]) => w === 'mozi' || w === 'laozi'));
+  assert.strictEqual(pickChat(['mozi', 'laozi'], { rand: first, scenes: ['night', 'any'], avoid: night.index }).scene, 'any', '剛聊過就換平常的');
 });

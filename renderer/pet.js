@@ -58,6 +58,13 @@ if (bubbleInputEl) {
       if (window.api.composeSend) window.api.composeSend(text, composeTargetId);
       return;
     }
+    // 完成泡泡的回覆：鉤子已經不在等了，改用「主動說話」送到同一個對話
+    if (text && !id && bubbleInputEl.dataset.composeTo) {
+      const to = bubbleInputEl.dataset.composeTo;
+      hideBubble();
+      if (window.api.composeSend) window.api.composeSend(text, to);
+      return;
+    }
     if (!text || !id) return;
     if (window.api.answerChoice) window.api.answerChoice(id, 'text', text);
     hideBubble();
@@ -70,8 +77,9 @@ if (bubbleInputEl) {
   if (window.api.onInputExpire) {
     window.api.onInputExpire((id) => {
       if (bubbleInputEl.dataset.requestId !== id) return;
-      bubbleInputEl.hidden = true;
+      // 鉤子等太久結束了：回覆框留著（之後送出會改走「主動說話」的路），只有沒地方可送才收起來
       bubbleInputEl.dataset.requestId = '';
+      if (!bubbleInputEl.dataset.composeTo) bubbleInputEl.hidden = true;
     });
   }
   // 中文輸入法選字時的 Enter 不算送出
@@ -112,6 +120,13 @@ function showBubble(payload) {
   }
   bubbleEl.classList.toggle('has-img', !!image);
   bubbleTextEl.textContent = text;
+  // 字多就自動縮小，讓整段內容放得下（有圖片時字級由樣式另外決定）
+  const len = text.length;
+  let size = image ? '' : len <= 26 ? '' : len <= 50 ? '32px' : len <= 90 ? '26px' : len <= 150 ? '22px' : '19px';
+  // 選項直排時樣式本來就把題目縮到 28px，短題目不要反而放大
+  if (payload && Array.isArray(payload.choices) && payload.choices.length > 2 && size === '32px') size = '';
+  bubbleTextEl.style.fontSize = size;
+  bubbleTextEl.style.lineHeight = size ? '1.4' : '';
   if (bubbleAttrEl) {
     bubbleAttrEl.textContent = attr;
     bubbleAttrEl.hidden = !attr;
@@ -142,7 +157,8 @@ function showBubble(payload) {
   }
   // 打字回覆：選項之外也可以自己輸入
   if (bubbleInputEl) {
-    const canType = sticky && !!payload.inputPlaceholder && (!!payload.requestId || stickyAction === 'compose');
+    const canType = sticky && !!payload.inputPlaceholder && (!!payload.requestId || !!payload.composeTo || stickyAction === 'compose');
+    bubbleInputEl.dataset.composeTo = canType ? (payload.composeTo || '') : '';
     bubbleInputEl.hidden = !canType;
     bubbleInputEl.dataset.requestId = canType ? (payload.requestId || '') : '';
     bubbleTextInput.value = '';
@@ -193,7 +209,7 @@ function showBubble(payload) {
   bubbleEl.classList.toggle('compose', stickyAction === 'compose');
   bubbleEl.classList.toggle('reply', stickyAction === 'reply' || stickyAction === 'choice');
   if (bubbleHintEl) {
-    const canReplyHere = stickyAction === 'confirm' && !!payload.inputPlaceholder && !!payload.requestId;
+    const canReplyHere = stickyAction === 'confirm' && !!payload.inputPlaceholder && (!!payload.requestId || !!payload.composeTo);
     bubbleHintEl.textContent = stickyAction === 'reply' ? '點一下，打開那個對話去回答'
       : stickyAction === 'compose' ? '不說了就點一下泡泡'
         : canReplyHere ? '不回覆就點一下泡泡' : '知道了就點一下泡泡';

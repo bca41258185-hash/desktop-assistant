@@ -11,7 +11,7 @@ const hooksInstaller = require('./ai-watch/hooks-installer');
 const { listClaudeSessions, desktopSessionMeta } = require('./ai-watch/claude-sessions');
 const compose = require('./ai-watch/compose');
 const { remarkFor } = require('./data/remarks');
-const { pickChat } = require('./data/chats');
+const { pickChat, scenesFor } = require('./data/chats');
 const { CHARACTERS, ORDER: ACTIVE_CHARACTERS, DEFAULT_ID, categoryOf } = require('./renderer/characters');
 // 只有開放中的角色可以選；封存的角色（設定檔裡的舊值）一律換成預設角色
 const isActiveCharacter = (id) => ACTIVE_CHARACTERS.includes(id);
@@ -494,9 +494,12 @@ const aiLastBubble = new Map();   // sessionId+kind -> 時間，避免同一事�
 function petLine(text, n) {
   const first = String(text || '').split('\n').map((l) => l.trim()).find((l) => l && !/^[-=*_#>|\s]+$/.test(l) && !l.startsWith('#')) || '';   // 標題行不算
   const plain = first.replace(/^[#>*\s-]+/, '').replace(/[*_`]/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').trim();
-  const m = /^(.+?[。！？!?])(?![」』）)"'])/.exec(plain);   // 引號裡的問號不算句尾
-  const sentence = m && m[1].length <= n ? m[1] : plain;
-  return sentence.length > n ? sentence.slice(0, n - 1) + '…' : sentence;
+  if (plain.length <= n) return plain;       // 放得下就整段顯示（泡泡會依字數自動縮小字級）
+  // 太長：在 n 個字以內找最後一個句尾，停在完整的句子上（引號裡的問號不算句尾）
+  let cut = -1;
+  const re = /[。！？!?](?![」』）)"'])/g;
+  for (let m = re.exec(plain); m && m.index < n; m = re.exec(plain)) cut = m.index + 1;
+  return cut > 0 ? plain.slice(0, cut) : plain.slice(0, n - 1) + '…';
 }
 
 function clip(text, n) {
@@ -511,7 +514,7 @@ function doneFrom(s) {
 
 // 把「Claude 想用某個工具」說成白話（不出現 Bash、Edit 這類名稱）
 function permissionQuestion(tool, summary) {
-  const what = clip(summary, 40);
+  const what = clip(summary, 80);
   const quoted = what ? `「${what}」` : '';
   switch (tool) {
     case 'Bash': case 'PowerShell': return `Claude 想在電腦上執行${quoted || '一個指令'}，要讓它做嗎？`;
@@ -587,7 +590,8 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
     replyBySession.set(sessionIdOf(s), id);
     pose('happy');
     say({
-      text: petLine(s.lastTextFull || s.lastText, 44) || '完成了',
+      text: petLine(s.lastTextFull || s.lastText, 150) || '完成了',
+      composeTo: sessionIdOf(s),
       attribution: doneFrom(s),
       ai: true, sticky: true, action: 'confirm', requestId: id, inputPlaceholder: '回覆 Claude…'
     });
@@ -640,7 +644,7 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
   } else if (kind === 'start') {
     pose('think');
     // 主句是「Claude 開始處理了」；你剛下的指令用小字放在下面（它是你說的話，不是大師說的）
-    say({ text: 'Claude 開始處理了', attribution: s.lastPrompt ? '你說：' + clip(s.lastPrompt, 40) : '', ai: true, duration: 6000 });
+    say({ text: 'Claude 開始處理了', attribution: s.lastPrompt ? '你說：' + clip(s.lastPrompt, 80) : '', ai: true, duration: 6000 });
   } else if (kind === 'waiting') {
     pose('idle');
     // 等你回覆的泡泡也留著，點一下就跳到 Claude
@@ -659,7 +663,11 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
     } else {
       pose('happy');
       // 「完成」要等使用者按確認才消失，不會自己不見，也不會被名言／提醒蓋掉
-      say({ text: petLine(s.lastTextFull || s.lastText, 44) || '完成了', attribution: doneFrom(s), ai: true, sticky: true });
+      // 回覆框一直留著：鉤子還在等就直接交給它，過了等待時間就改用「主動說話」的路送出
+      say({
+        text: petLine(s.lastTextFull || s.lastText, 150) || '完成了', attribution: doneFrom(s),
+        ai: true, sticky: true, action: 'confirm', composeTo: sessionIdOf(s), inputPlaceholder: '回覆 Claude…'
+      });
     }
   }
 }
@@ -794,6 +802,19 @@ let chatNextAt = 0;
 let chatLastIndex = -1;
 let chatPlaying = false;
 
+// 現在符合哪些閒聊情境（剛做完／很久沒動靜／深夜／早上／平常）
+function chatScenes() {
+  const t = Date.now();
+  const all = [].concat(...(aiSnapshot || []).map((p) => p.sessions || []));
+  const done = all.filter((s) => s.status === 'done').map((s) => t - s.lastActivity);
+  const act = all.map((s) => t - s.lastActivity);
+  return scenesFor({
+    hour: new Date().getHours(),
+    msSinceDone: done.length ? Math.min(...done) : undefined,
+    msSinceActivity: act.length ? Math.min(...act) : undefined
+  });
+}
+
 function anySessionBusy() {
   return [].concat(...(aiSnapshot || []).map((p) => p.sessions || []))
     .some((s) => s.status === 'working' || s.status === 'waiting');
@@ -805,7 +826,7 @@ function chatTick() {
   if (config.settings.aiRemarks === false || chatPlaying || pets.size < 2) return;
   if (!chatNextAt) chatNextAt = chatLastBusyAt + CHAT_FIRST_IDLE_MS;
   if (t < chatNextAt) return;
-  const chat = pickChat([...pets.keys()], { avoid: chatLastIndex });
+  const chat = pickChat([...pets.keys()], { avoid: chatLastIndex, scenes: chatScenes() });
   if (!chat) { chatNextAt = t + CHAT_GAP_MS[0]; return; }
   // 要聊的人裡有誰的泡泡還開著（例如「完成了」還沒按確認）：半分鐘後再看看
   if (chat.lines.some(([who]) => pets.get(who) && pets.get(who).expanded)) { chatNextAt = t + 30 * 1000; return; }
@@ -1385,7 +1406,7 @@ app.whenReady().then(() => {
   setInterval(chatTick, 10000);
   // 開發測試：啟動 8 秒後直接播一段閒聊（不必等大家都閒下來）
   if (process.argv.includes('--test-chat')) {
-    setTimeout(() => { const c = pickChat([...pets.keys()]); if (c) playChat(c, true); }, 8000);
+    setTimeout(() => { const c = pickChat([...pets.keys()], { scenes: chatScenes() }); if (c) playChat(c, true); }, 8000);
   }
 
   // 第一次使用（還沒追蹤任何對話）：自動打開面板，並由桌寵說明怎麼操作
