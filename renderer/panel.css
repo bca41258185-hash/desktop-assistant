@@ -454,3 +454,10 @@ details.advanced .ai-config { margin-top: 8px; }
 .ai-banner-msg.ok { color: #2f6a3f; background: #e6f4e9; border: 1px solid #b9dcc1; }
 .ai-row.clickable { cursor: pointer; }
 .ai-row.clickable:hover { filter: brightness(0.98); }
+
+/* 由哪位助手盯：小膠囊，點一下換人 */
+.ai-row-who {
+  flex-shrink: 0; padding: 3px 8px; font-size: 11px; border-radius: 999px;
+  color: #3a3a36; background: #fff; border: 1px solid var(--line);
+}
+.ai-row-who:hover { border-color: #3b7dd8; }

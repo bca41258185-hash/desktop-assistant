@@ -126,16 +126,38 @@ function effectiveSettings() {
 // 兩種大小都以「角色底部中央」為錨點，所以角色不會跳動。
 const PET_SMALL = { width: 240, height: 250 };
 const PET_BIG = { width: 520, height: 640 };
-let petExpanded = false;
-let petShift = 0;   // 展開時因貼近螢幕邊緣而把視窗推回的距離（角色在視窗內反向位移）
 
-function setPetExpanded(open) {
-  if (!petWindow || petWindow.isDestroyed() || open === petExpanded) return;
-  const from = petExpanded ? PET_BIG : PET_SMALL;
+// 可以同時有好幾位助手：每位角色一個視窗，各自盯著分配給他的對話。
+//   pets：角色 id → { id, win, expanded, shift }
+//   主助手（設定裡選的角色）一定在場，負責名言、任務提醒，以及沒有特別分配的對話。
+const pets = new Map();
+
+function primaryPet() {
+  return pets.get(currentCharacterId()) || [...pets.values()][0] || null;
+}
+
+function petOf(characterId) {
+  const p = characterId && pets.get(characterId);
+  return p && !p.win.isDestroyed() ? p : primaryPet();
+}
+
+function petBySender(sender) {
+  for (const p of pets.values()) if (!p.win.isDestroyed() && p.win.webContents === sender) return p;
+  return null;
+}
+
+function sendToPet(characterId, channel, payload) {
+  const p = petOf(characterId);
+  if (p && !p.win.isDestroyed()) p.win.webContents.send(channel, payload);
+}
+
+function setPetExpanded(pet, open) {
+  if (!pet || pet.win.isDestroyed() || open === pet.expanded) return;
+  const from = pet.expanded ? PET_BIG : PET_SMALL;
   const to = open ? PET_BIG : PET_SMALL;
-  const b = petWindow.getBounds();
-  const anchorX = b.x + from.width / 2 + petShift;   // 角色水平中心（含展開時的位移）
-  const bottom = b.y + from.height;           // 角色腳底
+  const b = pet.win.getBounds();
+  const anchorX = b.x + from.width / 2 + pet.shift;   // 角色水平中心（含展開時的位移）
+  const bottom = b.y + from.height;                   // 角色腳底
   let x = Math.round(anchorX - to.width / 2);
   const y = Math.round(bottom - to.height);
   let shift = 0;
@@ -146,16 +168,25 @@ function setPetExpanded(open) {
     shift = x - clamped;
     x = clamped;
   }
-  petExpanded = open;
-  petShift = shift;
-  petWindow.setBounds({ x, y, width: to.width, height: to.height });
-  petWindow.webContents.send('pet:layout', { shift });
+  pet.expanded = open;
+  pet.shift = shift;
+  pet.win.setBounds({ x, y, width: to.width, height: to.height });
+  pet.win.webContents.send('pet:layout', { shift });
+  if (open) pet.win.moveTop();   // 說話的那位站到最前面，泡泡不被旁邊的助手擋住
 }
 
-function createPetWindow() {
-  petExpanded = false;
-  petShift = 0;
-  petWindow = new BrowserWindow({
+// 第 index 位助手的預設位置：從主螢幕右下角往左一位一位排
+function defaultPetPosition(index) {
+  const { workArea } = screen.getPrimaryDisplay();
+  return {
+    x: workArea.x + workArea.width - 40 - (index + 1) * PET_SMALL.width - index * 8,
+    y: workArea.y + workArea.height - PET_SMALL.height - 20
+  };
+}
+
+// greeting：這位助手出現時要說的第一句話（不說就留空）
+function createPet(characterId, index, greeting) {
+  const win = new BrowserWindow({
     width: PET_SMALL.width,
     height: PET_SMALL.height,
     frame: false,
@@ -163,30 +194,68 @@ function createPetWindow() {
     resizable: false,
     alwaysOnTop: true,
     hasShadow: false,
-    skipTaskbar: false,
+    skipTaskbar: index > 0,          // 工作列只留主助手一個圖示
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false
     }
   });
+  const pet = { id: characterId, win, expanded: false, shift: 0 };
+  pets.set(characterId, pet);
 
-  petWindow.loadFile(path.join(__dirname, 'renderer', 'pet.html'));
-  petWindow.setAlwaysOnTop(true, 'screen-saver');
+  win.loadFile(path.join(__dirname, 'renderer', 'pet.html'));
+  win.setAlwaysOnTop(true, 'screen-saver');
 
-  // 載入完成後，告知桌寵目前選用的大師並顯示其問候語
-  petWindow.webContents.on('did-finish-load', () => {
-    const id = currentCharacterId();
-    const c = CHARACTERS[id];
-    petWindow.webContents.send('pet:character', { id, greeting: c.greeting });
+  // 載入完成後，告知這個視窗它是哪一位大師；需要時顯示問候語
+  win.webContents.on('did-finish-load', () => {
+    win.webContents.send('pet:character', { id: characterId, greeting: greeting || undefined });
+    win.webContents.send('pet:status', petStatusOf(sessionsOfPet(characterId)));
   });
 
-  // 預設放在主螢幕右下角
-  const { workArea } = screen.getPrimaryDisplay();
-  petWindow.setPosition(
-    workArea.x + workArea.width - PET_SMALL.width - 40,
-    workArea.y + workArea.height - PET_SMALL.height - 20
-  );
+  const pos = defaultPetPosition(index);
+  win.setPosition(pos.x, pos.y);
+  return pet;
+}
+
+// 現在應該在場的助手：主助手 + 每個追蹤中對話被分配到的角色（不重複）
+function wantedPetIds() {
+  const ids = [currentCharacterId()];
+  aiSessions().forEach((s) => {
+    const c = characterOfSession(s.id);
+    if (!ids.includes(c)) ids.push(c);
+  });
+  return ids;
+}
+
+// 讓畫面上的助手和設定一致：多的請走，少的請來
+// mode：'startup'＝剛開程式，主助手說自己的問候語；'join'＝新加入的助手說明他來盯對話；其他＝不說話
+function syncPets(mode) {
+  const want = wantedPetIds();
+  for (const [id, p] of [...pets]) {
+    if (!want.includes(id)) {
+      pets.delete(id);
+      if (!p.win.isDestroyed()) p.win.destroy();
+    }
+  }
+  want.forEach((id) => {
+    if (!pets.has(id)) {
+      // 新來的站在還沒人站的位置
+      let index = 0;
+      const taken = new Set([...pets.values()].map((p) => p.slot));
+      while (taken.has(index)) index += 1;
+      const c = CHARACTERS[id];
+      const greeting = mode === 'startup' ? (id === currentCharacterId() && c ? c.greeting : '')
+        : mode === 'join' ? '這個對話交給我來盯。' : '';
+      createPet(id, index, greeting).slot = index;
+    }
+  });
+  petWindow = primaryPet() ? primaryPet().win : null;
+}
+
+// 相容舊名稱：建立（或補齊）所有助手視窗
+function createPetWindow() {
+  syncPets('startup');
 }
 
 function createPanelWindow() {
@@ -230,30 +299,52 @@ function togglePanel() {
 }
 
 // ---------------------------------------------------------------------------
-// 讓桌寵「說話」：把文字送到桌寵視窗顯示氣泡
+// 讓助手「說話」：把文字送到某位助手的視窗顯示氣泡（沒指定就是主助手）
 // ---------------------------------------------------------------------------
-function speak(text) {
-  if (petWindow && !petWindow.isDestroyed()) {
-    petWindow.webContents.send('pet:speak', text);
-  }
+function speak(text, characterId) {
+  sendToPet(characterId, 'pet:speak', text);
 }
 
-// 讓桌寵切換姿勢：'idle' | 'think' | 'happy'
-function setPetPose(pose) {
-  if (petWindow && !petWindow.isDestroyed()) {
-    petWindow.webContents.send('pet:pose', pose);
-  }
+// 讓助手切換姿勢：'idle' | 'think' | 'happy'
+function setPetPose(pose, characterId) {
+  sendToPet(characterId, 'pet:pose', pose);
 }
 
-// 切換桌寵角色並播放該大師的問候語
+// 換主助手的角色：重新整理在場的助手，並讓新的主助手打招呼
 function setPetCharacter(id, withGreeting) {
-  if (petWindow && !petWindow.isDestroyed()) {
-    const c = CHARACTERS[id];
-    petWindow.webContents.send('pet:character', {
-      id,
-      greeting: withGreeting && c ? c.greeting : undefined
-    });
-  }
+  syncPets('');
+  const c = CHARACTERS[id];
+  if (withGreeting && c) sendToPet(id, 'pet:speak', c.greeting);
+}
+
+// 換主助手時：原本交給舊主助手的對話改跟新主助手，原本交給新主助手那位角色的則換給舊的
+// （這樣「換角色」只是換一張臉，不會憑空多出一位助手）
+function swapPrimaryCharacter(oldId, newId) {
+  aiSessions().forEach((s) => {
+    if (s.characterId === oldId) s.characterId = newId;
+    else if (s.characterId === newId) s.characterId = oldId;
+  });
+}
+
+// --- 哪個對話由哪位助手盯 ---
+// 對話有指定角色（而且那位角色目前開放）就用他，否則歸主助手
+function characterOfSession(sessionId) {
+  const w = aiSessions().find((x) => x.id === sessionId);
+  return w && isActiveCharacter(w.characterId) ? w.characterId : currentCharacterId();
+}
+
+// 新加入的對話要分配給誰：先找還沒有盯任何對話的角色（主助手優先），都有事就給手上最少的
+function nextCharacterForNewSession() {
+  const order = [currentCharacterId()].concat(ACTIVE_CHARACTERS.filter((id) => id !== currentCharacterId()));
+  const load = new Map(order.map((id) => [id, 0]));
+  aiSessions().forEach((s) => { const c = characterOfSession(s.id); load.set(c, (load.get(c) || 0) + 1); });
+  return order.slice().sort((a, b) => load.get(a) - load.get(b) || order.indexOf(a) - order.indexOf(b))[0];
+}
+
+// 某位助手負責的對話（面板快照裡的格式）。主助手另外包辦沒有個別加入的對話（整個資料夾追蹤到的）
+function sessionsOfPet(characterId) {
+  const all = [].concat(...(aiSnapshot || []).map((p) => p.sessions || []));
+  return all.filter((s) => characterOfSession(path.basename(String(s.id || ''), '.jsonl')) === characterId);
 }
 
 // ---------------------------------------------------------------------------
@@ -330,31 +421,25 @@ function quotesFor(id) {
   return QUOTES_BY_ID[id] || [];
 }
 
-function speakQuote(quote) {
+function speakQuote(quote, characterId) {
   if (!quote || !quote.zh) return false;
   const master = CHARACTERS[quote.id] || CHARACTERS[currentCharacterId()];
   const name = master ? master.nameZh : '';
   const source = quote.sourceZh || quote.source || '';
   const attribution = [name, source].filter(Boolean).join(' ／ ');
-  if (petWindow && !petWindow.isDestroyed()) {
-    petWindow.webContents.send('pet:speak', {
-      text: quote.zh,
-      attribution: attribution ? '—— ' + attribution : '',
-      duration: 12000
-    });
-  }
+  speak({ text: quote.zh, attribution: attribution ? '—— ' + attribution : '', duration: 12000 }, characterId);
   return true;
 }
 
-function speakRandomQuote() {
-  const list = quotesFor(currentCharacterId());
+function speakRandomQuote(characterId) {
+  const list = quotesFor(characterId || currentCharacterId());
   if (!list.length) return false;
   let idx = Math.floor(Math.random() * list.length);
   if (list.length > 1 && idx === lastQuoteIndex) {
     idx = (idx + 1) % list.length;
   }
   lastQuoteIndex = idx;
-  return speakQuote(list[idx]);
+  return speakQuote(list[idx], characterId);
 }
 
 function setupQuoteTimer() {
@@ -390,7 +475,7 @@ function clip(text, n) {
 
 // 同時追蹤好幾個對話時，「完成」泡泡註明是哪一個做完了（只有一個就不寫）
 function doneFrom(s) {
-  return composeTargets().length > 1 && s.title && s.title !== '（尚無指令）' ? '做完的是：' + clip(s.title, 24) : '';
+  return composeTargets(characterOfSession(sessionIdOf(s))).length > 1 && s.title && s.title !== '（尚無指令）' ? '做完的是：' + clip(s.title, 24) : '';
 }
 
 // 把「Claude 想用某個工具」說成白話（不出現 Bash、Edit 這類名稱）
@@ -416,13 +501,13 @@ function askNextQuestion(id) {
   const st = pendingQuestions.get(id);
   if (!st) return;
   const q = st.questions[st.index];
-  speak({
+  speak({ // 送給負責這個對話的助手（見最後的 st.who）
     text: q.question,
     attribution: [st.from, st.questions.length > 1 ? `第 ${st.index + 1} 題，共 ${st.questions.length} 題` : ''].filter(Boolean).join('・'),
     ai: true, sticky: true, action: 'choice', requestId: id,
     choices: q.options.map((label, i) => ({ id: 'opt' + i, label })),
     inputLabel: '都不是？自己打字回答：', inputPlaceholder: '打字，按 Enter 送出'
-  });
+  }, st.who);
 }
 
 // 讓鉤子知道桌寵開著（沒開的話鉤子不會讓 Claude 空等）
@@ -458,6 +543,10 @@ function answerPermission(id, choice, answers, message) {
 }
 
 function onAiEvent({ kind, session: s, image, fromUser, request }) {
+  // 這個對話由哪位助手盯，泡泡和姿勢就出現在他身上
+  const who = characterOfSession(sessionIdOf(s));
+  const say = (payload) => speak(payload, who);
+  const pose = (p) => setPetPose(p, who);
   if (kind === 'reply-open') {
     // Claude 做完了，而且鉤子還在等：完成泡泡多一格輸入框，打字就把話交給 Claude 繼續做
     const id = request.id;
@@ -465,8 +554,8 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
     pendingPermissions.add(id);
     pendingReplies.add(id);
     replyBySession.set(sessionIdOf(s), id);
-    setPetPose('happy');
-    speak({
+    pose('happy');
+    say({
       text: petLine(s.lastTextFull || s.lastText, 44) || '完成了',
       attribution: doneFrom(s),
       ai: true, sticky: true, action: 'confirm', requestId: id, inputPlaceholder: '回覆 Claude…'
@@ -477,22 +566,22 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
       if (fs.existsSync(path.join(aiHooksDir(), 'permission', id + '.hold'))) return;
       pendingReplies.delete(id);
       pendingPermissions.delete(id);
-      if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:input-expire', id);
+      sendToPet(who, 'pet:input-expire', id);
     }, 19000);
     return;
   }
   if (kind === 'permission') {
     permLog(`${request.id} shown tool=${request.tool}`);
     pendingPermissions.add(request.id);
-    setPetPose('idle');
+    pose('idle');
     // 同時追蹤好幾個對話時，註明是哪一個在問（只有一個就不囉嗦）
-    const from = composeTargets().length > 1 && s.title && s.title !== '（尚無指令）' ? '來自：' + clip(s.title, 24) : '';
+    const from = composeTargets(characterOfSession(sessionIdOf(s))).length > 1 && s.title && s.title !== '（尚無指令）' ? '來自：' + clip(s.title, 24) : '';
     if (Array.isArray(request.questions) && request.questions.length) {
-      pendingQuestions.set(request.id, { questions: request.questions, index: 0, answers: {}, from });
+      pendingQuestions.set(request.id, { questions: request.questions, index: 0, answers: {}, from, who });
       askNextQuestion(request.id);
       return;
     }
-    speak({
+    say({
       text: permissionQuestion(request.tool, request.summary),
       attribution: from,
       ai: true, sticky: true, action: 'choice', requestId: request.id,
@@ -510,38 +599,36 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
   aiLastBubble.set(key, t);
   // 剛顯示圖片的幾秒內，「開始」不要蓋掉圖片（等你確認、完成比較重要，照樣顯示）
   if (kind === 'start' && t - (aiLastBubble.get(s.id + ':image') || 0) < 8000) {
-    setPetPose('think');
+    pose('think');
     return;
   }
 
   // 泡泡只說發生了什麼，不寫專案／對話名稱（字大、空間小，名稱只是雜訊）
   if (kind === 'image') {
-    if (petWindow && !petWindow.isDestroyed()) {
-      petWindow.webContents.send('pet:speak', { text: '我在看的圖', image, duration: 15000, ai: true });
-    }
+    say({ text: '我在看的圖', image, duration: 15000, ai: true });
   } else if (kind === 'start') {
-    setPetPose('think');
+    pose('think');
     // 主句是「Claude 開始處理了」；你剛下的指令用小字放在下面（它是你說的話，不是大師說的）
-    speak({ text: 'Claude 開始處理了', attribution: s.lastPrompt ? '你說：' + clip(s.lastPrompt, 40) : '', ai: true, duration: 6000 });
+    say({ text: 'Claude 開始處理了', attribution: s.lastPrompt ? '你說：' + clip(s.lastPrompt, 40) : '', ai: true, duration: 6000 });
   } else if (kind === 'waiting') {
-    setPetPose('idle');
+    pose('idle');
     // 等你回覆的泡泡也留著，點一下就跳到 Claude
     // 點泡泡會直接開到這一個對話；同時追蹤好幾個時註明是哪一個
-    const multi = composeTargets().length > 1 && s.title && s.title !== '（尚無指令）';
+    const multi = composeTargets(characterOfSession(sessionIdOf(s))).length > 1 && s.title && s.title !== '（尚無指令）';
     // 沒裝即時提醒時這只是推測（工具很久沒回應），話不能說死
     const sure = !!s.waitingMessage || s.viaHooks;
-    speak({
+    say({
       text: sure ? 'Claude 在等你回答' : 'Claude 可能在等你回答（也可能只是做比較久）', attribution: multi ? '來自：' + clip(s.title, 24) : '',
       ai: true, sticky: true, action: 'reply', sessionId: sessionIdOf(s)
     });
   } else if (kind === 'done') {
     if (s.interrupted) {
-      setPetPose('idle');
-      speak({ text: '已中斷', ai: true });
+      pose('idle');
+      say({ text: '已中斷', ai: true });
     } else {
-      setPetPose('happy');
+      pose('happy');
       // 「完成」要等使用者按確認才消失，不會自己不見，也不會被名言／提醒蓋掉
-      speak({ text: petLine(s.lastTextFull || s.lastText, 44) || '完成了', attribution: doneFrom(s), ai: true, sticky: true });
+      say({ text: petLine(s.lastTextFull || s.lastText, 44) || '完成了', attribution: doneFrom(s), ai: true, sticky: true });
     }
   }
 }
@@ -554,7 +641,8 @@ function sessionIdOf(s) {
 }
 
 // 可以送話過去的對話：所有追蹤中的對話，等你的 > 進行中的 > 最近有動靜的；第一個是預設
-function composeTargets() {
+// characterId：只列出那位助手負責的對話（他手上沒有對話時才列出全部）
+function composeTargets(characterId) {
   const rank = { waiting: 0, working: 1, done: 2, idle: 3 };
   const out = new Map();
   const live = [].concat(...(aiSnapshot || []).map((p) => p.sessions || []));
@@ -563,18 +651,21 @@ function composeTargets() {
     id: sessionIdOf(s), title: (s.title && s.title !== '（尚無指令）') ? s.title : '對話', status: s.status
   }));
   aiSessions().forEach((w) => { if (!out.has(w.id)) out.set(w.id, { id: w.id, title: w.title || '對話', status: 'idle' }); });
-  return [...out.values()];
+  const all = [...out.values()];
+  if (!characterId) return all;
+  const mine = all.filter((t) => characterOfSession(t.id) === characterId);
+  return mine.length ? mine : all;
 }
 
-function composeTarget(id) {
-  const list = composeTargets();
+function composeTarget(id, characterId) {
+  const list = composeTargets(characterId);
   return list.find((t) => t.id === id) || list[0] || null;
 }
 
-function openCompose() {
-  const list = composeTargets();
+function openCompose(characterId) {
+  const list = composeTargets(characterId);
   if (!list.length) {
-    speak({ text: '還沒有可以說話的對話。先按「📋 對話清單」，再按「＋ 加入對話」。', duration: 10000 });
+    speak({ text: '還沒有可以說話的對話。先按「📋 對話清單」，再按「＋ 加入對話」。', duration: 10000 }, characterId);
     return;
   }
   speak({
@@ -583,14 +674,14 @@ function openCompose() {
     attribution: list.length > 1 ? '' : '送到：' + clip(list[0].title, 30),
     targets: list.length > 1 ? list.slice(0, 5).map((t) => ({ id: t.id, title: clip(t.title, 26) })) : [],
     ai: true, sticky: true, action: 'compose', inputPlaceholder: '打字，按 Enter 送出'
-  });
+  }, characterId);
 }
 
-async function sendCompose(text, targetId) {
+async function sendCompose(text, targetId, characterId) {
   text = String(text || '').trim().slice(0, 4000);
-  const t = composeTarget(targetId);
+  const t = composeTarget(targetId, characterId);
   if (!text || !t) return;
-  const say = (msg) => speak({ text: msg, ai: true, duration: 7000 });
+  const say = (msg) => speak({ text: msg, ai: true, duration: 7000 }, characterId);
   try {
     // 1. Claude 剛做完、鉤子還在等：直接交給它
     const rid = replyBySession.get(t.id);
@@ -628,11 +719,17 @@ const remarkState = new Map();              // 對話 id → { since, nextAt, sa
 
 function remarkTick() {
   if (config.settings.aiRemarks === false) return;
-  const t = Date.now();
-  const working = [].concat(...(aiSnapshot || []).map((p) => p.sessions || [])).filter((s) => s.status === 'working');
+  const allWorking = [].concat(...(aiSnapshot || []).map((p) => p.sessions || [])).filter((s) => s.status === 'working');
   // 已經不在進行中的對話：清掉記錄，下次重新計時
-  const ids = new Set(working.map((s) => s.id));
+  const ids = new Set(allWorking.map((s) => s.id));
   [...remarkState.keys()].forEach((id) => { if (!ids.has(id)) remarkState.delete(id); });
+  // 每位助手各自對「自己負責、正在進行」的對話發表看法
+  for (const pet of pets.values()) remarkTickFor(pet.id);
+}
+
+function remarkTickFor(characterId) {
+  const t = Date.now();
+  const working = sessionsOfPet(characterId).filter((s) => s.status === 'working');
   if (!working.length) return;
   working.sort((a, b) => b.lastActivity - a.lastActivity);
   const s = working[0];
@@ -645,18 +742,18 @@ function remarkTick() {
   if (t < st.nextAt) return;
   const longRunning = !st.saidLong && t - st.since > REMARK_LONG_MS;
   // avoid：不連續說同一句。這位角色沒有台詞（已封存）時回傳空字串，就不說話
-  const line = remarkFor(currentCharacterId(), { lastAction: s.lastAction, longRunning, avoid: st.last });
+  const line = remarkFor(characterId, { lastAction: s.lastAction, longRunning, avoid: st.last });
   st.nextAt = t + REMARK_GAP_MS[0] + Math.random() * (REMARK_GAP_MS[1] - REMARK_GAP_MS[0]);
   if (!line) return;
   if (longRunning) st.saidLong = true;
   st.last = line;
   // 一般泡泡（不是 ai 通知）：有等你回答／完成的泡泡開著時不會蓋掉它
-  speak({ text: line, duration: 9000 });
+  speak({ text: line, duration: 9000 }, characterId);
 }
 
 // 角色頭上的小狀態標籤：等你 > 進行中 > 剛完成（10 分鐘內）；都沒有就不顯示
-function petStatusOf(list) {
-  const all = [].concat(...(list || []).map((p) => p.sessions || []));
+function petStatusOf(all) {
+  all = all || [];
   if (all.some((s) => s.status === 'waiting')) return { text: '等你回答', cls: 'waiting' };
   const working = all.filter((s) => s.status === 'working').length;
   if (working) return { text: working > 1 ? `${working} 個對話進行中` : '進行中', cls: 'working' };
@@ -666,15 +763,16 @@ function petStatusOf(list) {
 
 function onAiUpdate(list) {
   aiSnapshot = list;
-  if (petWindow && !petWindow.isDestroyed()) {
-    const st = petStatusOf(list);
-    petWindow.webContents.send('pet:status', st);
-    if (st.cls !== 'waiting') {
-      petWindow.webContents.send('pet:dismiss-reply');
-      // 已經不在等了（例如你在 Claude 裡回答了）：放掉還在等的鉤子
-      [...pendingPermissions].filter((id) => !pendingReplies.has(id)).forEach((id) => answerPermission(id, 'pass'));
-    }
+  let anyWaiting = false;
+  for (const pet of pets.values()) {
+    if (pet.win.isDestroyed()) continue;
+    const st = petStatusOf(sessionsOfPet(pet.id));
+    pet.win.webContents.send('pet:status', st);
+    if (st.cls === 'waiting') anyWaiting = true;
+    else pet.win.webContents.send('pet:dismiss-reply');
   }
+  // 已經沒有任何對話在等了（例如你在 Claude 裡回答了）：放掉還在等的鉤子
+  if (!anyWaiting) [...pendingPermissions].filter((id) => !pendingReplies.has(id)).forEach((id) => answerPermission(id, 'pass'));
   if (panelWindow && !panelWindow.isDestroyed()) {
     panelWindow.webContents.send('ai:update', list);
   }
@@ -733,7 +831,7 @@ function aiState() {
     enabled: !!aiWatcher,
     roots: aiWatcher ? aiWatcher.roots : null,
     watchProjects: aiProjects(),
-    watchSessions: aiSessions(),
+    watchSessions: aiSessions().map((s) => Object.assign({}, s, { characterId: characterOfSession(s.id) })),
     hooks: hooksInstaller.status(),
     projects: aiSnapshot
   };
@@ -742,21 +840,22 @@ function aiState() {
 function registerIpc() {
   // 桌寵拖曳：依位移移動視窗
   ipcMain.on('pet:move-by', (e, { dx, dy }) => {
-    if (!petWindow) return;
+    const pet = petBySender(e.sender);
+    if (!pet) return;
     // 一律帶上寬高，避免在非 100% 顯示比例下拖曳時視窗大小漂移
-    const b = petWindow.getBounds();
-    const size = petExpanded ? PET_BIG : PET_SMALL;
-    petWindow.setBounds({ x: Math.round(b.x + dx), y: Math.round(b.y + dy), width: size.width, height: size.height });
+    const b = pet.win.getBounds();
+    const size = pet.expanded ? PET_BIG : PET_SMALL;
+    pet.win.setBounds({ x: Math.round(b.x + dx), y: Math.round(b.y + dy), width: size.width, height: size.height });
   });
 
   // 泡泡出現／消失 → 展開／收起桌寵視窗
-  ipcMain.on('pet:bubble', (e, open) => setPetExpanded(!!open));
+  ipcMain.on('pet:bubble', (e, open) => setPetExpanded(petBySender(e.sender), !!open));
 
   // 點擊桌寵 → 開/關面板
   ipcMain.on('panel:toggle', () => togglePanel());
-  ipcMain.on('pet:menu', () => showPetMenu());
-  ipcMain.on('pet:compose-open', () => openCompose());
-  ipcMain.on('pet:compose-send', (e, { text, targetId }) => { sendCompose(text, targetId); });
+  ipcMain.on('pet:menu', (e) => showPetMenu(petBySender(e.sender)));
+  ipcMain.on('pet:compose-open', (e) => { const p = petBySender(e.sender); openCompose(p && p.id); });
+  ipcMain.on('pet:compose-send', (e, { text, targetId }) => { const p = petBySender(e.sender); sendCompose(text, targetId, p && p.id); });
   ipcMain.on('claude:focus', (e, sessionId) => {
     // 知道是哪個對話就用官方連結直接開到那一個；不知道才只把 Claude 視窗叫出來
     let meta = null;
@@ -799,7 +898,7 @@ function registerIpc() {
 
   // --- 資料夾 ---
   ipcMain.handle('folders:pick', async () => {
-    const res = await dialog.showOpenDialog(panelWindow || petWindow, {
+    const res = await dialog.showOpenDialog(panelWindow || (primaryPet() && primaryPet().win), {
       title: '選擇要監看的資料夾',
       properties: ['openDirectory', 'multiSelections']
     });
@@ -869,11 +968,25 @@ function registerIpc() {
 
   ipcMain.handle('ai:add-session', (e, s) => {
     if (!s || typeof s.id !== 'string' || !/^[\w-]+$/.test(s.id)) return aiState();
-    const list = aiSessions().filter((x) => x.id !== s.id);
-    list.push({ id: s.id, title: String(s.title || '').slice(0, 80), cwd: String(s.cwd || '') });
-    config.settings.aiSessions = list;
+    config.settings.aiSessions = aiSessions().filter((x) => x.id !== s.id);
+    // 自動分配一位助手來盯這個對話（還有人沒事做就派他，都有事就派手上最少的）
+    const characterId = nextCharacterForNewSession();
+    config.settings.aiSessions.push({ id: s.id, title: String(s.title || '').slice(0, 80), cwd: String(s.cwd || ''), characterId });
     saveConfig();
     setupAiWatch();
+    syncPets('join');
+    return aiState();
+  });
+
+  // 改由另一位助手來盯某個對話
+  ipcMain.handle('ai:set-session-character', (e, { id, characterId }) => {
+    const w = aiSessions().find((x) => x.id === id);
+    if (w && isActiveCharacter(characterId)) {
+      w.characterId = characterId;
+      saveConfig();
+      syncPets('join');
+      onAiUpdate(aiSnapshot);   // 各助手頭上的狀態標籤重新分配
+    }
     return aiState();
   });
 
@@ -881,6 +994,7 @@ function registerIpc() {
     config.settings.aiSessions = aiSessions().filter((x) => x.id !== id);
     saveConfig();
     setupAiWatch();
+    syncPets('');   // 沒有對話要盯的助手就先離開（主助手留著）
     return aiState();
   });
 
@@ -970,6 +1084,7 @@ function registerIpc() {
       ? incoming.characterId
       : currentCharacterId();
     const changedCharacter = nextCharacter !== currentCharacterId();
+    if (changedCharacter) swapPrimaryCharacter(currentCharacterId(), nextCharacter);
     config.settings = {
       ...config.settings,
       provider: incoming.provider || 'openai',
@@ -995,9 +1110,11 @@ function registerIpc() {
   // 切換大師：立即更新桌寵（不需重啟）、持久化、播放問候語
   ipcMain.handle('character:set', (e, id) => {
     if (!isActiveCharacter(id)) return { ok: false };
+    if (id !== currentCharacterId()) swapPrimaryCharacter(currentCharacterId(), id);
     config.settings.characterId = id;
     saveConfig();
     setPetCharacter(id, true);
+    onAiUpdate(aiSnapshot);   // 狀態標籤跟著重新分配
     if (panelWindow && !panelWindow.isDestroyed()) {
       panelWindow.webContents.send('character:changed', id);
     }
@@ -1025,8 +1142,10 @@ function registerIpc() {
     return { ok: true };
   });
 
-  ipcMain.handle('quotes:speak-random', () => {
-    return { ok: speakRandomQuote() };
+  ipcMain.handle('quotes:speak-random', (e) => {
+    // 從助手視窗來的（點一下角色）就由那位說；從面板來的由主助手說
+    const p = petBySender(e.sender);
+    return { ok: speakRandomQuote(p ? p.id : undefined) };
   });
 
   ipcMain.handle('shell:open-external', (e, url) => {
@@ -1144,12 +1263,13 @@ function focusClaudeWindow() {
 }
 
 // 桌寵的右鍵選單：所有「桌寵本身」的操作都在這裡，包含結束程式
-function showPetMenu() {
-  if (!petWindow || petWindow.isDestroyed()) return;
+function showPetMenu(pet) {
+  pet = pet || primaryPet();
+  if (!pet || pet.win.isDestroyed()) return;
   Menu.buildFromTemplate([
     { label: '📋 打開對話清單', click: () => { if (!panelWindow.isVisible()) togglePanel(); else panelWindow.focus(); } },
-    { label: '✏️ 對 Claude 說', click: () => openCompose() },
-    { label: '說一句名言', click: () => speakRandomQuote() },
+    { label: '✏️ 對 Claude 說', click: () => openCompose(pet.id) },
+    { label: '說一句名言', click: () => speakRandomQuote(pet.id) },
     { type: 'separator' },
     {
       label: '開機時自動啟動',
@@ -1159,7 +1279,7 @@ function showPetMenu() {
     },
     { type: 'separator' },
     { label: '結束桌面大師', click: () => app.quit() }
-  ]).popup({ window: petWindow });
+  ]).popup({ window: pet.win });
 }
 
 app.whenReady().then(() => {

@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('api', {
   recentAiSessions: () => ipcRenderer.invoke('ai:recent-sessions'),
   addAiSession: (s) => ipcRenderer.invoke('ai:add-session', s),
   removeAiSession: (id) => ipcRenderer.invoke('ai:remove-session', id),
+  setAiSessionCharacter: (id, characterId) => ipcRenderer.invoke('ai:set-session-character', { id, characterId }),
   installAiHooks: () => ipcRenderer.invoke('ai:hooks-install'),
   uninstallAiHooks: () => ipcRenderer.invoke('ai:hooks-uninstall'),
   onAiUpdate: (cb) => ipcRenderer.on('ai:update', (_e, list) => cb(list)),

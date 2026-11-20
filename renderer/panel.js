@@ -576,7 +576,7 @@ function renderAi() {
   }));
   const rows = [];
   (aiState.watchSessions || []).forEach((w) => {
-    rows.push({ id: w.id, title: w.title || '對話', s: live.get(w.id), removable: true });
+    rows.push({ id: w.id, title: w.title || '對話', s: live.get(w.id), removable: true, characterId: w.characterId });
     live.delete(w.id);
   });
   // 透過「整個資料夾」追蹤到的其他對話
@@ -605,6 +605,20 @@ function renderAi() {
       body.appendChild(el('div', 'ai-row-time', timeAgo(s.lastActivity)));
     }
     row.appendChild(body);
+    // 由哪位助手盯這個對話：點一下換下一位
+    const order = window.CHAR_ORDER || [];
+    const who = (window.CHARACTERS || {})[r.characterId];
+    if (r.removable && who && order.length > 1) {
+      const by = el('button', 'ai-row-who', who.nameZh + ' 盯');
+      by.title = '點一下，換另一位助手來盯這個對話';
+      by.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const next = order[(order.indexOf(r.characterId) + 1) % order.length];
+        aiState = await window.api.setAiSessionCharacter(r.id, next);
+        renderAi();
+      });
+      row.appendChild(by);
+    }
     // 等你回答的那一列可以點：直接開到那個對話
     if (s && s.status === 'waiting' && window.api.focusClaude) {
       row.classList.add('clickable');
