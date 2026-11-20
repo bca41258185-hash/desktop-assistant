@@ -434,7 +434,7 @@ async function openSessionPicker() {
 function renderPicker() {
   const q = (aiPickerSearch ? aiPickerSearch.value : '').trim().toLowerCase();
   // 沒打字：只看近三天用過的；有打字：連更早的對話一起找
-  const items = pickerItems.filter((s) => (q ? (s.title + ' ' + (s.group || '') + ' ' + (s.parentTitle || '')).toLowerCase().includes(q) : s.recent !== false));
+  const items = pickerItems.filter((s) => (q ? (s.title + ' ' + (s.group || '') + ' ' + (s.parentTitle || '') + ' ' + (s.firstPrompt || '')).toLowerCase().includes(q) : s.recent !== false));
   aiPickerList.innerHTML = '';
   if (!items.length) {
     aiPickerList.appendChild(el('li', 'empty', q ? '找不到符合的對話。' : '最近三天沒有用過的 Claude 對話。'));
@@ -478,6 +478,8 @@ function addPickerRow(s) {
   const li = el('li', (s.watched ? 'watched ' : '') + (s.child ? 'child' : ''));
   const text = el('div', 'ai-picker-text');
   text.appendChild(el('span', 'ai-picker-title', s.title));
+  // 第二行：你在這個對話說的第一句話（標題是英文或「New session」時靠它辨認）
+  if (s.firstPrompt && s.firstPrompt !== s.title) text.appendChild(el('span', 'ai-picker-first', '「' + s.firstPrompt + '」'));
   text.appendChild(el('span', 'ai-picker-meta', timeAgo(s.mtime) + (s.parentTitle && !s.child ? '・來自「' + s.parentTitle + '」' : '')));
   li.appendChild(text);
   const btn = el('button', '', s.watched ? '已加入' : '加入');

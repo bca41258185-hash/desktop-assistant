@@ -72,7 +72,8 @@ function summarize(file) {
     } catch (err) { /* 被截斷的行 */ }
   }
   const title = (customTitle || aiTitle || prompt.replace(/\s+/g, ' ').slice(0, 60) || '（尚無指令）').trim();
-  return { id: path.basename(file, '.jsonl'), file, cwd, title, mtime: lastUsed || st.mtimeMs };
+  // firstPrompt：這段對話你說的第一句話（標題看不出內容時，用它來認）
+  return { id: path.basename(file, '.jsonl'), file, cwd, title, mtime: lastUsed || st.mtimeMs, firstPrompt: prompt.replace(/\s+/g, ' ').slice(0, 60) };
 }
 
 /**

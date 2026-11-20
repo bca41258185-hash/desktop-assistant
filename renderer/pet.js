@@ -144,6 +144,12 @@ function showBubble(payload) {
     const targets = stickyAction === 'compose' && Array.isArray(payload.targets) ? payload.targets : [];
     bubbleTargetsEl.innerHTML = '';
     composeTargetId = targets.length ? targets[0].id : '';
+    if (targets.length) {
+      const label = document.createElement('div');
+      label.className = 'bubble-targets-label';
+      label.textContent = '送到打勾的對話（點別的可以換）：';
+      bubbleTargetsEl.appendChild(label);
+    }
     targets.forEach((t, i) => {
       const b = document.createElement('button');
       b.type = 'button';
@@ -170,7 +176,7 @@ function showBubble(payload) {
   bubbleEl.classList.toggle('reply', stickyAction === 'reply' || stickyAction === 'choice');
   if (bubbleHintEl) {
     const canReplyHere = stickyAction === 'confirm' && !!payload.inputPlaceholder && !!payload.requestId;
-    bubbleHintEl.textContent = stickyAction === 'reply' ? '點一下，到 Claude 回答'
+    bubbleHintEl.textContent = stickyAction === 'reply' ? '點一下，去 Claude 回答'
       : stickyAction === 'compose' ? '不說了就點一下泡泡'
         : canReplyHere ? '不回覆就點一下泡泡' : '知道了就點一下泡泡';
     bubbleHintEl.hidden = !sticky || stickyAction === 'choice';
@@ -298,4 +304,11 @@ const composeBtn = document.getElementById('composeBtn');
 if (composeBtn) {
   composeBtn.addEventListener('mousedown', (e) => e.stopPropagation());
   composeBtn.addEventListener('click', (e) => { e.stopPropagation(); if (window.api.openCompose) window.api.openCompose(); });
+}
+
+// 📋 按鈕：打開面板（和點角色兩下一樣，只是看得見）
+const panelBtn = document.getElementById('panelBtn');
+if (panelBtn) {
+  panelBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+  panelBtn.addEventListener('click', (e) => { e.stopPropagation(); window.api.togglePanel(); });
 }

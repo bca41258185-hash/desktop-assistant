@@ -342,3 +342,6 @@ html, body {
   color: #7a7a70; background: transparent; border: none; text-decoration: underline; cursor: pointer;
 }
 .bubble-skip[hidden] { display: none; }
+
+.compose-btn.panel-btn { right: auto; left: calc(50% - 116px); }
+.bubble-targets-label { font-size: 16px; color: #7a7a70; }

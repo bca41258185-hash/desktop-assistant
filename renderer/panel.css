@@ -436,3 +436,5 @@ details.advanced .ai-config { margin-top: 8px; }
 .ai-picker-group-name { font-size: 13px; }
 #view-ai.active { display: flex; flex-direction: column; }
 .ai-list[hidden] { display: none; }
+
+.ai-picker-first { font-size: 12px; color: #5c5b54; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

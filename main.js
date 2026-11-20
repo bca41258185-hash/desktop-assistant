@@ -557,7 +557,7 @@ function openCompose() {
     return;
   }
   speak({
-    text: list.length > 1 ? '要跟哪個對話說？說什麼？' : '要跟 Claude 說什麼？',
+    text: '要跟 Claude 說什麼？',
     // 只有一個對話時直接寫出名稱；有好幾個時列出來讓使用者點選
     attribution: list.length > 1 ? '' : '送到：' + clip(list[0].title, 30),
     targets: list.length > 1 ? list.slice(0, 5).map((t) => ({ id: t.id, title: clip(t.title, 26) })) : [],
@@ -796,6 +796,7 @@ function registerIpc() {
         return {
           id: s.id, title: m.title || s.title, cwd: s.cwd, mtime: s.mtime, watched: watched.has(s.id),
           recent: now - s.mtime <= 3 * 24 * 3600 * 1000,
+          firstPrompt: s.firstPrompt || '',
           group: m.group || folderName(s.cwd), parentTitle: m.parentTitle || ''
         };
       });
@@ -838,8 +839,7 @@ function registerIpc() {
       detail:
         '・不會影響 Claude 的運作，也不會記錄你打的內容或 Claude 的回覆。\n' +
         '・只對你加入追蹤的對話有作用。\n' +
-        '・會在 Claude 的設定檔加一小段（先自動備份），隨時可以關閉還原。\n' +
-        '・電腦需要裝有 Node.js。\n\n' +
+        '・會在 Claude 的設定裡加一小段（會先備份），隨時可以關掉還原。\n\n' +
         `設定檔位置：${file}`
     });
     if (response !== 0) return { ok: false, canceled: true, state: aiState() };
