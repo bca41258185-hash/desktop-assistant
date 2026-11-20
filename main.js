@@ -7,6 +7,7 @@ const fs = require('fs');
 const chokidar = require('chokidar');
 const { createProvider } = require('./providers');
 const { createAiWatcher } = require('./ai-watch');
+const hooksInstaller = require('./ai-watch/hooks-installer');
 const { CHARACTERS, DEFAULT_ID, categoryOf } = require('./renderer/characters');
 
 // 名言資料：讀取 data/ 下所有 quotes*.json（每個職業一個檔，方便擴充）
@@ -61,7 +62,8 @@ const CONFIG_DEFAULTS = {
     reminderIntervalMinutes: 30,
     quoteIntervalMinutes: 20,      // 名言氣泡間隔（0＝關閉）
     characterId: DEFAULT_ID,       // 目前選用的大師（'ando' | 'gehry' | ...）
-    aiWatch: true                  // 監看 Claude Code / Codex 對話進度（唯讀）
+    aiWatch: true,                 // 監看 Claude Code / Codex 對話進度（唯讀）
+    aiProjects: []                 // 只監看這些專案資料夾內的對話（空 = 不讀任何對話）
   }
 };
 
@@ -350,7 +352,9 @@ function onAiEvent({ kind, session: s }) {
     speak(`${s.label} 開始處理「${s.projectName}」：${clip(s.lastPrompt, 26)}`);
   } else if (kind === 'waiting') {
     setPetPose('idle');
-    speak(`「${s.projectName}」的 ${s.label} 可能在等你確認（或指令執行較久）`);
+    speak(s.waitingMessage
+      ? `「${s.projectName}」的 ${s.label}${s.waitingMessage}`
+      : `「${s.projectName}」的 ${s.label} 可能在等你確認（或指令執行較久）`);
   } else if (kind === 'done') {
     if (s.interrupted) {
       setPetPose('idle');
@@ -369,15 +373,48 @@ function onAiUpdate(list) {
   }
 }
 
-function setupAiWatch() {
-  const want = config.settings.aiWatch !== false;
-  if (want && !aiWatcher) {
-    aiWatcher = createAiWatcher({ onEvent: onAiEvent, onUpdate: onAiUpdate }).start();
-  } else if (!want && aiWatcher) {
-    aiWatcher.stop();
-    aiWatcher = null;
-    onAiUpdate([]);
+// 鉤子腳本與桌寵交換資料的資料夾（userData/ai-hooks）
+function aiHooksDir() {
+  return path.join(app.getPath('userData'), 'ai-hooks');
+}
+
+function aiProjects() {
+  const list = config.settings.aiProjects;
+  return Array.isArray(list) ? list.filter((p) => typeof p === 'string' && p) : [];
+}
+
+// 把指定專案清單寫給鉤子腳本讀（鉤子據此決定要不要記錄事件）
+function writeWatchProjects() {
+  try {
+    fs.mkdirSync(aiHooksDir(), { recursive: true });
+    const list = config.settings.aiWatch !== false ? aiProjects() : [];
+    fs.writeFileSync(path.join(aiHooksDir(), 'watch-projects.json'), JSON.stringify(list, null, 2));
+  } catch (e) {
+    console.error('寫入監看專案清單失敗:', e.message);
   }
+}
+
+function setupAiWatch() {
+  if (aiWatcher) { aiWatcher.stop(); aiWatcher = null; }
+  writeWatchProjects();
+  if (config.settings.aiWatch === false) { onAiUpdate([]); return; }
+  aiWatcher = createAiWatcher({
+    projects: aiProjects(),
+    hookEventsFile: path.join(aiHooksDir(), 'hook-events.jsonl'),
+    onEvent: onAiEvent,
+    onUpdate: onAiUpdate
+  }).start();
+  onAiUpdate([]);
+}
+
+function aiState() {
+  return {
+    enabled: !!aiWatcher,
+    roots: aiWatcher ? aiWatcher.roots : null,
+    watchProjects: aiProjects(),
+    hooks: hooksInstaller.status(),
+    projects: aiSnapshot
+  };
 }
 
 function registerIpc() {
@@ -421,11 +458,79 @@ function registerIpc() {
   ipcMain.handle('changes:list', () => recentChanges);
 
   // --- AI 專案 ---
-  ipcMain.handle('ai:list', () => ({
-    enabled: !!aiWatcher,
-    roots: aiWatcher ? aiWatcher.roots : null,
-    projects: aiSnapshot
-  }));
+  ipcMain.handle('ai:list', () => aiState());
+
+  // 指定要監看的專案資料夾（只有這些資料夾內的對話會被讀取）
+  ipcMain.handle('ai:add-project', async () => {
+    const res = await dialog.showOpenDialog(panelWindow, {
+      title: '選擇要監看的專案資料夾（Claude Code／Codex 的工作目錄）',
+      properties: ['openDirectory', 'multiSelections']
+    });
+    if (res.canceled) return aiState();
+    const set = new Set(aiProjects());
+    res.filePaths.forEach((p) => set.add(p));
+    config.settings.aiProjects = [...set];
+    saveConfig();
+    setupAiWatch();
+    return aiState();
+  });
+
+  ipcMain.handle('ai:remove-project', (e, p) => {
+    config.settings.aiProjects = aiProjects().filter((x) => x !== p);
+    saveConfig();
+    setupAiWatch();
+    return aiState();
+  });
+
+  // 安裝／移除 Claude Code 通知鉤子：會修改使用者層級的 settings.json，因此一律先跳確認視窗
+  ipcMain.handle('ai:hooks-install', async () => {
+    const file = hooksInstaller.settingsPath();
+    const { response } = await dialog.showMessageBox(panelWindow, {
+      type: 'question',
+      buttons: ['安裝', '取消'],
+      defaultId: 1,
+      cancelId: 1,
+      title: '安裝 Claude Code 通知鉤子',
+      message: '要在 Claude Code 設定中加入桌面大師的通知鉤子嗎？',
+      detail:
+        `將修改：${file}\n\n` +
+        '・加入 3 個鉤子（送出指令、需要你允許、回合結束），每次執行最多 5 秒，不會阻擋或改變 Claude 的行為。\n' +
+        '・保留你原有的所有設定與其他鉤子，修改前會先備份原檔。\n' +
+        '・鉤子只記錄「指定專案」的事件種類與時間，不記錄指令內容與回覆。\n' +
+        '・需要電腦上可執行 node 指令。\n' +
+        '・隨時可在此處移除。'
+    });
+    if (response !== 0) return { ok: false, canceled: true, state: aiState() };
+    try {
+      writeWatchProjects();
+      const r = hooksInstaller.install({
+        scriptPath: path.join(__dirname, 'hooks', 'claude-hook.js'),
+        dataDir: aiHooksDir()
+      });
+      return { ok: true, backup: r.backup, state: aiState() };
+    } catch (err) {
+      return { ok: false, error: err.message, state: aiState() };
+    }
+  });
+
+  ipcMain.handle('ai:hooks-uninstall', async () => {
+    const { response } = await dialog.showMessageBox(panelWindow, {
+      type: 'question',
+      buttons: ['移除', '取消'],
+      defaultId: 1,
+      cancelId: 1,
+      title: '移除 Claude Code 通知鉤子',
+      message: '要從 Claude Code 設定中移除桌面大師的通知鉤子嗎？',
+      detail: `將修改：${hooksInstaller.settingsPath()}\n只移除桌面大師加入的鉤子，其他設定不受影響；修改前會先備份。`
+    });
+    if (response !== 0) return { ok: false, canceled: true, state: aiState() };
+    try {
+      const r = hooksInstaller.uninstall();
+      return { ok: true, removed: r.removed, backup: r.backup, state: aiState() };
+    } catch (err) {
+      return { ok: false, error: err.message, state: aiState() };
+    }
+  });
 
   // --- 設定 ---
   ipcMain.handle('config:get-settings', () => {

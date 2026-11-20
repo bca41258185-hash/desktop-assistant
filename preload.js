@@ -29,6 +29,10 @@ contextBridge.exposeInMainWorld('api', {
 
   // --- AI 專案（Claude Code / Codex 進度，唯讀） ---
   listAi: () => ipcRenderer.invoke('ai:list'),
+  addAiProject: () => ipcRenderer.invoke('ai:add-project'),
+  removeAiProject: (p) => ipcRenderer.invoke('ai:remove-project', p),
+  installAiHooks: () => ipcRenderer.invoke('ai:hooks-install'),
+  uninstallAiHooks: () => ipcRenderer.invoke('ai:hooks-uninstall'),
   onAiUpdate: (cb) => ipcRenderer.on('ai:update', (_e, list) => cb(list)),
 
   // --- 設定 ---

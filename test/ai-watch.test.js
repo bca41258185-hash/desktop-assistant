@@ -218,3 +218,198 @@ test('實際監看（chokidar）：新增的紀錄檔會被偵測', async () => 
   await w.stop();
   assert.deepStrictEqual(events.map((e) => e.kind), ['start']);
 });
+
+// ---------------------------------------------------------------------------
+// 指定專案（只讀指定的對話）
+// ---------------------------------------------------------------------------
+function setupWith(opts) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aiwatch-p-'));
+  let clock = Date.parse('2026-11-20T10:00:00Z');
+  const events = [];
+  const tool = opts.tool || 'claude';
+  const w = createAiWatcher(Object.assign({
+    roots: { [tool]: root }, tools: [tool], now: () => clock,
+    onEvent: (e) => events.push(e), hookDelayMs: 0
+  }, opts));
+  return { root, w, events, advance(ms) { clock += ms; }, iso() { return new Date(clock).toISOString(); } };
+}
+
+test('指定專案：其他專案的 Claude 紀錄不讀；子資料夾算在專案內；資料夾名稱撞名時以實際工作目錄為準', () => {
+  const proj = path.resolve('/work/villa');
+  const t = setupWith({ projects: [proj] });
+  const mk = (dir, cwd, text) => {
+    const f = path.join(t.root, dir, 's-' + Math.random().toString(36).slice(2) + '.jsonl');
+    append(f, [{ type: 'user', cwd, timestamp: t.iso(), message: { role: 'user', content: text } }]);
+    t.w._onAdd('claude', f, false);
+    return f;
+  };
+  mk('-other-project', '/other/project', '別的專案');
+  mk('-work-villa-site', path.join(proj, 'site'), '子資料夾');
+  // 中文資料夾名稱編碼後都是「-」，可能撞名：/work/villa 與 /work/villa？ 都編成 -work-villa-
+  mk('-work-villa-', '/work/villa？', '撞名的另一個專案');
+  mk('-work-villa', proj, '本專案');
+  assert.deepStrictEqual(t.events.map((e) => e.session.lastPrompt).sort(), ['子資料夾', '本專案'].sort());
+});
+
+test('指定專案：未指定任何專案時完全不讀', async () => {
+  const t = setupWith({ projects: [] });
+  const f = path.join(t.root, '-p', 's.jsonl');
+  append(f, [{ type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: 'x' } }]);
+  t.w.start();
+  await new Promise((r) => setTimeout(r, 300));
+  await t.w.stop();
+  assert.strictEqual(t.w.snapshot().length, 0);
+});
+
+test('指定專案：Codex 以檔頭 session_meta 判斷；空檔先暫緩，寫入後再判斷', () => {
+  const t = setupWith({ tool: 'codex', projects: ['/work/site'] });
+  const f = path.join(t.root, '2026', '11', '20', 'rollout-a.jsonl');
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f, '');
+  t.w._onAdd('codex', f, false);
+  append(f, [
+    { timestamp: t.iso(), type: 'session_meta', payload: { cwd: '/work/site' } },
+    { timestamp: t.iso(), type: 'event_msg', payload: { type: 'user_message', message: '開始' } }
+  ]);
+  t.w._onChange('codex', f);
+  assert.deepStrictEqual(t.events.map((e) => e.kind), ['start']);
+
+  const g = path.join(t.root, '2026', '11', '20', 'rollout-b.jsonl');
+  append(g, [
+    { timestamp: t.iso(), type: 'session_meta', payload: { cwd: '/elsewhere' } },
+    { timestamp: t.iso(), type: 'event_msg', payload: { type: 'user_message', message: '不該出現' } }
+  ]);
+  t.w._onAdd('codex', g, false);
+  assert.strictEqual(t.events.length, 1);
+});
+
+test('啟動時的舊對話之後才有新內容：舊指令不補發通知，只通知新的', () => {
+  const t = setupWith({ projects: ['/p'], recentMs: 1000 });
+  const f = path.join(t.root, '-p', 's.jsonl');
+  append(f, [{ type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: '很久以前的指令' } }]);
+  const old = new Date(Date.parse(t.iso()) - 3600 * 1000);
+  fs.utimesSync(f, old, old);
+  t.w._onAdd('claude', f, true);          // 啟動掃描：太舊，不讀
+  assert.strictEqual(t.w.snapshot().length, 0);
+  append(f, [{ type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: '新指令' } }]);
+  t.w._onChange('claude', f);
+  assert.deepStrictEqual(t.events.map((e) => e.session.lastPrompt), ['新指令']);
+});
+
+// ---------------------------------------------------------------------------
+// Claude Code 通知鉤子事件
+// ---------------------------------------------------------------------------
+test('鉤子：需要你允許 → 立即通知並附工具名；有鉤子後不再用時間推測；Stop → 完成', () => {
+  const hookFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'aiwatch-h-')), 'hook-events.jsonl');
+  const t = setupWith({ projects: ['/p'], hookEventsFile: hookFile });
+  fs.writeFileSync(hookFile, JSON.stringify({ event: 'Stop', cwd: '/p', transcript_path: 'old' }) + '\n');
+  t.w._readHookEvents('skip');            // 啟動前的舊事件略過
+
+  const f = path.join(t.root, '-p', 's.jsonl');
+  append(f, [
+    { type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: '刪掉暫存資料夾' } },
+    { type: 'assistant', cwd: '/p', timestamp: t.iso(), message: { role: 'assistant', content: [{ type: 'tool_use', id: 'b1', name: 'Bash', input: { command: 'rm -rf tmp' } }] } }
+  ]);
+  t.w._onAdd('claude', f, false);
+  append(hookFile, [
+    { event: 'Notification', cwd: '/p', transcript_path: f, notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' },
+    { event: 'Notification', cwd: '/other', transcript_path: f, notification_type: 'permission_prompt', message: '不在指定專案' }
+  ]);
+  t.w._readHookEvents();
+  assert.deepStrictEqual(t.events.map((e) => e.kind), ['start', 'waiting']);
+  assert.strictEqual(t.events[1].session.waitingMessage, '需要你允許使用 Bash');
+
+  // 允許後繼續；長時間執行的指令不會再被時間推測誤報
+  append(f, [{ type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'b1' }] } },
+    { type: 'assistant', cwd: '/p', timestamp: t.iso(), message: { role: 'assistant', content: [{ type: 'tool_use', id: 'b2', name: 'Bash', input: { command: 'npm run build' } }] } }]);
+  t.w._onChange('claude', f);
+  t.advance(60 * 1000); t.w.tick();
+  assert.deepStrictEqual(t.events.map((e) => e.kind), ['start', 'waiting']);
+
+  append(hookFile, [{ event: 'Stop', cwd: '/p', transcript_path: f }]);
+  t.w._readHookEvents();
+  assert.deepStrictEqual(t.events.map((e) => e.kind), ['start', 'waiting', 'done']);
+});
+
+// ---------------------------------------------------------------------------
+// 鉤子腳本本身（以子行程實際執行）
+// ---------------------------------------------------------------------------
+const { spawnSync } = require('child_process');
+const HOOK = path.join(__dirname, '..', 'hooks', 'claude-hook.js');
+
+test('鉤子腳本：只記錄指定專案、不記錄指令內容、stdout 無輸出、永遠 exit 0', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-'));
+  fs.writeFileSync(path.join(dir, 'watch-projects.json'), JSON.stringify([path.resolve('/work/villa')]));
+  const run = (input) => spawnSync(process.execPath, [HOOK, dir], { input, encoding: 'utf8' });
+
+  let r = run(JSON.stringify({ hook_event_name: 'UserPromptSubmit', cwd: path.resolve('/work/villa/a'), session_id: 's', transcript_path: '/t.jsonl', prompt: '機密指令內容' }));
+  assert.strictEqual(r.status, 0); assert.strictEqual(r.stdout, '');
+  r = run(JSON.stringify({ hook_event_name: 'Stop', cwd: path.resolve('/other'), session_id: 'x', transcript_path: '/x.jsonl' }));
+  assert.strictEqual(r.status, 0); assert.strictEqual(r.stdout, '');
+  r = run('這不是 JSON');
+  assert.strictEqual(r.status, 0); assert.strictEqual(r.stdout, '');
+
+  const lines = fs.readFileSync(path.join(dir, 'hook-events.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  assert.strictEqual(lines.length, 1);
+  assert.strictEqual(lines[0].event, 'UserPromptSubmit');
+  assert.ok(!JSON.stringify(lines[0]).includes('機密指令內容'), '不得記錄指令內容');
+
+  // 沒有專案清單檔（例如桌寵從未設定）時什麼都不寫
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-'));
+  r = spawnSync(process.execPath, [HOOK, empty], { input: JSON.stringify({ hook_event_name: 'Stop', cwd: '/x' }), encoding: 'utf8' });
+  assert.strictEqual(r.status, 0);
+  assert.ok(!fs.existsSync(path.join(empty, 'hook-events.jsonl')));
+});
+
+// ---------------------------------------------------------------------------
+// 鉤子安裝／移除（修改 settings.json）
+// ---------------------------------------------------------------------------
+const installer = require('../ai-watch/hooks-installer');
+
+test('安裝鉤子：保留原有設定與其他鉤子、先備份、重複安裝不重複、移除只刪自己的', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'settings-'));
+  const file = path.join(dir, 'settings.json');
+  const original = {
+    model: 'opus',
+    permissions: { allow: ['Bash(npm test)'] },
+    hooks: { Stop: [{ hooks: [{ type: 'command', command: 'say done' }] }], PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'check.sh' }] }] }
+  };
+  fs.writeFileSync(file, JSON.stringify(original));
+
+  const res = installer.install({ file, scriptPath: 'C:\\Apps\\desktop assistant\\hooks\\claude-hook.js', dataDir: 'C:\\Users\\me\\AppData\\ai-hooks' });
+  assert.ok(res.backup && fs.existsSync(res.backup));
+  assert.strictEqual(res.command, 'node "C:/Apps/desktop assistant/hooks/claude-hook.js" "C:/Users/me/AppData/ai-hooks"');
+  installer.install({ file, scriptPath: '/new/place/hooks/claude-hook.js', dataDir: '/d' });   // 重新安裝（例如程式搬家）
+
+  const s = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.strictEqual(s.model, 'opus');
+  assert.deepStrictEqual(s.permissions, original.permissions);
+  assert.deepStrictEqual(s.hooks.PreToolUse, original.hooks.PreToolUse);
+  assert.strictEqual(s.hooks.Stop.length, 2, '原有的 Stop 鉤子保留，自己的只有一組');
+  assert.strictEqual(s.hooks.Stop[0].hooks[0].command, 'say done');
+  for (const ev of installer.EVENTS) {
+    const ours = s.hooks[ev].flatMap((g) => g.hooks).filter((h) => h.command.includes('hooks/claude-hook.js'));
+    assert.strictEqual(ours.length, 1);
+    assert.ok(ours[0].command.includes('/new/place/'));
+    assert.strictEqual(ours[0].timeout, 5);
+  }
+  assert.strictEqual(installer.status(file).installed, true);
+
+  const un = installer.uninstall({ file });
+  assert.strictEqual(un.removed, 3);
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(file, 'utf8')), original);
+  assert.strictEqual(installer.status(file).installed, false);
+});
+
+test('安裝鉤子：設定檔格式錯誤時完全不修改；設定檔不存在時建立', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'settings-'));
+  const bad = path.join(dir, 'settings.json');
+  fs.writeFileSync(bad, '{ "model": "opus", // 註解\n }');
+  assert.throws(() => installer.install({ file: bad, scriptPath: '/a/hooks/claude-hook.js', dataDir: '/d' }), /未做任何修改/);
+  assert.strictEqual(fs.readFileSync(bad, 'utf8'), '{ "model": "opus", // 註解\n }');
+  assert.deepStrictEqual(fs.readdirSync(dir), ['settings.json'], '不應留下備份或暫存檔');
+
+  const fresh = path.join(dir, 'sub', 'settings.json');
+  installer.install({ file: fresh, scriptPath: '/a/hooks/claude-hook.js', dataDir: '/d' });
+  assert.strictEqual(installer.status(fresh).installed, true);
+});

@@ -66,17 +66,27 @@
 - 任務可切換完成／未完成。
 
 ### 6. AI 專案進度（Claude Code／Codex，唯讀）
-- 即時讀取本機 **Claude Code**（`~/.claude/projects/`）與 **Codex**（`~/.codex/sessions/`）寫下的對話紀錄，依專案資料夾分組，顯示在面板「AI 專案」分頁：目前狀態、最後一句指令、正在做的動作或最後回覆、改過的檔案。
+- **只讀指定的專案**：在面板「AI 專案」分頁按「加入專案資料夾」，指定要追蹤的專案（Claude Code／Codex 的工作目錄，子資料夾也算）。沒有指定任何專案時，完全不讀取對話紀錄。
+  - Claude Code：先以紀錄資料夾名稱（`~/.claude/projects/<編碼後的路徑>`）過濾，名稱不符的對話完全不開啟；名稱相符者再讀檔頭確認實際工作目錄（中文資料夾名稱編碼後可能撞名，以實際目錄為準）。
+  - Codex：所有對話都放在 `~/.codex/sessions/<日期>/`，因此需要讀每個新對話的檔頭（`session_meta` 的工作目錄）判斷所屬專案；不符合的檔案之後不再讀取。
+- 依專案分組顯示：目前狀態、最後一句指令、正在做的動作或最後回覆、改過的檔案。
 - 桌寵會跟著反應：
   - 送出指令時 → 思考姿勢＋「Claude Code 開始處理『專案名』：…」
-  - 工具呼叫超過 20 秒沒有結果 → 「可能在等你確認（或指令執行較久）」；Codex 若在紀錄中寫入核准請求，則立即提醒
-  - 回合結束 → 開心姿勢＋「完成了：…」；使用者中斷則提示「已中斷」
-- **只看不改**：只以唯讀方式讀取紀錄檔新增的內容，不寫入任何檔案，也不修改 Claude Code／Codex 的設定。內容只在本機處理，不會送到任何 AI 服務。
-- 可在「設定」頁關閉。若設定了 `CLAUDE_CONFIG_DIR` 或 `CODEX_HOME` 環境變數，會改監看對應位置。
+  - 需要你允許時 → 「需要你允許使用 Bash」（安裝通知鉤子後）；未安裝時以「工具呼叫超過 20 秒沒有結果」推測。Codex 若在紀錄中寫入核准請求，則立即提醒。
+  - 回合結束 → 開心姿勢＋「完成了：…」；使用者中斷則提示「已中斷」。
+- **Claude Code 通知鉤子（選用）**：在「AI 專案」分頁按「安裝鉤子」，確認後會在 Claude Code 的使用者設定 `~/.claude/settings.json`（或 `$CLAUDE_CONFIG_DIR/settings.json`）加入 3 個鉤子：送出指令（UserPromptSubmit）、需要你允許（Notification）、回合結束（Stop）。
+  - 合併而非覆蓋：保留原有設定與其他鉤子；修改前自動備份為 `settings.json.bak-desktop-assistant-<時間>`；設定檔格式無法解析時完全不修改。
+  - 鉤子腳本 `hooks/claude-hook.js`：一律 exit 0、不輸出任何內容、最多執行 3 秒，不會阻擋或改變 Claude 的行為；只記錄「指定專案」的事件種類與時間，**不記錄指令內容與回覆**。
+  - 需要電腦上可執行 `node`。若之後搬移了程式資料夾，請再按一次「安裝鉤子」更新路徑。
+  - 隨時可按「移除鉤子」，只會刪除本程式加入的項目。
+- 只以唯讀方式讀取紀錄；除了你按下「安裝／移除鉤子」時修改 Claude Code 設定檔之外，不寫入任何 Claude Code／Codex 的檔案。內容只在本機處理，不會送到任何 AI 服務。
+- 可在「設定」頁關閉整個功能。
 - 限制：
   - 雲端（網頁版）Claude Code 的對話不在本機，看不到。
-  - 「在等你確認權限」對 Claude Code 是依「工具呼叫久未回傳」推測，長時間執行的指令也會觸發。
+  - 使用者按 Esc 中斷時 Claude Code 不會觸發 Stop 鉤子，中斷仍以紀錄檔判斷。
+  - 「需要你允許」的鉤子通知約在等待 6 秒後才發出（Claude Code 的設計）。
   - 對話紀錄格式並非公開規格，工具改版後可能需要調整 `ai-watch/claude.js`、`ai-watch/codex.js`；解析失敗的行會被略過，不會讓程式崩潰。
+  - 日後若打包成安裝檔，`hooks/claude-hook.js` 需設定為不壓縮進 asar（`asarUnpack`），否則 node 無法執行。
 
 ### 7. 介面語言
 - 所有介面文字皆為繁體中文（zh-TW）。
@@ -109,7 +119,7 @@ npm start
 npm test
 ```
 
-以模擬的 Claude Code／Codex 紀錄檔驗證狀態轉換（開始、等待、完成、中斷、半行寫入、啟動時不誤發通知、不寫入紀錄檔等）。
+以模擬的 Claude Code／Codex 紀錄檔驗證狀態轉換（開始、等待、完成、中斷、半行寫入、啟動時不誤發通知、不寫入紀錄檔）、指定專案過濾、鉤子事件，並實際執行鉤子腳本與安裝程式（保留原設定、備份、格式錯誤不修改）。
 
 ---
 
@@ -153,7 +163,9 @@ OPENAI_API_KEY=sk-xxx OPENAI_MODEL=gpt-4o-mini npm start
 ├── ai-watch/
 │   ├── index.js            # AI 專案監看核心：追蹤紀錄檔新增內容、維護對話狀態、依專案分組
 │   ├── claude.js           # Claude Code 紀錄解析器
-│   └── codex.js            # Codex 紀錄解析器
+│   ├── codex.js            # Codex 紀錄解析器
+│   └── hooks-installer.js  # Claude Code 通知鉤子的安裝／移除（合併、備份）
+├── hooks/claude-hook.js    # 通知鉤子腳本（由 Claude Code 執行，只記錄指定專案的事件）
 ├── test/ai-watch.test.js   # AI 專案監看單元測試（npm test）
 ├── preload.js              # contextBridge 暴露的最小化 API（renderer 不開啟 nodeIntegration）
 ├── providers/

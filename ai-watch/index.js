@@ -6,6 +6,9 @@
 //  - 解析器（claude.js / codex.js）把每行轉成訊號，這裡統一維護狀態：
 //      working（進行中）→ waiting（可能在等你）→ working … → done（完成）／idle（閒置）
 //  - 狀態轉換時呼叫 onEvent（給桌寵反應），任何變動時呼叫 onUpdate（給面板列表）。
+//  - 只處理「指定專案」（options.projects）內的對話；其他專案的紀錄檔不讀取內容
+//    （Claude Code 先以資料夾名稱過濾；需要時只讀檔頭判斷工作目錄，不符合就永久略過）。
+//  - 若安裝了 Claude Code 通知鉤子，另外讀取鉤子事件檔，取得精準的「需要你允許」「回合結束」。
 
 const fs = require('fs');
 const path = require('path');
@@ -30,8 +33,24 @@ const DEFAULTS = {
   idleMs: 30 * 60 * 1000,
   // 面板只列出這段時間內有活動的對話
   listWindowMs: 24 * 3600 * 1000,
-  tickMs: 3000
+  tickMs: 3000,
+  // 鉤子事件延遲處理，讓紀錄檔的最後幾行先寫入（避免「完成」時拿到舊的回覆摘要）
+  hookDelayMs: 1000,
+  // 判斷檔案屬於哪個專案時，最多讀取檔頭這麼多位元組
+  peekBytes: 64 * 1024
 };
+
+// 路徑正規化：統一斜線、去掉結尾斜線；Windows 不分大小寫
+function normPath(p) {
+  let s = path.resolve(String(p || '')).replace(/\\/g, '/').replace(/\/+$/, '');
+  if (process.platform === 'win32') s = s.toLowerCase();
+  return s;
+}
+
+// Claude Code 存放紀錄的資料夾名稱：工作目錄中非英數字元都換成「-」
+function claudeDirName(p) {
+  return String(p).replace(/[^a-zA-Z0-9]/g, '-');
+}
 
 function defaultRoots() {
   const home = os.homedir();
@@ -57,6 +76,25 @@ function createAiWatcher(options) {
   const now = opt.now || (() => Date.now());
   const onEvent = opt.onEvent || (() => {});
   const onUpdate = opt.onUpdate || (() => {});
+  // null = 不限制（測試用）；陣列 = 只處理這些專案資料夾（含子資料夾）
+  const projects = Array.isArray(opt.projects) ? opt.projects.filter(Boolean) : null;
+  const projectNorms = projects ? projects.map(normPath) : null;
+
+  function inProjects(cwd) {
+    if (!projectNorms) return true;
+    const c = normPath(cwd);
+    return projectNorms.some((p) => c === p || c.startsWith(p + '/'));
+  }
+
+  // Claude Code 預先過濾：只看資料夾名稱，不讀內容
+  function claudeDirMayMatch(file) {
+    if (!projects) return true;
+    const dir = path.basename(path.dirname(file));
+    return projects.some((p) => {
+      const enc = claudeDirName(path.resolve(p));
+      return dir === enc || dir.startsWith(enc + '-');
+    });
+  }
 
   const files = new Map();      // file -> { offset, rest }
   const sessions = new Map();   // file -> session
@@ -77,7 +115,7 @@ function createAiWatcher(options) {
         id: file, tool, label: PARSERS[tool].label, cwd: '', title: '',
         status: 'idle', lastPrompt: '', lastPromptAt: 0, lastAction: '', lastText: '',
         lastKind: '', files: [], pending: new Set(), turns: 0,
-        lastActivity: 0, notifiedWaiting: false
+        lastActivity: 0, notifiedWaiting: false, viaHooks: false, waitingMessage: ''
       };
       sessions.set(file, s);
     }
@@ -136,6 +174,7 @@ function createAiWatcher(options) {
         backToWorking(s);
         break;
       case 'waiting':
+        s.waitingMessage = sig.message || '';
         if (s.status !== 'waiting') {
           s.status = 'waiting';
           s.notifiedWaiting = true;
@@ -179,13 +218,13 @@ function createAiWatcher(options) {
   }
 
   // 讀取檔案從 offset 到結尾的新內容（唯讀開啟）
-  function readFrom(file, start) {
+  function readFrom(file, start, limit) {
     let fd;
     try {
       fd = fs.openSync(file, 'r');
       const size = fs.fstatSync(fd).size;
       if (size <= start) return { text: '', size };
-      const buf = Buffer.alloc(size - start);
+      const buf = Buffer.alloc(Math.min(size - start, limit || Infinity));
       fs.readSync(fd, buf, 0, buf.length, start);
       return { text: buf.toString('utf8'), size };
     } catch (e) {
@@ -195,32 +234,64 @@ function createAiWatcher(options) {
     }
   }
 
+  // 判斷這個紀錄檔是否屬於指定專案：true／false／null（還無法判斷，例如檔案剛建立）
+  function admit(tool, file) {
+    if (!projects) return true;
+    if (tool === 'claude' && !claudeDirMayMatch(file)) return false;
+    const r = readFrom(file, 0, opt.peekBytes);
+    if (!r) return null;
+    const parser = PARSERS[tool];
+    for (const line of r.text.split('\n')) {
+      let entry;
+      try { entry = JSON.parse(line); } catch (e) { continue; }
+      let sigs = [];
+      try { sigs = parser.parse(entry); } catch (e) { sigs = []; }
+      const c = sigs.find((x) => x.type === 'cwd');
+      if (c) return inProjects(c.cwd);
+    }
+    return null;
+  }
+
+  // 新出現（或尚未判定）的紀錄檔
+  //  - quietUntil 之前的內容是「啟動時就已存在」的舊內容：靜默載入（不發通知），且最多讀結尾一段
+  //  - quietUntil 之後的內容視為即時進度
   function onAdd(tool, file, initial) {
-    if (files.has(file)) return onChange(tool, file);
+    const known = files.get(file);
+    if (known && !known.undecided) return onChange(tool, file);
     let st;
     try { st = fs.statSync(file); } catch (e) { return; }
-    const recent = now() - st.mtimeMs < opt.recentMs;
-    if (initial && !recent) {
-      // 舊對話：不載入內容，只從結尾開始追蹤，之後有新內容再出現在列表
-      files.set(file, { offset: st.size, rest: '' });
+    const quietUntil = known && known.undecided ? known.quietUntil : (initial ? st.size : 0);
+
+    if (initial && now() - st.mtimeMs >= opt.recentMs) {
+      // 舊對話：連檔頭都不讀，等之後有新內容再判斷
+      files.set(file, { undecided: true, quietUntil });
       return;
     }
-    let start = 0;
-    if (initial && st.size > opt.initialTailBytes) start = st.size - opt.initialTailBytes;
-    const r = readFrom(file, start);
-    if (!r) return;
-    let text = r.text;
-    if (start > 0) text = text.slice(text.indexOf('\n') + 1);   // 丟掉被截斷的第一行
-    const cut = text.lastIndexOf('\n');
-    files.set(file, { offset: r.size, rest: cut === text.length - 1 ? '' : text.slice(cut + 1) });
-    processLines(tool, file, cut >= 0 ? text.slice(0, cut + 1) : '', initial);
-    if (initial) settleSilently(sessions.get(file));
+    const ok = admit(tool, file);
+    if (ok === false) { files.set(file, { ignored: true }); return; }
+    if (ok === null) { files.set(file, { undecided: true, quietUntil }); return; }
+
+    let rest = '';
+    if (quietUntil > 0) {
+      const start = Math.max(0, quietUntil - opt.initialTailBytes);
+      const r = readFrom(file, start, quietUntil - start);
+      if (!r) return;
+      let text = r.text;
+      if (start > 0) text = text.slice(text.indexOf('\n') + 1);   // 丟掉被截斷的第一行
+      const cut = text.lastIndexOf('\n');
+      rest = text.slice(cut + 1);
+      processLines(tool, file, cut >= 0 ? text.slice(0, cut + 1) : '', true);
+      settleSilently(sessions.get(file));
+    }
+    files.set(file, { offset: quietUntil, rest });
+    onChange(tool, file);
     queueUpdate();
   }
 
   function onChange(tool, file) {
     const f = files.get(file);
-    if (!f) return onAdd(tool, file, false);
+    if (!f || f.undecided) return onAdd(tool, file, false);
+    if (f.ignored) return;
     const r = readFrom(file, f.offset);
     if (!r) return;
     if (r.size < f.offset) { f.offset = 0; f.rest = ''; return onChange(tool, file); }   // 檔案被截斷或重寫
@@ -248,7 +319,8 @@ function createAiWatcher(options) {
     for (const s of sessions.values()) {
       const quiet = t - s.lastActivity;
       if (s.status === 'working') {
-        if (s.pending.size > 0 && quiet > opt.waitingMs && !s.notifiedWaiting) {
+        // 有鉤子時以鉤子的「需要你允許」為準，不再用時間推測
+        if (s.pending.size > 0 && quiet > opt.waitingMs && !s.notifiedWaiting && !s.viaHooks) {
           s.status = 'waiting';
           s.notifiedWaiting = true;
           emit('waiting', s, false);
@@ -277,6 +349,7 @@ function createAiWatcher(options) {
       title: s.aiTitle || s.title || '（尚無指令）', status: s.status, interrupted: !!s.interrupted,
       lastPrompt: shorten(s.lastPrompt, 120), lastAction: s.lastAction,
       lastText: shorten(s.lastText, 200), files: s.files.slice(0, 8),
+      waitingMessage: s.waitingMessage, viaHooks: s.viaHooks,
       turns: s.turns, lastActivity: s.lastActivity
     };
   }
@@ -300,7 +373,76 @@ function createAiWatcher(options) {
     return list.sort((a, b) => b.lastActivity - a.lastActivity);
   }
 
+  // -------------------------------------------------------------------------
+  // Claude Code 通知鉤子事件（hooks/claude-hook.js 寫入的 hook-events.jsonl）
+  // -------------------------------------------------------------------------
+  let hookOffset = 0;
+  let hookRest = '';
+
+  function findSessionByTranscript(p) {
+    if (!p) return null;
+    const n = normPath(p);
+    for (const [file, s] of sessions) if (normPath(file) === n) return s;
+    return null;
+  }
+
+  function handleHook(ev) {
+    if (!ev || !ev.event) return;
+    if (ev.cwd && !inProjects(ev.cwd)) return;
+    const s = findSessionByTranscript(ev.transcript_path);
+    if (!s) return;
+    s.viaHooks = true;
+    const at = now();
+    if (ev.event === 'UserPromptSubmit') {
+      apply(s, { type: 'turnStart' }, false, at);
+    } else if (ev.event === 'Notification' && ev.notification_type === 'permission_prompt') {
+      const m = /permission to use (.+)$/i.exec(ev.message || '');
+      apply(s, { type: 'waiting', message: m ? `需要你允許使用 ${m[1]}` : '需要你允許' }, false, at);
+    } else if (ev.event === 'Stop') {
+      apply(s, { type: 'turnEnd' }, false, at);
+    }
+    queueUpdate();
+  }
+
+  function readHookEvents(fromStart) {
+    const file = opt.hookEventsFile;
+    if (!file) return;
+    let st;
+    try { st = fs.statSync(file); } catch (e) { hookOffset = 0; hookRest = ''; return; }
+    if (fromStart === 'skip') { hookOffset = st.size; return; }    // 啟動前的舊事件不處理
+    if (st.size < hookOffset) { hookOffset = 0; hookRest = ''; }    // 事件檔被換新
+    const r = readFrom(file, hookOffset);
+    if (!r) return;
+    hookOffset = r.size;
+    const text = hookRest + r.text;
+    const cut = text.lastIndexOf('\n');
+    if (cut < 0) { hookRest = text; return; }
+    hookRest = text.slice(cut + 1);
+    const evs = [];
+    for (const line of text.slice(0, cut + 1).split('\n')) {
+      if (!line.trim()) continue;
+      try { evs.push(JSON.parse(line)); } catch (e) { /* 略過 */ }
+    }
+    const run = () => evs.forEach(handleHook);
+    if (opt.hookDelayMs > 0) setTimeout(run, opt.hookDelayMs); else run();
+  }
+
   function start() {
+    if (opt.hookEventsFile) {
+      const dir = path.dirname(opt.hookEventsFile);
+      try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { /* ignore */ }
+      readHookEvents('skip');
+      const hw = chokidar.watch(dir, { persistent: true, depth: 0, ignoreInitial: true });
+      const onHookFile = (f) => { if (path.resolve(f) === path.resolve(opt.hookEventsFile)) readHookEvents(); };
+      hw.on('add', onHookFile).on('change', onHookFile)
+        .on('error', (err) => console.error('鉤子事件監看錯誤:', err.message));
+      watchers.push(hw);
+    }
+    if (projects && projects.length === 0) {
+      // 沒有指定任何專案：不讀取任何對話紀錄
+      timer = setInterval(tick, opt.tickMs);
+      return api;
+    }
     for (const tool of enabled) {
       const parser = PARSERS[tool];
       const root = roots[tool];
@@ -334,7 +476,8 @@ function createAiWatcher(options) {
   const api = {
     start, stop, snapshot, tick, roots,
     _onAdd: (tool, file, initial) => onAdd(tool, file, initial),
-    _onChange: (tool, file) => onChange(tool, file)
+    _onChange: (tool, file) => onChange(tool, file),
+    _readHookEvents: (mode) => readHookEvents(mode)
   };
   return api;
 }

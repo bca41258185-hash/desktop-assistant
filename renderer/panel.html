@@ -61,7 +61,21 @@
     <div class="section-head">
       <h2>AI 專案進度 <span id="aiBadge" class="progress-badge"></span></h2>
     </div>
-    <p class="hint">即時讀取本機 Claude Code 與 Codex 的對話紀錄，只看不改。雲端（網頁版）的對話不在本機，看不到。</p>
+    <p class="hint">只讀取「監看的專案」資料夾內的 Claude Code／Codex 對話，只看不改。雲端（網頁版）的對話不在本機，看不到。</p>
+
+    <div class="ai-config">
+      <div class="ai-config-row">
+        <strong>監看的專案</strong>
+        <button id="aiAddProject">加入專案資料夾</button>
+      </div>
+      <ul class="ai-watch-list" id="aiWatchList"></ul>
+      <div class="ai-config-row">
+        <span><strong>Claude Code 通知鉤子</strong> <span id="aiHookStatus" class="ai-hook-status"></span></span>
+        <button id="aiHookBtn"></button>
+      </div>
+      <p class="hint" id="aiHookHint"></p>
+    </div>
+
     <div class="ai-list" id="aiList"></div>
   </section>
 

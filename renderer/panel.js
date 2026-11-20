@@ -370,7 +370,63 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
 // ---------------------------------------------------------------------------
 const aiList = document.getElementById('aiList');
 const aiBadge = document.getElementById('aiBadge');
-let aiState = { enabled: true, roots: null, projects: [] };
+const aiWatchList = document.getElementById('aiWatchList');
+const aiHookStatus = document.getElementById('aiHookStatus');
+const aiHookBtn = document.getElementById('aiHookBtn');
+const aiHookHint = document.getElementById('aiHookHint');
+let aiState = { enabled: true, roots: null, watchProjects: [], hooks: {}, projects: [] };
+let aiHookMsg = '';
+
+function renderAiConfig() {
+  aiWatchList.innerHTML = '';
+  const list = aiState.watchProjects || [];
+  if (!list.length) {
+    aiWatchList.appendChild(el('li', 'empty', '尚未指定專案：目前不讀取任何對話。'));
+  }
+  list.forEach((p) => {
+    const li = el('li');
+    li.appendChild(el('span', 'ai-watch-path', p));
+    const rm = el('button', '', '移除');
+    rm.addEventListener('click', async () => {
+      aiState = await window.api.removeAiProject(p);
+      renderAi();
+    });
+    li.appendChild(rm);
+    aiWatchList.appendChild(li);
+  });
+
+  const h = aiState.hooks || {};
+  if (h.error) {
+    aiHookStatus.textContent = '設定檔無法讀取';
+    aiHookStatus.className = 'ai-hook-status warn';
+  } else if (h.installed) {
+    aiHookStatus.textContent = '已安裝';
+    aiHookStatus.className = 'ai-hook-status ok';
+  } else {
+    aiHookStatus.textContent = h.partial ? '安裝不完整' : '未安裝';
+    aiHookStatus.className = 'ai-hook-status';
+  }
+  aiHookBtn.textContent = h.installed || h.partial ? '移除鉤子' : '安裝鉤子';
+  aiHookHint.textContent = aiHookMsg || (h.installed
+    ? '已能精準提醒「需要你允許」與「回合結束」。Claude Code 通常會自動載入；若沒有反應，請重新開啟該對話。'
+    : '安裝後可精準提醒「需要你允許」；未安裝時以「工具呼叫超過 20 秒沒結果」推測。會修改 Claude Code 的 settings.json（先備份、可移除）。');
+}
+
+document.getElementById('aiAddProject').addEventListener('click', async () => {
+  aiState = await window.api.addAiProject();
+  renderAi();
+});
+
+aiHookBtn.addEventListener('click', async () => {
+  const h = aiState.hooks || {};
+  const r = h.installed || h.partial ? await window.api.uninstallAiHooks() : await window.api.installAiHooks();
+  if (r.state) aiState = r.state;
+  if (r.error) aiHookMsg = '失敗：' + r.error;
+  else if (r.ok && r.backup) aiHookMsg = '完成。原設定已備份：' + r.backup;
+  else if (r.ok) aiHookMsg = '完成。';
+  else aiHookMsg = '';
+  renderAi();
+});
 
 const AI_STATUS = {
   working: { text: '進行中', cls: 'working' },
@@ -396,20 +452,21 @@ function el(tag, cls, text) {
 }
 
 function renderAi() {
+  renderAiConfig();
   aiList.innerHTML = '';
   const projects = aiState.projects || [];
   const active = projects.reduce((n, p) =>
     n + p.sessions.filter((s) => s.status === 'working' || s.status === 'waiting').length, 0);
   aiBadge.textContent = active ? `${active} 個進行中` : '';
+  aiBadge.style.display = active ? '' : 'none';
 
   if (!aiState.enabled) {
     aiList.appendChild(el('p', 'empty', '已關閉監看。可到「設定」頁開啟。'));
     return;
   }
   if (!projects.length) {
-    aiList.appendChild(el('p', 'empty', '最近 24 小時沒有 Claude Code 或 Codex 的對話。開始一段對話後，這裡會即時更新。'));
-    if (aiState.roots) {
-      aiList.appendChild(el('p', 'hint', `監看位置：${aiState.roots.claude}、${aiState.roots.codex}`));
+    if ((aiState.watchProjects || []).length) {
+      aiList.appendChild(el('p', 'empty', '指定專案最近 24 小時沒有 Claude Code 或 Codex 的對話。開始一段對話後，這裡會即時更新。'));
     }
     return;
   }
@@ -430,6 +487,7 @@ function renderAi() {
       top.appendChild(el('span', 'ai-time', timeAgo(s.lastActivity)));
       row.appendChild(top);
 
+      if (s.status === 'waiting' && s.waitingMessage) row.appendChild(el('div', 'ai-line ai-alert', s.waitingMessage));
       if (s.lastPrompt) row.appendChild(el('div', 'ai-line', '指令：' + s.lastPrompt));
       if (s.status === 'done' && s.lastText) row.appendChild(el('div', 'ai-line', '回覆：' + s.lastText));
       else if (s.lastAction) row.appendChild(el('div', 'ai-line', '動作：' + s.lastAction));
