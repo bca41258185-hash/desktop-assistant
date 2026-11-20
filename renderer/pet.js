@@ -26,14 +26,31 @@ function setPose(pose) {
   }
 }
 
-// --- 說話氣泡 ---
+// --- 說話氣泡（字串＝一般訊息；物件可帶出處，用於名言） ---
+const bubbleTextEl = bubbleEl.querySelector('.bubble-text') || bubbleEl;
+const bubbleAttrEl = bubbleEl.querySelector('.bubble-attr');
 let bubbleTimer = null;
-function showBubble(text) {
+function showBubble(payload) {
+  let text = '';
+  let attr = '';
+  let duration = 6000;
+  if (payload && typeof payload === 'object') {
+    text = payload.text || payload.zh || '';
+    attr = payload.attribution || payload.sourceZh || '';
+    duration = Number(payload.duration) || (attr ? 12000 : 6000);
+  } else {
+    text = String(payload || '');
+  }
   if (!text) return;
-  bubbleEl.textContent = text;
+  bubbleTextEl.textContent = text;
+  if (bubbleAttrEl) {
+    bubbleAttrEl.textContent = attr;
+    bubbleAttrEl.hidden = !attr;
+  }
+  bubbleEl.classList.toggle('has-attr', !!attr);
   bubbleEl.classList.add('show');
   if (bubbleTimer) clearTimeout(bubbleTimer);
-  bubbleTimer = setTimeout(() => bubbleEl.classList.remove('show'), 6000);
+  bubbleTimer = setTimeout(() => bubbleEl.classList.remove('show'), duration);
 }
 
 // 先以預設角色渲染，避免切換前空白
@@ -58,7 +75,13 @@ let lastX = 0;
 let lastY = 0;
 let moved = 0;
 
+petEl.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  if (window.api.speakRandomQuote) window.api.speakRandomQuote();
+});
+
 petEl.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
   dragging = true;
   lastX = e.screenX;
   lastY = e.screenY;

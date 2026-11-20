@@ -1,19 +1,38 @@
 // 主行程：負責視窗、IPC、資料夾監看、設定讀寫、提醒、AI 呼叫。
 // Main process: windows, IPC, folder watching, config I/O, reminders, AI calls.
 
-const { app, BrowserWindow, ipcMain, dialog, screen, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
 const { createProvider } = require('./providers');
 const { CHARACTERS, DEFAULT_ID } = require('./renderer/characters');
 
+function loadQuotes() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'quotes.json'), 'utf-8'));
+    const list = Array.isArray(raw) ? raw : (raw.quotes || []);
+    const map = {};
+    for (const q of list) {
+      if (!q || !q.id || !q.zh) continue;
+      if (!map[q.id]) map[q.id] = [];
+      map[q.id].push(q);
+    }
+    return map;
+  } catch (e) {
+    console.error('載入名言失敗:', e.message);
+    return {};
+  }
+}
 let petWindow = null;
 let panelWindow = null;
 const watchers = new Map();      // folderPath -> chokidar watcher
 let recentChanges = [];          // { path, name, type, time }
 let reminderTimer = null;
+let quoteTimer = null;
+let lastQuoteIndex = -1;
 let config = null;
+let QUOTES_BY_ID = loadQuotes();
 
 // ---------------------------------------------------------------------------
 // 設定讀寫（存於 app.getPath('userData')，絕不放進 repo）
@@ -27,6 +46,7 @@ const CONFIG_DEFAULTS = {
     baseUrl: '',
     model: '',
     reminderIntervalMinutes: 30,
+    quoteIntervalMinutes: 20,      // 名言氣泡間隔（0＝關閉）
     characterId: DEFAULT_ID        // 目前選用的大師（'ando' | 'gehry' | ...）
   }
 };
@@ -70,7 +90,10 @@ function effectiveSettings() {
     apiKey: process.env.OPENAI_API_KEY || s.apiKey || '',
     baseUrl: process.env.OPENAI_BASE_URL || s.baseUrl || 'https://api.openai.com/v1',
     model: process.env.OPENAI_MODEL || s.model || 'gpt-4o-mini',
-    reminderIntervalMinutes: Number(s.reminderIntervalMinutes) || 30
+    reminderIntervalMinutes: Number(s.reminderIntervalMinutes) || 30,
+    quoteIntervalMinutes: (s.quoteIntervalMinutes === 0 || s.quoteIntervalMinutes === '0')
+      ? 0
+      : (Number(s.quoteIntervalMinutes) || 20)
   };
 }
 
@@ -79,8 +102,8 @@ function effectiveSettings() {
 // ---------------------------------------------------------------------------
 function createPetWindow() {
   petWindow = new BrowserWindow({
-    width: 240,
-    height: 340,
+    width: 250,
+    height: 400,
     frame: false,
     transparent: true,
     resizable: false,
@@ -107,8 +130,8 @@ function createPetWindow() {
   // 預設放在主螢幕右下角
   const { workArea } = screen.getPrimaryDisplay();
   petWindow.setPosition(
-    workArea.x + workArea.width - 260,
-    workArea.y + workArea.height - 360
+    workArea.x + workArea.width - 270,
+    workArea.y + workArea.height - 420
   );
 }
 
@@ -246,6 +269,49 @@ function setupReminder() {
 }
 
 // ---------------------------------------------------------------------------
+// 名言：目前大師的查證引言（與角色問候語分開）
+// ---------------------------------------------------------------------------
+function quotesFor(id) {
+  return QUOTES_BY_ID[id] || QUOTES_BY_ID[DEFAULT_ID] || [];
+}
+
+function speakQuote(quote) {
+  if (!quote || !quote.zh) return false;
+  const master = CHARACTERS[quote.id] || CHARACTERS[currentCharacterId()];
+  const name = master ? master.nameZh : '';
+  const source = quote.sourceZh || quote.source || '';
+  const attribution = [name, source].filter(Boolean).join(' ／ ');
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.webContents.send('pet:speak', {
+      text: quote.zh,
+      attribution: attribution ? '—— ' + attribution : '',
+      duration: 12000
+    });
+  }
+  return true;
+}
+
+function speakRandomQuote() {
+  const list = quotesFor(currentCharacterId());
+  if (!list.length) return false;
+  let idx = Math.floor(Math.random() * list.length);
+  if (list.length > 1 && idx === lastQuoteIndex) {
+    idx = (idx + 1) % list.length;
+  }
+  lastQuoteIndex = idx;
+  return speakQuote(list[idx]);
+}
+
+function setupQuoteTimer() {
+  if (quoteTimer) clearInterval(quoteTimer);
+  const mins = effectiveSettings().quoteIntervalMinutes;
+  if (!mins || mins <= 0) return;
+  quoteTimer = setInterval(() => {
+    speakRandomQuote();
+  }, mins * 60 * 1000);
+}
+
+// ---------------------------------------------------------------------------
 // IPC
 // ---------------------------------------------------------------------------
 function registerIpc() {
@@ -297,6 +363,9 @@ function registerIpc() {
       baseUrl: s.baseUrl || '',
       model: s.model || '',
       reminderIntervalMinutes: Number(s.reminderIntervalMinutes) || 30,
+      quoteIntervalMinutes: (s.quoteIntervalMinutes === 0 || s.quoteIntervalMinutes === '0')
+        ? 0
+        : (Number(s.quoteIntervalMinutes) || 20),
       characterId: currentCharacterId(),
       // 提示 UI：哪些值被環境變數覆蓋
       env: {
@@ -319,10 +388,14 @@ function registerIpc() {
       baseUrl: incoming.baseUrl || '',
       model: incoming.model || '',
       reminderIntervalMinutes: Number(incoming.reminderIntervalMinutes) || 30,
+      quoteIntervalMinutes: (incoming.quoteIntervalMinutes === 0 || incoming.quoteIntervalMinutes === '0')
+        ? 0
+        : (Number(incoming.quoteIntervalMinutes) || 20),
       characterId: nextCharacter
     };
     saveConfig();
     setupReminder();
+    setupQuoteTimer();
     if (changedCharacter) setPetCharacter(nextCharacter, true);
     return { ok: true };
   });
@@ -333,7 +406,42 @@ function registerIpc() {
     config.settings.characterId = id;
     saveConfig();
     setPetCharacter(id, true);
+    if (panelWindow && !panelWindow.isDestroyed()) {
+      panelWindow.webContents.send('character:changed', id);
+    }
     return { ok: true, id };
+  });
+
+  // --- 名言 ---
+  ipcMain.handle('quotes:list', (e, id) => {
+    const cid = CHARACTERS[id] ? id : currentCharacterId();
+    const c = CHARACTERS[cid];
+    return {
+      id: cid,
+      nameZh: c ? c.nameZh : '',
+      nameEn: c ? c.nameEn : '',
+      quotes: quotesFor(cid)
+    };
+  });
+
+  ipcMain.handle('quotes:speak', (e, index) => {
+    const list = quotesFor(currentCharacterId());
+    const q = list[Number(index)];
+    if (!q) return { ok: false };
+    lastQuoteIndex = Number(index);
+    speakQuote(q);
+    return { ok: true };
+  });
+
+  ipcMain.handle('quotes:speak-random', () => {
+    return { ok: speakRandomQuote() };
+  });
+
+  ipcMain.handle('shell:open-external', (e, url) => {
+    if (typeof url === 'string' && /^https:\/\//i.test(url)) {
+      return shell.openExternal(url);
+    }
+    return false;
   });
 
   // --- 任務 ---
@@ -423,6 +531,7 @@ app.whenReady().then(() => {
   // 還原已設定的監看資料夾
   for (const folder of config.folders) watchFolder(folder);
   setupReminder();
+  setupQuoteTimer();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createPetWindow();
@@ -433,6 +542,7 @@ app.on('before-quit', () => {
   app.isQuitting = true;
   for (const w of watchers.values()) w.close();
   if (reminderTimer) clearInterval(reminderTimer);
+  if (quoteTimer) clearInterval(quoteTimer);
 });
 
 // 桌寵常駐，不因關閉面板而退出；全部視窗關閉才退出（Windows/Linux）。

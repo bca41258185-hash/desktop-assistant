@@ -1,0 +1,305 @@
+{
+  "description": "Verified quotations by six Pritzker laureates for the desktop pet. Original greetings in characters.js are separate and are not quotations.",
+  "quotes": [
+    {
+      "id": "ando",
+      "original": "For me, making architecture is the same as thinking.",
+      "zh": "對我而言，創造建築就等同於思考。",
+      "source": "Pritzker Prize acceptance speech, 1995",
+      "sourceZh": "普立茲克獎得獎致詞，1995",
+      "url": "https://www.pritzkerprize.com/sites/default/files/inline-files/Tadao_Ando_Acceptance_Speech_1995.pdf",
+      "year": 1995,
+      "lang": "en"
+    },
+    {
+      "id": "ando",
+      "original": "Architecture is deemed complete only upon the intervention of the human that experiences it.",
+      "zh": "唯有經由體驗它的人介入其中，建築才算真正完成。",
+      "source": "Pritzker Prize acceptance speech, 1995",
+      "sourceZh": "普立茲克獎得獎致詞，1995",
+      "url": "https://www.pritzkerprize.com/sites/default/files/inline-files/Tadao_Ando_Acceptance_Speech_1995.pdf",
+      "year": 1995,
+      "lang": "en"
+    },
+    {
+      "id": "ando",
+      "original": "I believe that there is no such thing as a creation from nothing.",
+      "zh": "我相信，世上並不存在無中生有的創造。",
+      "source": "Interview, The Talks, 18 August 2021",
+      "sourceZh": "《The Talks》訪談，2021",
+      "url": "https://the-talks.com/interview/tadao-ando/",
+      "year": 2021,
+      "lang": "en"
+    },
+    {
+      "id": "ando",
+      "original": "Architecture is built through the accumulation of one's own choices, made entirely on one's responsibility.",
+      "zh": "建築，是透過一個人完全自負其責所做出的一連串選擇累積而成的。",
+      "source": "Interview, The Talks, 18 August 2021",
+      "sourceZh": "《The Talks》訪談，2021",
+      "url": "https://the-talks.com/interview/tadao-ando/",
+      "year": 2021,
+      "lang": "en"
+    },
+    {
+      "id": "ando",
+      "original": "After visiting these structures I felt it important to minimise the design, and that creating something that sticks to your heart is more important than anything else.",
+      "zh": "參訪過這些建築之後，我體認到讓設計極簡化很重要，而創造出能深深觸動人心的東西，比任何事都更重要。",
+      "source": "Alain Elkann Interviews, May 2019 (conversation at Château La Coste, April 2019)",
+      "sourceZh": "Alain Elkann 訪談，2019",
+      "url": "https://www.alainelkanninterviews.com/tadao-ando/",
+      "year": 2019,
+      "lang": "en"
+    },
+    {
+      "id": "gehry",
+      "original": "Architecture is a small piece of this human equation, but for those of us who practice it, we believe in its potential to make a difference, to enlighten and to enrich the human experience, to penetrate the barriers of misunderstanding and provide a beautiful context for life's drama.",
+      "zh": "建築在人類這道方程式中只是小小的一塊，但對我們這些從事建築的人而言，我們相信它有潛力帶來改變——去啟迪並豐富人的生命經驗，去穿透彼此誤解的藩籬，並為人生這齣戲提供一個美麗的舞台。",
+      "source": "Pritzker Prize acceptance speech, 1989",
+      "sourceZh": "普立茲克獎得獎致詞，1989",
+      "url": "https://www.pritzkerprize.com/sites/default/files/inline-files/Frank_Gehry_Acceptance_Speech_1989.pdf",
+      "year": 1989,
+      "lang": "en"
+    },
+    {
+      "id": "gehry",
+      "original": "Architecture is surely an art, and those who practice the art of architecture are surely architects.",
+      "zh": "建築當然是一門藝術，而從事建築這門藝術的人，當然就是建築師。",
+      "source": "Pritzker Prize acceptance speech, 1989",
+      "sourceZh": "普立茲克獎得獎致詞，1989",
+      "url": "https://www.pritzkerprize.com/sites/default/files/inline-files/Frank_Gehry_Acceptance_Speech_1989.pdf",
+      "year": 1989,
+      "lang": "en"
+    },
+    {
+      "id": "gehry",
+      "original": "The dream is that each brick, each window, each wall, each road, each tree will be placed lovingly by craftsmen, client, architect, and people to create beautiful cities.",
+      "zh": "我的夢想是：每一塊磚、每一扇窗、每一道牆、每一條路、每一棵樹，都由工匠、業主、建築師與眾人用心懷愛地安放，共同造就美麗的城市。",
+      "source": "Pritzker Prize acceptance speech, 1989",
+      "sourceZh": "普立茲克獎得獎致詞，1989",
+      "url": "https://www.pritzkerprize.com/sites/default/files/inline-files/Frank_Gehry_Acceptance_Speech_1989.pdf",
+      "year": 1989,
+      "lang": "en"
+    },
+    {
+      "id": "gehry",
+      "original": "I respond to every fucking detail of the time we're in with the people we live with, in this place.",
+      "zh": "我會回應我們所處這個時代的每一個該死的細節——連同我們共同生活的人，以及我們身處的這個地方。",
+      "source": "Dezeen interview at Luma Arles, 29 June 2021",
+      "sourceZh": "Dezeen 訪談（Luma Arles），2021",
+      "url": "https://www.dezeen.com/2021/06/29/frank-gehry-interview-luma-arles/",
+      "year": 2021,
+      "lang": "en"
+    },
+    {
+      "id": "gehry",
+      "original": "In the world we live in, 98 per cent of what gets built and designed today is pure shit. There's no sense of design nor respect for humanity or anything. They're bad buildings and that's it.",
+      "zh": "在我們所處的這個世界，今天蓋出來、設計出來的東西，百分之九十八根本是垃圾。沒有設計意識，也談不上對人性的尊重。就是糟糕的建築，如此而已。",
+      "source": "Prince of Asturias Awards press conference, reported by Dezeen, 24 October 2014 (originally El Mundo)",
+      "sourceZh": "阿斯圖里亞斯親王獎記者會，Dezeen 報導，2014（原載《El Mundo》）",
+      "url": "https://www.dezeen.com/2014/10/24/98-percent-of-architecture-is-bad-says-frank-gehry-middle-finger/",
+      "year": 2014,
+      "lang": "en"
+    },
+    {
+      "id": "hadid",
+      "original": "Architecture is not a medium of personal expression for me. To interpret it as striving for individual expression is to misunderstand it. However, for me there was never any doubt that architecture must contribute to society's progress and ultimately to our individual and collective wellbeing.",
+      "zh": "對我而言，建築不是一種個人表達的媒介。若把它理解成追求個人表現，就是誤解了它。然而對我來說，建築必須為社會的進步、並最終為我們個人與集體的福祉作出貢獻，這一點從來沒有任何疑問。",
+      "source": "RIBA Royal Gold Medal lecture, reported by Dezeen, 3 February 2016",
+      "sourceZh": "RIBA 皇家金獎演講，Dezeen 報導，2016",
+      "url": "https://www.dezeen.com/2016/02/03/architecture-not-medium-personal-expression-for-me-zaha-hadid-riba-royal-gold-medal-2016/",
+      "year": 2016,
+      "lang": "en"
+    },
+    {
+      "id": "hadid",
+      "original": "I have always believed in progress and in creativity's role in progress. That's why I remain critical of any traditionalism.",
+      "zh": "我始終相信進步，也相信創造力在進步中扮演的角色。這正是我對任何守舊傳統主義都保持批判態度的原因。",
+      "source": "RIBA Royal Gold Medal lecture, reported by Dezeen, 3 February 2016",
+      "sourceZh": "RIBA 皇家金獎演講，Dezeen 報導，2016",
+      "url": "https://www.dezeen.com/2016/02/03/architecture-not-medium-personal-expression-for-me-zaha-hadid-riba-royal-gold-medal-2016/",
+      "year": 2016,
+      "lang": "en"
+    },
+    {
+      "id": "hadid",
+      "original": "People used to think women did not have enough logic. Well, that is absolute nonsense. I don't know the ego of a man, or how their mentality works, but there is no difference at all in capability, not formally in terms of the buildings at least.",
+      "zh": "過去人們以為女性缺乏足夠的邏輯。這完全是胡說八道。我不懂男人的自尊心、也不懂他們的思維是怎麼運作的，但在能力上根本毫無差別——至少就建築本身而言，形式上並無不同。",
+      "source": "Interview with The Observer, published 17 February 2013 (The Guardian)",
+      "sourceZh": "《The Observer》訪談，2013（刊於 The Guardian）",
+      "url": "https://www.theguardian.com/artanddesign/2013/feb/17/architecture-misogyny-zaha-hadid",
+      "year": 2013,
+      "lang": "en"
+    },
+    {
+      "id": "hadid",
+      "original": "I don't want to be seen as an outsider necessarily, but it means I can carry on with experimentation and innovation. Having to fight hard has made me a better architect.",
+      "zh": "我並不特別想被視為局外人，但身為局外人意味著我可以繼續進行實驗與創新。正因為必須奮力拼搏，才讓我成為一個更好的建築師。",
+      "source": "The Times, cited in TIME, '8 Inspiring Zaha Hadid Quotes on Success', 31 March 2016",
+      "sourceZh": "《The Times》訪談，經 TIME 2016 年專文轉引",
+      "url": "https://time.com/4278414/zaha-hadid-quotes/",
+      "year": 2016,
+      "lang": "en"
+    },
+    {
+      "id": "hadid",
+      "original": "Women are always told, 'You're not going to make it, it's too difficult, you can't do that, don't enter this competition, you'll never win it.' They need confidence in themselves and people around them to help them to get on.",
+      "zh": "女性總是被告知：『你辦不到的、這太難了、你做不來、別參加這個競圖、你永遠贏不了。』她們需要對自己有信心，也需要身邊的人支持，才能往前走。",
+      "source": "The Telegraph, cited in TIME, '8 Inspiring Zaha Hadid Quotes on Success', 31 March 2016",
+      "sourceZh": "《The Telegraph》訪談，經 TIME 2016 年專文轉引",
+      "url": "https://time.com/4278414/zaha-hadid-quotes/",
+      "year": 2016,
+      "lang": "en"
+    },
+    {
+      "id": "pei",
+      "original": "I believe that architecture is a pragmatic art. To become art it must be built on a foundation of necessity.",
+      "zh": "我相信建築是一門務實的藝術。要成為藝術，它必須建立在必要性的基礎上。",
+      "source": "Pritzker Prize acceptance speech, 16 May 1983",
+      "sourceZh": "普立茲克獎得獎致詞，1983",
+      "url": "https://www.pritzkerprize.com/sites/default/files/inline-files/IM_Pei_Acceptance_Speech_1983.pdf",
+      "year": 1983,
+      "lang": "en"
+    },
+    {
+      "id": "pei",
+      "original": "Architects by design investigate the play of volumes in light, explore the mysteries of movement in space, examine the measure that is scale and proportion, and above all, they search for that special quality that is the spirit of the place as no building exists alone.",
+      "zh": "建築師在設計中探討光與量體的交互作用，探索空間中運動的奧祕，檢視尺度與比例，而最重要的是，去尋找那份獨特的場所精神——因為沒有一棟建築是獨自存在的。",
+      "source": "Pritzker Prize acceptance speech, 16 May 1983",
+      "sourceZh": "普立茲克獎得獎致詞，1983",
+      "url": "https://www.pritzkerprize.com/sites/default/files/inline-files/IM_Pei_Acceptance_Speech_1983.pdf",
+      "year": 1983,
+      "lang": "en"
+    },
+    {
+      "id": "pei",
+      "original": "Let us all be attentive to new ideas, to advancing means, to dawning needs, to impetuses of change so that we may achieve, beyond architectural originality, a harmony of spirit in the service of man.",
+      "zh": "讓我們都留意新的想法、進步的方法、萌發的需求，以及推動改變的力量，好讓我們在建築的原創之外，更能達成一種服務於人的精神和諧。",
+      "source": "Pritzker Prize acceptance speech, 16 May 1983",
+      "sourceZh": "普立茲克獎得獎致詞，1983",
+      "url": "https://www.pritzkerprize.com/sites/default/files/inline-files/IM_Pei_Acceptance_Speech_1983.pdf",
+      "year": 1983,
+      "lang": "en"
+    },
+    {
+      "id": "pei",
+      "original": "The practice of architecture is a collective enterprise, with many individuals of various disciplines and talents working closely together.",
+      "zh": "建築的實踐是一項集體事業，需要許多來自不同領域、懷有不同才能的人密切合作。",
+      "source": "Pritzker Prize acceptance speech, 16 May 1983",
+      "sourceZh": "普立茲克獎得獎致詞，1983",
+      "url": "https://www.pritzkerprize.com/sites/default/files/inline-files/IM_Pei_Acceptance_Speech_1983.pdf",
+      "year": 1983,
+      "lang": "en"
+    },
+    {
+      "id": "pei",
+      "original": "For me the important distinction is between a stylistic approach to the design; and an analytical approach giving the process of due consideration to time, place, and purpose.",
+      "zh": "對我而言，重要的區別在於：一種是從風格出發的設計取徑；另一種則是分析性的取徑，在過程中充分考量時間、場所與目的。",
+      "source": "Gero von Boehm, Conversations with I. M. Pei: Light Is the Key (Prestel, 2000), p.113; excerpt also quoted in thelink.berlin",
+      "sourceZh": "Gero von Boehm《Conversations with I. M. Pei: Light Is the Key》，2000，第113頁",
+      "url": "https://thelink.berlin/2018/09/japan-koka-kyoto-ieoh-ming-pei-pritzker-preistraeger-miho-museum-architektur/",
+      "year": 2000,
+      "lang": "en"
+    },
+    {
+      "id": "koolhaas",
+      "original": "Architecture has a serious problem today in that people who are not alike don't communicate.",
+      "zh": "建築如今面臨一個嚴重的問題：彼此不相似的人之間並不溝通。",
+      "source": "AIA Convention keynote, reported by Dezeen, 24 May 2016",
+      "sourceZh": "AIA 年會專題演講，Dezeen 報導，2016",
+      "url": "https://www.dezeen.com/2016/05/24/rem-koolhaas-architecture-serious-problem-communication-oma-american-institute-architects-aia-convention/",
+      "year": 2016,
+      "lang": "en"
+    },
+    {
+      "id": "koolhaas",
+      "original": "Architecture stands with one leg in a world that's 3,000 years old and another leg in the 21st century. This almost ballet-like stretch makes our profession surprisingly deep.",
+      "zh": "建築一隻腳站在三千年歷史的世界裡，另一隻腳站在二十一世紀。這種近乎芭蕾般的伸展，讓我們這一行出奇地有深度。",
+      "source": "AIA Convention keynote, reported by Dezeen, 24 May 2016",
+      "sourceZh": "AIA 年會專題演講，Dezeen 報導，2016",
+      "url": "https://www.dezeen.com/2016/05/24/rem-koolhaas-architecture-serious-problem-communication-oma-american-institute-architects-aia-convention/",
+      "year": 2016,
+      "lang": "en"
+    },
+    {
+      "id": "koolhaas",
+      "original": "We discovered that, unbeknown to us, a large part of the world's service is under a particular regime of preservation and therefore cannot be changed. That made us suddenly aware that the world is now divided into areas that change extremely quickly and areas that cannot change.",
+      "zh": "我們發現，在我們毫不知情的情況下，世界上很大一部分地表已被納入某種保存的體制之下，因而無法被改變。這讓我們突然意識到，如今的世界被劃分為兩種區域：變化極快的區域，以及無法變化的區域。",
+      "source": "Dezeen interview on preservation and the countryside, 28 November 2013 (wording as published; 'world's service' appears thus in the transcript)",
+      "sourceZh": "Dezeen 訪談（保存與鄉間），2013",
+      "url": "https://www.dezeen.com/2013/11/28/rem-koolhaas-countryside-preservation-movie-interview/",
+      "year": 2013,
+      "lang": "en"
+    },
+    {
+      "id": "koolhaas",
+      "original": "I've absolutely never thought about money or economic issues. But as an architect I think this is a strength. It allows me to be irresponsible and to invest in my work.",
+      "zh": "我從來沒有真正考慮過金錢或經濟問題。但身為建築師，我認為這是一種優勢：它讓我可以不計後果，並且全心投入我的工作。",
+      "source": "Smithsonian Magazine, September 2012, full reprint at Archinect",
+      "sourceZh": "《Smithsonian Magazine》，2012年9月（Archinect 全文轉載）",
+      "url": "https://archinect.com/news/article/55799217/why-is-rem-koolhaas-the-world-s-most-controversial-architect",
+      "year": 2012,
+      "lang": "en"
+    },
+    {
+      "id": "koolhaas",
+      "original": "Running against the current and running with the current. Sometimes running with the current is underestimated. The acceptance of certain realities doesn't preclude idealism. It can lead to certain breakthroughs.",
+      "zh": "逆流而行，也順流而行。有時，順流而行被低估了。接受某些現實並不排斥理想主義——它反而可能帶來某些突破。",
+      "source": "Smithsonian Magazine, September 2012, full reprint at METALOCUS",
+      "sourceZh": "《Smithsonian Magazine》，2012年9月（METALOCUS 全文轉載）",
+      "url": "https://www.metalocus.es/en/news/why-rem-koolhaas-worlds-most-controversial-architect",
+      "year": 2012,
+      "lang": "en"
+    },
+    {
+      "id": "sejima",
+      "original": "In our early work, we were very interested in the program of the building, in understanding the social aspects of what happens inside. But now I think the program itself is not as important as connecting the building to the environment, to its surroundings.",
+      "zh": "在我們早期的作品裡，我們非常關注建築的使用機能，想理解內部所發生之事的社會面向。但現在我認為，機能本身並不如把建築與環境、與其周遭連結起來那麼重要。",
+      "source": "Interview by Julian Rose, from Building Culture (Princeton Architectural Press, 2024), published on Scratching the Surface, 3 September 2024",
+      "sourceZh": "Julian Rose 訪談，收錄於《Building Culture》，2024（刊於 Scratching the Surface）",
+      "url": "https://scratchingthesurface.fm/stories/kazuo-sejima-interview",
+      "year": 2024,
+      "lang": "en"
+    },
+    {
+      "id": "sejima",
+      "original": "A museum building should be like a city. It's boring to immediately understand everything. But it should not be impossible to understand, either.",
+      "zh": "美術館建築應該像一座城市。若一下子就把一切都看懂，那很無趣；但也不該讓人完全無法理解。",
+      "source": "Interview by Julian Rose, from Building Culture (Princeton Architectural Press, 2024), published on Scratching the Surface, 3 September 2024",
+      "sourceZh": "Julian Rose 訪談，收錄於《Building Culture》，2024（刊於 Scratching the Surface）",
+      "url": "https://scratchingthesurface.fm/stories/kazuo-sejima-interview",
+      "year": 2024,
+      "lang": "en"
+    },
+    {
+      "id": "sejima",
+      "original": "It was a mistake to treat them as separate entities in the first place and then try to join them together.",
+      "zh": "一開始就把內部與外部當成兩個分離的實體、然後再試著把它們接合起來，這本身就是個錯誤。",
+      "source": "El Croquis 205 (SANAA I), conversation with Maki Onishi, 26 October 2020 (referring to interior and exterior)",
+      "sourceZh": "《El Croquis》205 期，與大西麻貴對談，2020（談室內與室外）",
+      "url": "https://elcroquis.es/en/blogs/news/205_sanaa_interview",
+      "year": 2020,
+      "lang": "en"
+    },
+    {
+      "id": "sejima",
+      "original": "If everything in the universe is made of points, a high density of points can be something like a wall, and reducing the density of the points in the wall can turn it into a space.",
+      "zh": "如果宇宙間的萬物都由點構成，那麼高密度的點就能形成像牆一般的東西，而降低牆中點的密度，就能讓它轉化為空間。",
+      "source": "El Croquis 205 (SANAA I), conversation with Maki Onishi, 26 October 2020",
+      "sourceZh": "《El Croquis》205 期，與大西麻貴對談，2020",
+      "url": "https://elcroquis.es/en/blogs/news/205_sanaa_interview",
+      "year": 2020,
+      "lang": "en"
+    },
+    {
+      "id": "sejima",
+      "original": "私が作るものは、その人その人が思い思いに使っていけるような、楽しめるものになったらいいなと思っています。",
+      "zh": "我希望自己創造出來的東西，是每個人都能依自己的心意去使用、去享受的事物。",
+      "source": "妹島和世インタビュー, FASHIONPOST, 2023",
+      "sourceZh": "《FASHIONPOST》妹島和世訪談，2023",
+      "url": "https://fashionpost.jp/portraits/176591",
+      "year": 2023,
+      "lang": "ja"
+    }
+  ]
+}

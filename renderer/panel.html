@@ -12,6 +12,7 @@
     <button class="tab active" data-tab="chat">聊天</button>
     <button class="tab" data-tab="folders">資料夾</button>
     <button class="tab" data-tab="tasks">任務</button>
+    <button class="tab" data-tab="quotes">名言</button>
     <button class="tab" data-tab="settings">設定</button>
   </nav>
 
@@ -53,6 +54,17 @@
     <ul class="task-list" id="taskList"></ul>
   </section>
 
+
+  <!-- 名言：目前大師的查證引言（與問候語分開） -->
+  <section class="panel-view" id="view-quotes">
+    <div class="section-head">
+      <h2>大師名言 <span id="quoteMaster" class="progress-badge"></span></h2>
+      <button id="quoteRandom">隨機說一句</button>
+    </div>
+    <p class="hint">以下為查證過的真實引言（訪談、著作或得獎致詞），與桌寵啟動時的原創問候語不同。</p>
+    <ul class="quote-list" id="quoteList"></ul>
+  </section>
+
   <!-- 設定 -->
   <section class="panel-view" id="view-settings">
     <h2>選擇你的大師</h2>
@@ -83,9 +95,14 @@
 
     <h2 class="mt">提醒設定</h2>
     <label class="field">
-      提醒間隔（分鐘，0 = 關閉）
+      工作進度提醒間隔（分鐘，0 = 關閉）
       <input type="number" id="setReminder" min="0" step="1" />
     </label>
+    <label class="field">
+      名言氣泡間隔（分鐘，0 = 關閉；預設 20）
+      <input type="number" id="setQuoteInterval" min="0" step="1" />
+    </label>
+    <p class="hint">也可在桌寵上按右鍵，或到「名言」分頁點選，立即讓大師說一句。</p>
 
     <button id="saveSettings" class="primary">儲存設定</button>
     <span id="saveStatus" class="save-status"></span>

@@ -186,6 +186,75 @@ taskInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') addTask();
 });
 
+
+// ---------------------------------------------------------------------------
+// 名言
+// ---------------------------------------------------------------------------
+const quoteList = document.getElementById('quoteList');
+const quoteMaster = document.getElementById('quoteMaster');
+
+function renderQuotes(payload) {
+  if (!quoteList) return;
+  quoteList.innerHTML = '';
+  const name = (payload && payload.nameZh) || '';
+  if (quoteMaster) quoteMaster.textContent = name;
+  const quotes = (payload && payload.quotes) || [];
+  if (!quotes.length) {
+    quoteList.innerHTML = '<li class="empty">這位大師目前還沒有收錄名言。</li>';
+    return;
+  }
+  quotes.forEach((q, index) => {
+    const li = document.createElement('li');
+    li.className = 'quote-card';
+
+    const zh = document.createElement('div');
+    zh.className = 'quote-zh';
+    zh.textContent = '「' + q.zh + '」';
+
+    const orig = document.createElement('div');
+    orig.className = 'quote-orig';
+    orig.textContent = q.original || '';
+
+    const src = document.createElement('div');
+    src.className = 'quote-src';
+    const srcLabel = document.createElement('span');
+    srcLabel.textContent = (q.sourceZh || q.source || '') + (q.url ? '  ·  ' : '');
+    src.appendChild(srcLabel);
+    if (q.url) {
+      const a = document.createElement('button');
+      a.type = 'button';
+      a.textContent = '開啟來源';
+      a.addEventListener('click', () => window.api.openExternal(q.url));
+      src.appendChild(a);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'quote-actions';
+    const speakBtn = document.createElement('button');
+    speakBtn.textContent = '讓大師說這句';
+    speakBtn.addEventListener('click', () => window.api.speakQuote(index));
+    actions.appendChild(speakBtn);
+
+    li.appendChild(zh);
+    if (q.original) li.appendChild(orig);
+    li.appendChild(src);
+    li.appendChild(actions);
+    quoteList.appendChild(li);
+  });
+}
+
+async function loadQuotes(id) {
+  renderQuotes(await window.api.listQuotes(id));
+}
+
+const quoteRandom = document.getElementById('quoteRandom');
+if (quoteRandom) {
+  quoteRandom.addEventListener('click', () => window.api.speakRandomQuote());
+}
+if (window.api.onCharacterChanged) {
+  window.api.onCharacterChanged((id) => { loadQuotes(id); });
+}
+
 // ---------------------------------------------------------------------------
 // 設定
 // ---------------------------------------------------------------------------
@@ -194,6 +263,7 @@ const setBaseUrl = document.getElementById('setBaseUrl');
 const setModel = document.getElementById('setModel');
 const setApiKey = document.getElementById('setApiKey');
 const setReminder = document.getElementById('setReminder');
+const setQuoteInterval = document.getElementById('setQuoteInterval');
 const envHint = document.getElementById('envHint');
 const saveStatus = document.getElementById('saveStatus');
 const charPicker = document.getElementById('charPicker');
@@ -234,6 +304,7 @@ async function loadSettings() {
   setModel.value = s.model;
   setApiKey.value = s.apiKey;
   setReminder.value = s.reminderIntervalMinutes;
+  if (setQuoteInterval) setQuoteInterval.value = s.quoteIntervalMinutes;
   selectedCharId = s.characterId || selectedCharId;
   renderCharPicker();
 
@@ -253,6 +324,7 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
     model: setModel.value.trim(),
     apiKey: setApiKey.value,
     reminderIntervalMinutes: Number(setReminder.value) || 0,
+    quoteIntervalMinutes: Number(setQuoteInterval && setQuoteInterval.value),
     characterId: selectedCharId
   });
   saveStatus.textContent = '已儲存 ✓';
@@ -267,4 +339,5 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
   renderChanges(await window.api.listChanges());
   renderTasks(await window.api.listTasks());
   await loadSettings();
+  await loadQuotes(selectedCharId);
 })();

@@ -12,6 +12,13 @@ contextBridge.exposeInMainWorld('api', {
   onCharacter: (cb) => ipcRenderer.on('pet:character', (_e, payload) => cb(payload)),
   onPose: (cb) => ipcRenderer.on('pet:pose', (_e, pose) => cb(pose)),
   setCharacter: (id) => ipcRenderer.invoke('character:set', id),
+  onCharacterChanged: (cb) => ipcRenderer.on('character:changed', (_e, id) => cb(id)),
+
+  // --- 名言 ---
+  listQuotes: (id) => ipcRenderer.invoke('quotes:list', id),
+  speakQuote: (index) => ipcRenderer.invoke('quotes:speak', index),
+  speakRandomQuote: () => ipcRenderer.invoke('quotes:speak-random'),
+  openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
 
   // --- 資料夾監看 ---
   pickFolders: () => ipcRenderer.invoke('folders:pick'),

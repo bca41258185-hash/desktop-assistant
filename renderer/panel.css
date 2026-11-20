@@ -211,3 +211,32 @@ button.primary:hover, button#chatSend:hover { background: var(--graphite-hi); }
 .char-thumb svg { width: 72px; height: 80px; }
 .char-name-zh { font-size: 12px; font-weight: 700; color: var(--ink); margin-top: 2px; }
 .char-name-en { font-size: 10px; color: var(--muted); letter-spacing: 0.3px; }
+
+/* --- 名言列表 --- */
+.quote-list { list-style: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.quote-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px 12px;
+  margin-top: 10px;
+}
+.quote-zh { font-size: 14px; line-height: 1.65; color: var(--ink); }
+.quote-orig {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #6b6a62;
+  font-style: italic;
+}
+.quote-src {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+  word-break: break-all;
+}
+.quote-src a { color: var(--graphite); text-decoration: none; }
+.quote-src a:hover { text-decoration: underline; }
+.quote-actions { margin-top: 8px; }
+.quote-actions button { font-size: 12px; padding: 4px 10px; }
