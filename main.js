@@ -786,7 +786,7 @@ function remarkTickFor(characterId) {
 }
 
 // --- 空閒時，在場的助手彼此聊天 ---
-const CHAT_FIRST_IDLE_MS = 60 * 1000;                 // 大家都閒下來多久後開始第一段
+const CHAT_FIRST_IDLE_MS = 30 * 1000;                 // 大家都閒下來多久後開始第一段
 const CHAT_GAP_MS = [3 * 60 * 1000, 6 * 60 * 1000];   // 之後每隔 3～6 分鐘聊一段
 const CHAT_LINE_MS = 5000;                            // 一句話之後隔多久接下一句
 let chatLastBusyAt = Date.now();
