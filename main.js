@@ -386,7 +386,8 @@ function askNextQuestion(id) {
     text: q.question,
     attribution: st.questions.length > 1 ? `第 ${st.index + 1} 題，共 ${st.questions.length} 題` : '',
     ai: true, sticky: true, action: 'choice', requestId: id,
-    choices: q.options.map((label, i) => ({ id: 'opt' + i, label }))
+    choices: q.options.map((label, i) => ({ id: 'opt' + i, label })),
+    inputPlaceholder: '或自己打字回答…'
   });
 }
 
@@ -404,7 +405,7 @@ function permLog(msg) {
 `); } catch (e) { /* ignore */ }
 }
 
-function answerPermission(id, choice, answers) {
+function answerPermission(id, choice, answers, message) {
   permLog(`${id} answer=${choice}${answers ? '+answers' : ''} pending=${pendingPermissions.has(id)}`);
   pendingQuestions.delete(id);
   if (!/^[\w-]+$/.test(String(id || '')) || !pendingPermissions.delete(id)) return;
@@ -416,7 +417,7 @@ function answerPermission(id, choice, answers) {
       if (choice !== 'pass') focusClaudeWindow();
       return;
     }
-    fs.writeFileSync(path.join(dir, id + '.answer.json'), JSON.stringify(answers ? { choice, answers } : { choice }));
+    fs.writeFileSync(path.join(dir, id + '.answer.json'), JSON.stringify(Object.assign({ choice }, answers ? { answers } : {}, message ? { message } : {})));
   } catch (e) {
     console.error('寫入權限回答失敗:', e.message);
   }
@@ -436,7 +437,8 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
       text: `可以用 ${request.tool} 嗎？`,
       attribution: request.summary,
       ai: true, sticky: true, action: 'choice', requestId: request.id,
-      choices: [{ id: 'allow', label: '允許' }, { id: 'deny', label: '拒絕' }]
+      choices: [{ id: 'allow', label: '允許' }, { id: 'deny', label: '拒絕' }],
+      inputPlaceholder: '或告訴 Claude 改怎麼做…'
     });
     return;
   }
@@ -574,19 +576,23 @@ function registerIpc() {
   ipcMain.on('panel:toggle', () => togglePanel());
   ipcMain.on('pet:menu', () => showPetMenu());
   ipcMain.on('claude:focus', () => focusClaudeWindow());
-  ipcMain.on('pet:choice', (e, { requestId, choice }) => {
+  ipcMain.on('pet:choice', (e, { requestId, choice, text }) => {
     permLog(`${requestId} clicked ${choice}`);
+    const typed = choice === 'text' ? String(text || '').trim().slice(0, 2000) : '';
     // Claude 的選擇題：記下這題的答案，還有下一題就繼續問，問完一次回覆
     const st = pendingQuestions.get(requestId);
     if (st) {
       const q = st.questions[st.index];
-      const label = q.options[Number(String(choice).replace('opt', ''))];
+      // 自己打字的回答直接當成這題的答案（等同 Claude 畫面上的「其他」）
+      const label = typed || q.options[Number(String(choice).replace('opt', ''))];
       if (label === undefined) return answerPermission(requestId, 'pass');
       st.answers[q.question] = label;
       st.index += 1;
       if (st.index < st.questions.length) return askNextQuestion(requestId);
       return answerPermission(requestId, 'allow', st.answers);
     }
+    // 權限詢問時打字 = 不允許這一步，並把你的話交給 Claude（等同 Claude 畫面上「告訴它改怎麼做」）
+    if (typed) return answerPermission(requestId, 'deny', null, typed);
     answerPermission(requestId, choice === 'allow' ? 'allow' : choice === 'deny' ? 'deny' : 'pass');
   });
 
@@ -972,7 +978,7 @@ app.whenReady().then(() => {
     saveConfig();
     setTimeout(() => {
       if (!panelWindow.isVisible()) panelWindow.show();
-      speak({ text: '點我一下開面板，右鍵有選單。先按「＋ 加入對話」吧。', duration: 15000 });
+      speak({ text: '點我兩下開面板，右鍵有選單。先按「＋ 加入對話」吧。', duration: 15000 });
     }, 7000);
   }
 

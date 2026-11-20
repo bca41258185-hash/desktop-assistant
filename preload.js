@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   togglePanel: () => ipcRenderer.send('panel:toggle'),
   showPetMenu: () => ipcRenderer.send('pet:menu'),
   focusClaude: () => ipcRenderer.send('claude:focus'),
-  answerChoice: (requestId, choice) => ipcRenderer.send('pet:choice', { requestId, choice }),
+  answerChoice: (requestId, choice, text) => ipcRenderer.send('pet:choice', { requestId, choice, text }),
   onDismissReply: (cb) => ipcRenderer.on('pet:dismiss-reply', () => cb()),
   onSpeak: (cb) => ipcRenderer.on('pet:speak', (_e, text) => cb(text)),
   // 角色與姿勢

@@ -32,6 +32,21 @@ const bubbleAttrEl = bubbleEl.querySelector('.bubble-attr');
 const bubbleImgEl = bubbleEl.querySelector('.bubble-img');
 const bubbleHintEl = document.getElementById('bubbleHint');
 const bubbleChoicesEl = document.getElementById('bubbleChoices');
+const bubbleInputEl = document.getElementById('bubbleInput');
+const bubbleTextInput = document.getElementById('bubbleTextInput');
+if (bubbleInputEl) {
+  bubbleInputEl.addEventListener('click', (e) => e.stopPropagation());
+  bubbleInputEl.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = bubbleTextInput.value.trim();
+    const id = bubbleInputEl.dataset.requestId;
+    if (!text || !id) return;
+    if (window.api.answerChoice) window.api.answerChoice(id, 'text', text);
+    hideBubble();
+  });
+  // 中文輸入法選字時的 Enter 不算送出
+  bubbleTextInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.isComposing) e.stopPropagation(); });
+}
 let bubbleTimer = null;
 let stickyOpen = false;
 let stickyAction = '';   // 'confirm'：點一下就收起；'reply'：點一下跳到 Claude 去回覆
@@ -87,6 +102,14 @@ function showBubble(payload) {
     bubbleChoicesEl.classList.toggle('stack', choices.length > 2 || choices.some((c) => String(c.label).length > 6));
     bubbleChoicesEl.hidden = !choices.length;
   }
+  // 打字回覆：選項之外也可以自己輸入
+  if (bubbleInputEl) {
+    const canType = stickyAction === 'choice' && !!payload.inputPlaceholder;
+    bubbleInputEl.hidden = !canType;
+    bubbleInputEl.dataset.requestId = canType ? payload.requestId : '';
+    bubbleTextInput.value = '';
+    bubbleTextInput.placeholder = canType ? payload.inputPlaceholder : '';
+  }
   bubbleEl.classList.toggle('sticky', sticky);
   bubbleEl.classList.toggle('confirm', stickyAction === 'confirm');
   bubbleEl.classList.toggle('reply', stickyAction === 'reply' || stickyAction === 'choice');
@@ -107,6 +130,7 @@ function hideBubble() {
   bubbleEl.classList.remove('show', 'sticky', 'confirm', 'reply');
   if (bubbleHintEl) bubbleHintEl.hidden = true;
   if (bubbleChoicesEl) bubbleChoicesEl.hidden = true;
+  if (bubbleInputEl) bubbleInputEl.hidden = true;
   if (window.api.setBubbleOpen) window.api.setBubbleOpen(false);
 }
 // 點泡泡本身就是確認；等你回覆的泡泡點了會把 Claude 視窗叫到最前面
@@ -191,6 +215,17 @@ window.addEventListener('mousemove', (e) => {
 window.addEventListener('mouseup', () => {
   if (!dragging) return;
   dragging = false;
-  // 位移很小 → 視為點擊 → 開/關面板
-  if (moved < 5) window.api.togglePanel();
+  if (moved >= 5) return;                 // 有移動 = 拖曳，不算點擊
+  // 點一下 = 下一句名言；快速點兩下 = 打開面板
+  if (clickTimer) {
+    clearTimeout(clickTimer);
+    clickTimer = null;
+    window.api.togglePanel();
+  } else {
+    clickTimer = setTimeout(() => {
+      clickTimer = null;
+      if (window.api.speakRandomQuote) window.api.speakRandomQuote();
+    }, 280);
+  }
 });
+let clickTimer = null;

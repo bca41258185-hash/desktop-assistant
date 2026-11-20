@@ -15,6 +15,10 @@
       <div class="bubble-text"></div>
       <div class="bubble-attr" hidden></div>
       <div id="bubbleChoices" class="bubble-choices" hidden></div>
+      <form id="bubbleInput" class="bubble-input" hidden>
+        <input type="text" id="bubbleTextInput" autocomplete="off" />
+        <button type="submit">送出</button>
+      </form>
       <div id="bubbleHint" class="bubble-hint" hidden></div>
     </div>
 
@@ -23,7 +27,7 @@
 
     <!-- 角色：由 pet.js 依所選大師注入 inline SVG（無外部圖檔） -->
     <div id="pet" class="pet" data-character="ando" data-pose="idle"
-         title="點一下開面板・拖曳可移動・右鍵有選單">
+         title="點一下：說一句名言・點兩下：打開面板・右鍵：選單">
       <div id="petArt"></div>
     </div>
   </div>

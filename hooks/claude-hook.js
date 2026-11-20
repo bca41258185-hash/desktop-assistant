@@ -149,7 +149,7 @@ function waitForAnswer(reqFile, toolInput) {
         return finish({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision } }, decision.updatedInput ? 'allow+answers' : 'allow');
       }
       if (ans && ans.choice === 'deny') {
-        return finish({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'deny', message: '使用者在桌面大師上按了「拒絕」。' } } }, 'deny');
+        return finish({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'deny', message: typeof ans.message === 'string' && ans.message ? '使用者沒有允許這一步，並說：' + ans.message : '使用者在桌面大師上按了「拒絕」。' } } }, 'deny');
       }
       if (ans || Date.now() > deadline) return finish(null, ans ? 'pass' : 'timeout');
       setTimeout(tick, 200);
