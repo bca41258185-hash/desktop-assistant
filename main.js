@@ -409,7 +409,7 @@ function askNextQuestion(id) {
   const q = st.questions[st.index];
   speak({
     text: q.question,
-    attribution: st.questions.length > 1 ? `第 ${st.index + 1} 題，共 ${st.questions.length} 題` : '',
+    attribution: [st.from, st.questions.length > 1 ? `第 ${st.index + 1} 題，共 ${st.questions.length} 題` : ''].filter(Boolean).join('・'),
     ai: true, sticky: true, action: 'choice', requestId: id,
     choices: q.options.map((label, i) => ({ id: 'opt' + i, label })),
     inputPlaceholder: '或自己打字回答…'
@@ -475,13 +475,16 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
     permLog(`${request.id} shown tool=${request.tool}`);
     pendingPermissions.add(request.id);
     setPetPose('idle');
+    // 同時追蹤好幾個對話時，註明是哪一個在問（只有一個就不囉嗦）
+    const from = composeTargets().length > 1 && s.title && s.title !== '（尚無指令）' ? '來自：' + clip(s.title, 24) : '';
     if (Array.isArray(request.questions) && request.questions.length) {
-      pendingQuestions.set(request.id, { questions: request.questions, index: 0, answers: {} });
+      pendingQuestions.set(request.id, { questions: request.questions, index: 0, answers: {}, from });
       askNextQuestion(request.id);
       return;
     }
     speak({
       text: permissionQuestion(request.tool, request.summary),
+      attribution: from,
       ai: true, sticky: true, action: 'choice', requestId: request.id,
       choices: [{ id: 'allow', label: '允許' }, { id: 'deny', label: '拒絕' }],
       inputPlaceholder: '不要做這步，改成…（打字）'
@@ -588,11 +591,11 @@ async function sendCompose(text, targetId) {
     clipboard.writeText(text);
     if (!meta || !/^local_[A-Za-z0-9-]+$/.test(meta.localId || '')) {
       focusClaudeWindow();
-      return say('已經複製好了，請到 Claude 按 Ctrl+V 貼上。');
+      return say('已經複製好了。請到 Claude 的輸入框按 Ctrl+V 貼上，再按 Enter 送出。');
     }
     await shell.openExternal('claude://code/continue?session=' + meta.localId);
     const r = await compose.pasteIntoClaude();
-    say(r === 'sent' ? '送出了。' : '已經複製好了，請到 Claude 按 Ctrl+V 貼上。');
+    say(r === 'sent' ? '送出了。' : '已經複製好了。請到 Claude 的輸入框按 Ctrl+V 貼上，再按 Enter 送出。');
   } catch (e) {
     console.error('送出訊息失敗:', e.message);
     say('沒送出去，請到 Claude 直接打字。');

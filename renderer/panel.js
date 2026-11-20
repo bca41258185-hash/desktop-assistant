@@ -479,7 +479,8 @@ function addPickerRow(s) {
   const text = el('div', 'ai-picker-text');
   text.appendChild(el('span', 'ai-picker-title', s.title));
   // 第二行：你在這個對話說的第一句話（標題是英文或「New session」時靠它辨認）
-  if (s.firstPrompt && s.firstPrompt !== s.title) text.appendChild(el('span', 'ai-picker-first', '「' + s.firstPrompt + '」'));
+  // 由別的對話自動開出來的對話，第一句是系統交辦文字，不是你說的話，不顯示
+  if (s.firstPrompt && s.firstPrompt !== s.title && !s.firstPrompt.startsWith('Background (')) text.appendChild(el('span', 'ai-picker-first', '「' + s.firstPrompt + '」'));
   text.appendChild(el('span', 'ai-picker-meta', timeAgo(s.mtime) + (s.parentTitle && !s.child ? '・來自「' + s.parentTitle + '」' : '')));
   li.appendChild(text);
   const btn = el('button', '', s.watched ? '已加入' : '加入');
