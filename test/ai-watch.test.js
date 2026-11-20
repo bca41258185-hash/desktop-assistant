@@ -691,7 +691,7 @@ test('主動說話：Claude 做事途中打的話放進待送信箱，回合結�
 test('角色看法：開放中的角色都有完整台詞；依 Claude 在做的事選句；不連續重複；封存角色不說話', () => {
   const { REMARKS, remarkFor, kindOf } = require('../data/remarks');
   const chars = require('../renderer/characters');
-  assert.deepStrictEqual(chars.ORDER.slice().sort(), ['laozi', 'mozi', 'zhuangzi'], '目前只開放三位');
+  assert.deepStrictEqual(chars.ORDER.slice().sort(), ['confucius', 'guiguzi', 'hanfeizi', 'laozi', 'mozi', 'zhuangzi'], '目前開放六位');
   assert.ok(chars.CHARACTERS.ando && chars.CHARACTERS.nietzsche, '封存的角色資料仍保留');
   for (const id of chars.ORDER) {
     assert.ok(REMARKS[id], '缺少 ' + id + ' 的台詞');
@@ -707,7 +707,8 @@ test('角色看法：開放中的角色都有完整台詞；依 Claude 在做的
   const one = remarkFor('mozi', { lastAction: '執行指令：x', rand: first });
   assert.notStrictEqual(remarkFor('mozi', { lastAction: '執行指令：x', rand: first, avoid: one }), one);
   assert.strictEqual(remarkFor('ando', { lastAction: '執行指令：x' }), '', '封存的角色不說話');
-  assert.strictEqual(Object.keys(require('../data/remarks-archived.json')).length, 18);
+  assert.strictEqual(Object.keys(require('../data/remarks-archived.json')).length, 16);
+  assert.ok(require('./quotes-check')(chars.ORDER), '開放中的角色都有收錄名言');
 });
 
 test('已安裝即時提醒時，跑很久的指令不會被時間推測誤報成「在等你」；Codex 沒有鉤子仍照舊推測', () => {
@@ -741,8 +742,10 @@ test('空閒閒聊：每段兩人輪流、每人至少五句；五種情境都�
       if (i > 0) assert.notStrictEqual(w, c.lines[i - 1][0], '同一個人不連說兩句');
     });
   }
-  // 三位角色兩兩之間，五種情境各至少一段
-  const pairs = [['laozi', 'zhuangzi'], ['mozi', 'zhuangzi'], ['laozi', 'mozi']];
+  // 開放中的角色兩兩之間，五種情境各至少一段
+  const pairs = [];
+  chars.ORDER.forEach((a, i) => chars.ORDER.slice(i + 1).forEach((b) => pairs.push([a, b])));
+  assert.strictEqual(pairs.length, 15);
   for (const pair of pairs) for (const scene of SCENES) {
     assert.ok(CHATS.some((c) => c.scene === scene && c.lines.every(([w]) => pair.includes(w))), pair.join('×') + ' 缺少 ' + scene);
   }

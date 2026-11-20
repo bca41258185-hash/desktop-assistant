@@ -243,7 +243,12 @@ function hideBubble() {
 }
 // 點泡泡本身就是確認；等你回覆的泡泡點了會把 Claude 視窗叫到最前面
 bubbleEl.addEventListener('click', () => {
-  if (!stickyOpen || stickyAction === 'choice') return;   // 選擇題要點選項才算
+  // 名言、看法、閒聊這類一般泡泡：點一下就關掉
+  if (!stickyOpen) {
+    if (bubbleEl.classList.contains('show')) hideBubble();
+    return;
+  }
+  if (stickyAction === 'choice') return;   // 選擇題要點選項才算
   const action = stickyAction;
   // 完成泡泡若還開著回覆框：點泡泡確認 = 不回覆，讓 Claude 馬上結束等待
   const rid = bubbleInputEl ? bubbleInputEl.dataset.requestId : '';
@@ -393,3 +398,9 @@ window.addEventListener('resize', reportShapeSoon);
 window.addEventListener('load', reportShapeSoon);
 setInterval(reportShape, 1000);    // 保險：萬一漏掉某次變化
 reportShapeSoon();
+
+// 點泡泡旁邊的空白處（視窗裡看得到的那一圈）也可以關掉一般泡泡；等你處理的泡泡不受影響
+document.getElementById('stage').addEventListener('click', (e) => {
+  if (e.target !== e.currentTarget) return;
+  if (!stickyOpen && bubbleEl.classList.contains('show')) hideBubble();
+});

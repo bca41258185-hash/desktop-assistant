@@ -225,6 +225,25 @@
         <path class="mouth-happy" display="none" d="M73 91 Q80 97 87 91" fill="none" stroke="#8a5547" stroke-width="2.4" stroke-linecap="round"/>`
     });
 
+    // 鬼谷子 — 山中隱士：灰白髮髻橫插木簪、垂到眼角的長白眉、長白鬚、青灰道袍；
+    // 手邊一枚陰陽相抱的圓（捭闔＝開與合）。無可靠畫像流傳，造型取自隱士畫像慣例。
+    const guiguzi = person({
+      motif: '<circle cx="22" cy="132" r="13" fill="#f3f0e6" stroke="#3a3a36" stroke-width="1.4"/>' +
+        '<path d="M22 119 A13 13 0 0 1 22 145 A6.5 6.5 0 0 1 22 132 A6.5 6.5 0 0 0 22 119 Z" fill="#2b2b2b"/>' +
+        '<circle cx="22" cy="125.5" r="1.9" fill="#2b2b2b"/><circle cx="22" cy="138.5" r="1.9" fill="#f3f0e6"/>',
+      robe: '#44525a', robeStroke: '#2b363c',
+      bodyExtra: crossCollar('#cfd6d2'),
+      back: '<path d="M52 56 Q50 30 80 27 Q110 30 108 56 L109 84 Q104 74 104 62 L56 62 Q56 74 51 84 Z" fill="#bdbab2"/>',
+      front: '<path d="M54 52 Q56 32 80 31 Q104 32 106 52 Q96 43 80 43 Q64 43 54 52 Z" fill="#bdbab2"/>' +
+        '<ellipse cx="80" cy="21" rx="10.5" ry="9.5" fill="#bdbab2" stroke="#93908a" stroke-width="1"/>' +
+        '<line x1="63" y1="23" x2="97" y2="19" stroke="#6b4a2a" stroke-width="2.6" stroke-linecap="round"/>',
+      brows: '<path d="M57 65 Q65 59 73 63 M87 63 Q95 59 103 65" stroke="#ecebe5" stroke-width="3.4" fill="none" stroke-linecap="round"/>' +
+        '<path d="M57 65 Q53 70 52 78 M103 65 Q107 70 108 78" stroke="#ecebe5" stroke-width="2.2" fill="none" stroke-linecap="round"/>',
+      eyes: calmEyes(72),
+      beard: longBeard('#e6e3db', 36),
+      mouth: mouth('#cdb9a6', 92)
+    });
+
     // 王陽明 — 明代烏紗帽（兩側帽翅）、紅色官袍與胸前補子、細長鬚；山中之花。
     const wangyangming = person({
       motif: '<path d="M22 152 Q20 138 23 126" stroke="#4c8a5a" stroke-width="2" fill="none"/>' +
@@ -394,6 +413,7 @@
       zhuangzi: { id: 'zhuangzi', nameZh: '莊子', nameEn: 'Zhuangzi', greeting: '放輕鬆，換個角度，路就寬了。', svg: zhuangzi },
       mozi: { id: 'mozi', nameZh: '墨子', nameEn: 'Mozi', greeting: '先把標準定好，再動手，做出來才實在。', svg: mozi },
       hanfeizi: { id: 'hanfeizi', nameZh: '韓非子', nameEn: 'Han Feizi', greeting: '規則講清楚，執行到位，就不會亂。', svg: hanfeizi },
+      guiguzi: { id: 'guiguzi', nameZh: '鬼谷子', nameEn: 'Guiguzi', greeting: '先看清楚對方要什麼，再開口也不遲。', svg: guiguzi },
       wangyangming: { id: 'wangyangming', nameZh: '王陽明', nameEn: 'Wang Yangming', greeting: '想清楚了就去做，在做之中再想得更清楚。', svg: wangyangming },
       socrates: { id: 'socrates', nameZh: '蘇格拉底', nameEn: 'Socrates', greeting: '我們先問一個問題：你真正想解決的是什麼？', svg: socrates },
       aristotle: { id: 'aristotle', nameZh: '亞里斯多德', nameEn: 'Aristotle', greeting: '好習慣是一次次做出來的，今天也從這裡開始。', svg: aristotle },
@@ -412,7 +432,7 @@
         style: '像一位循循善誘的思想前輩，用平實的話把道理講清楚，引導使用者自己想通'
       },
       characters,
-      order: ['confucius', 'mencius', 'xunzi', 'laozi', 'zhuangzi', 'mozi', 'hanfeizi', 'wangyangming',
+      order: ['confucius', 'mencius', 'xunzi', 'laozi', 'zhuangzi', 'mozi', 'hanfeizi', 'guiguzi', 'wangyangming',
         'socrates', 'aristotle', 'aurelius', 'seneca', 'descartes', 'kant', 'nietzsche']
     };
   }

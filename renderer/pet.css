@@ -353,3 +353,7 @@ html, body {
 /* 助手之間閒聊的小泡泡：窄而小，放在自己頭上 */
 .bubble.chat { max-width: 232px; padding: 8px 12px; }
 .bubble.chat .bubble-text { font-size: 21px !important; line-height: 1.4 !important; }
+
+/* 一般泡泡（名言、看法、閒聊）也可以點：點一下關掉 */
+.bubble.show { pointer-events: auto; cursor: pointer; }
+.bubble.show.sticky.reply, .bubble.show.sticky.compose { cursor: default; }

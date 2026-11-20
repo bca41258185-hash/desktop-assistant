@@ -330,7 +330,7 @@
   // 目前開放的角色。其他角色先「封存」：造型、名言、台詞都留著，只是不出現在選單裡。
   // 要重新開放某位角色，把他的 id 加回 ACTIVE_IDS 即可。
   // -------------------------------------------------------------------------
-  const ACTIVE_IDS = ['zhuangzi', 'laozi', 'mozi'];
+  const ACTIVE_IDS = ['zhuangzi', 'laozi', 'mozi', 'hanfeizi', 'guiguzi', 'confucius'];
   const ALL_CATEGORIES = CATEGORIES.slice();
   ALL_CATEGORIES.forEach((cat) => {
     cat.archivedOrder = cat.order.filter((id) => !ACTIVE_IDS.includes(id));

@@ -208,6 +208,12 @@ const CHATS = [
   ]) }
 ];
 
+// 其餘組合（韓非子、鬼谷子、孔子和每個人之間）放在 chats-more.json：
+// 每筆是 { scene, first, second, lines: [十句] }，first 先說、兩人輪流。
+require('./chats-more.json').forEach((c) => {
+  CHATS.push({ scene: c.scene, lines: talk(c.first, c.second, c.lines) });
+});
+
 const SCENES = ['done', 'longidle', 'night', 'morning', 'any'];
 
 /**
