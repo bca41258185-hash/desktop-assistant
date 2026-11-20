@@ -345,3 +345,7 @@ html, body {
 
 .compose-btn.panel-btn { right: auto; left: calc(50% - 116px); }
 .bubble-targets-label { font-size: 16px; color: #7a7a70; }
+
+.bubble-input-label { margin-top: 10px; font-size: 17px; line-height: 1.35; color: #5c5b54; }
+.bubble-input-label[hidden] { display: none; }
+.bubble-input-label + .bubble-input { margin-top: 4px; }

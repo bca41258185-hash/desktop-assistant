@@ -32,6 +32,7 @@ const bubbleAttrEl = bubbleEl.querySelector('.bubble-attr');
 const bubbleImgEl = bubbleEl.querySelector('.bubble-img');
 const bubbleHintEl = document.getElementById('bubbleHint');
 const bubbleChoicesEl = document.getElementById('bubbleChoices');
+const bubbleInputLabelEl = document.getElementById('bubbleInputLabel');
 const bubbleTargetsEl = document.getElementById('bubbleTargets');
 const bubbleSkipEl = document.getElementById('bubbleSkip');
 let composeTargetId = '';
@@ -146,6 +147,13 @@ function showBubble(payload) {
     bubbleInputEl.dataset.requestId = canType ? (payload.requestId || '') : '';
     bubbleTextInput.value = '';
     bubbleTextInput.placeholder = canType ? payload.inputPlaceholder : '';
+    const sendBtn = document.getElementById('bubbleSend');
+    if (sendBtn) sendBtn.textContent = (canType && payload.inputButton) || '送出';
+    // 輸入框上方的常駐說明（提示字一打字就看不到，重要的後果要一直看得到）
+    if (bubbleInputLabelEl) {
+      bubbleInputLabelEl.textContent = canType ? (payload.inputLabel || '') : '';
+      bubbleInputLabelEl.hidden = !(canType && payload.inputLabel);
+    }
     if (stickyAction === 'compose') setTimeout(() => bubbleTextInput.focus(), 150);
   }
   // 主動說話：有好幾個對話時，列出來讓使用者點要送到哪一個（預設第一個）
@@ -205,6 +213,7 @@ function hideBubble() {
   if (bubbleHintEl) bubbleHintEl.hidden = true;
   if (bubbleChoicesEl) bubbleChoicesEl.hidden = true;
   if (bubbleInputEl) bubbleInputEl.hidden = true;
+  if (bubbleInputLabelEl) bubbleInputLabelEl.hidden = true;
   if (bubbleTargetsEl) bubbleTargetsEl.hidden = true;
   if (bubbleSkipEl) bubbleSkipEl.hidden = true;
   if (window.api.setBubbleOpen) window.api.setBubbleOpen(false);

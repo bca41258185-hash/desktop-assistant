@@ -384,6 +384,11 @@ function clip(text, n) {
   return t.length > n ? t.slice(0, n) + '…' : t;
 }
 
+// 同時追蹤好幾個對話時，「完成」泡泡註明是哪一個做完了（只有一個就不寫）
+function doneFrom(s) {
+  return composeTargets().length > 1 && s.title && s.title !== '（尚無指令）' ? '做完的是：' + clip(s.title, 24) : '';
+}
+
 // 把「Claude 想用某個工具」說成白話（不出現 Bash、Edit 這類名稱）
 function permissionQuestion(tool, summary) {
   const what = clip(summary, 40);
@@ -412,7 +417,7 @@ function askNextQuestion(id) {
     attribution: [st.from, st.questions.length > 1 ? `第 ${st.index + 1} 題，共 ${st.questions.length} 題` : ''].filter(Boolean).join('・'),
     ai: true, sticky: true, action: 'choice', requestId: id,
     choices: q.options.map((label, i) => ({ id: 'opt' + i, label })),
-    inputPlaceholder: '或自己打字回答…'
+    inputLabel: '都不是？自己打字回答：', inputPlaceholder: '打字，按 Enter 送出'
   });
 }
 
@@ -459,6 +464,7 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
     setPetPose('happy');
     speak({
       text: petLine(s.lastTextFull || s.lastText, 44) || '完成了',
+      attribution: doneFrom(s),
       ai: true, sticky: true, action: 'confirm', requestId: id, inputPlaceholder: '回覆 Claude…'
     });
     // 20 秒內沒有開始打字，鉤子會自己結束；輸入框也跟著收起來
@@ -487,7 +493,7 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
       attribution: from,
       ai: true, sticky: true, action: 'choice', requestId: request.id,
       choices: [{ id: 'allow', label: '允許' }, { id: 'deny', label: '拒絕' }],
-      inputPlaceholder: '拒絕，並告訴 Claude 怎麼做…'
+      inputLabel: '不同意？打字告訴 Claude 要怎麼改：', inputPlaceholder: '打字告訴 Claude…', inputButton: '拒絕並送出'
     });
     return;
   }
@@ -511,7 +517,8 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
     }
   } else if (kind === 'start') {
     setPetPose('think');
-    speak({ text: `開始處理：${clip(s.lastPrompt, 30)}`, ai: true });
+    // 主句是「Claude 開始處理了」；你剛下的指令用小字放在下面（它是你說的話，不是大師說的）
+    speak({ text: 'Claude 開始處理了', attribution: s.lastPrompt ? '你說：' + clip(s.lastPrompt, 40) : '', ai: true, duration: 6000 });
   } else if (kind === 'waiting') {
     setPetPose('idle');
     // 等你回覆的泡泡也留著，點一下就跳到 Claude
@@ -528,7 +535,7 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
     } else {
       setPetPose('happy');
       // 「完成」要等使用者按確認才消失，不會自己不見，也不會被名言／提醒蓋掉
-      speak({ text: petLine(s.lastTextFull || s.lastText, 44) || '完成了', ai: true, sticky: true });
+      speak({ text: petLine(s.lastTextFull || s.lastText, 44) || '完成了', attribution: doneFrom(s), ai: true, sticky: true });
     }
   }
 }

@@ -560,6 +560,10 @@ function renderAi() {
     on.addEventListener('click', () => aiHookBtn.click());
     bar.appendChild(on);
     aiList.appendChild(bar);
+    // 開啟失敗時，原因直接寫在這裡（不要只寫在收起來的進階設定裡）
+    if (aiHookMsg && aiHookMsg.startsWith('失敗')) aiList.appendChild(el('div', 'ai-banner-msg bad', '沒有開成功。' + aiHookMsg.replace(/^失敗：/, '')));
+  } else if (hk.installed && aiHookMsg && aiHookMsg.startsWith('完成')) {
+    aiList.appendChild(el('div', 'ai-banner-msg ok', '✓ 即時提醒已開啟。'));
   }
   // 目前有動靜的對話（依檔名對應回加入的那一段）
   const live = new Map();
@@ -591,17 +595,25 @@ function renderAi() {
     body.appendChild(el('div', 'ai-row-title', (s && s.title && s.title !== '（尚無指令）') ? s.title : r.title));
     let line = '';
     if (s) {
-      if (s.status === 'waiting') line = 'Claude 在等你回答，看大師頭上的泡泡';
+      if (s.status === 'waiting') line = 'Claude 在等你回答。點這一列，打開那個對話去回答';
       else if (s.status === 'done') line = s.lastText || '';
       else if (s.status === 'working') line = s.lastAction || s.lastPrompt || '';
       if (line) body.appendChild(el('div', 'ai-row-line', line));
       body.appendChild(el('div', 'ai-row-time', timeAgo(s.lastActivity)));
     }
     row.appendChild(body);
+    // 等你回答的那一列可以點：直接開到那個對話
+    if (s && s.status === 'waiting' && window.api.focusClaude) {
+      row.classList.add('clickable');
+      row.addEventListener('click', () => window.api.focusClaude(r.id));
+    }
     if (r.removable) {
-      const rm = el('button', 'ai-row-remove', '從清單移除');
-      rm.title = '只是不再盯著它，不會影響 Claude 裡的對話';
-      rm.addEventListener('click', async () => {
+      const rm = el('button', 'ai-row-remove', '不再追蹤');
+      rm.title = '大師不再盯著這個對話；Claude 裡的對話不會被刪除';
+      rm.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        // 先問一次，並講清楚後果：只是不盯了，對話本身還在
+        if (!window.confirm('不再追蹤「' + r.title + '」？\n\n只是大師不再盯著它，Claude 裡的對話不會被刪除，之後也可以再加回來。')) return;
         aiState = await window.api.removeAiSession(r.id);
         renderAi();
       });

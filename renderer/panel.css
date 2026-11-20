@@ -448,3 +448,9 @@ details.advanced .ai-config { margin-top: 8px; }
 
 /* 「取消追蹤」用看得見的文字，避免被當成刪除對話 */
 .ai-row-remove { width: auto; height: auto; padding: 3px 8px; font-size: 11px; border-radius: 999px; border-color: var(--line); }
+
+.ai-banner-msg { margin: -4px 0 10px; padding: 6px 12px; font-size: 13px; border-radius: 8px; }
+.ai-banner-msg.bad { color: #a8342b; background: #fdeeee; border: 1px solid #e2b7b2; }
+.ai-banner-msg.ok { color: #2f6a3f; background: #e6f4e9; border: 1px solid #b9dcc1; }
+.ai-row.clickable { cursor: pointer; }
+.ai-row.clickable:hover { filter: brightness(0.98); }
