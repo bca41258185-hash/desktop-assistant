@@ -131,7 +131,7 @@ const PET_BIG = { width: 520, height: 640 };
 
 // 可以同時有好幾位助手：每位角色一個視窗，各自盯著分配給他的對話。
 //   pets：角色 id → { id, win, expanded, shift }
-//   主助手（設定裡選的角色）一定在場，負責名言、任務提醒，以及沒有特別分配的對話。
+//   名言、任務提醒這類不屬於任何對話的事，由 primaryPet()（主助手在場就是他，否則是第一位）負責。
 const pets = new Map();
 
 function primaryPet() {
@@ -266,14 +266,15 @@ function createPet(characterId, index, greeting) {
   return pet;
 }
 
-// 現在應該在場的助手：主助手 + 每個追蹤中對話被分配到的角色（不重複）
+// 現在應該在場的助手：每個追蹤中的對話被分配到的角色（不重複），一位盯一個對話。
+// 完全沒有追蹤對話時，才由主助手（設定裡選的角色）一個人站著。
 function wantedPetIds() {
-  const ids = [currentCharacterId()];
+  const ids = [];
   aiSessions().forEach((s) => {
     const c = characterOfSession(s.id);
     if (!ids.includes(c)) ids.push(c);
   });
-  return ids;
+  return ids.length ? ids : [currentCharacterId()];
 }
 
 // 讓畫面上的助手和設定一致：多的請走，少的請來
