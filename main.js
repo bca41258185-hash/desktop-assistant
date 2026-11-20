@@ -364,7 +364,7 @@ function onAiEvent({ kind, session: s, image, fromUser }) {
   if (kind === 'image') {
     if (petWindow && !petWindow.isDestroyed()) {
       petWindow.webContents.send('pet:speak', {
-        text: `「${s.projectName}」${fromUser ? '你貼的圖' : 'Claude 看的圖'}`,
+        text: fromUser ? '你貼的圖' : 'Claude 看的圖',
         image,
         duration: 15000
       });
