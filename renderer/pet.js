@@ -87,6 +87,9 @@ function showBubble(payload) {
   const sticky = !!(payload && payload.sticky);
   // 等使用者確認的泡泡還在時，只有 AI 對話的新訊息能取代它（名言、提醒不行）
   if (stickyOpen && !(payload && payload.ai)) return;
+  // 使用者正在回答（選擇題／允許拒絕）或正在打字（說話）時，不讓「開始處理」「完成」這類通知
+  // 把它蓋掉——否則按鈕和打到一半的字會突然消失。只有新的詢問（choice）可以取代。
+  if (stickyOpen && (stickyAction === 'choice' || stickyAction === 'compose') && !(payload && payload.action === 'choice')) return;
   if (payload && typeof payload === 'object') {
     text = payload.text || payload.zh || '';
     attr = payload.attribution || payload.sourceZh || '';

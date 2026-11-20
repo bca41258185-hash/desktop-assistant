@@ -487,7 +487,7 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
       attribution: from,
       ai: true, sticky: true, action: 'choice', requestId: request.id,
       choices: [{ id: 'allow', label: '允許' }, { id: 'deny', label: '拒絕' }],
-      inputPlaceholder: '不要做這步，改成…（打字）'
+      inputPlaceholder: '拒絕，並告訴 Claude 怎麼做…'
     });
     return;
   }
@@ -561,7 +561,7 @@ function composeTarget(id) {
 function openCompose() {
   const list = composeTargets();
   if (!list.length) {
-    speak({ text: '還沒有可以說話的對話。先按「📋 面板」，再按「＋ 加入對話」。', duration: 10000 });
+    speak({ text: '還沒有可以說話的對話。先按「📋 對話清單」，再按「＋ 加入對話」。', duration: 10000 });
     return;
   }
   speak({
@@ -1132,7 +1132,7 @@ app.whenReady().then(() => {
     saveConfig();
     setTimeout(() => {
       if (!panelWindow.isVisible()) panelWindow.show();
-      speak({ text: '按下面的「📋 面板」，再按「＋ 加入對話」。', duration: 20000 });
+      speak({ text: '面板打開了。請按面板上面的「＋ 加入對話」。', duration: 20000 });
     }, 7000);
   }
 

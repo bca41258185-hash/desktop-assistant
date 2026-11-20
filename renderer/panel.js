@@ -599,8 +599,8 @@ function renderAi() {
     }
     row.appendChild(body);
     if (r.removable) {
-      const rm = el('button', 'ai-row-remove', '取消追蹤');
-      rm.title = '不再追蹤這個對話';
+      const rm = el('button', 'ai-row-remove', '從清單移除');
+      rm.title = '只是不再盯著它，不會影響 Claude 裡的對話';
       rm.addEventListener('click', async () => {
         aiState = await window.api.removeAiSession(r.id);
         renderAi();
