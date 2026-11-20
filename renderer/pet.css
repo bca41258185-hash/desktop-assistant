@@ -251,6 +251,17 @@ html, body {
   0%, 100% { box-shadow: 0 5px 16px rgba(60, 60, 50, 0.22), 0 0 0 2px rgba(224, 168, 74, 0.4); }
   50%      { box-shadow: 0 5px 16px rgba(60, 60, 50, 0.22), 0 0 0 6px rgba(224, 168, 74, 0.85), 0 0 30px rgba(224, 168, 74, 0.9); }
 }
+/* 選擇題的選項：兩顆大按鈕 */
+.bubble.sticky.reply { cursor: default; }
+.bubble-choices { display: flex; gap: 12px; margin: 10px 0 4px; }
+.bubble-choices[hidden] { display: none; }
+.bubble-choice {
+  flex: 1; padding: 10px 0; font: inherit; font-size: 30px; font-weight: 700;
+  color: #fff; border: none; border-radius: 8px; cursor: pointer;
+}
+.bubble-choice.allow { background: #3f8f55; }
+.bubble-choice.deny { background: #b5483f; }
+.bubble-choice:hover { filter: brightness(1.12); }
 .bubble-hint {
   display: block; margin-top: 4px; text-align: right;
   font-size: 15px; color: #7a7a70;

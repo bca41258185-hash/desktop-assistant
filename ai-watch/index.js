@@ -414,6 +414,18 @@ function createAiWatcher(options) {
       apply(s, { type: 'waiting', message: m ? `需要你允許使用 ${m[1]}` : '需要你允許' }, false, at);
     } else if (ev.event === 'Stop') {
       apply(s, { type: 'turnEnd' }, false, at);
+    } else if (ev.event === 'PermissionRequest' && ev.request_id) {
+      // Claude 正在問「可以用這個工具嗎」，而且鉤子在等桌寵上的回答
+      let req = {};
+      try {
+        req = JSON.parse(fs.readFileSync(path.join(path.dirname(opt.hookEventsFile), 'permission', ev.request_id + '.json'), 'utf8'));
+      } catch (e) { return; }   // 請求檔已不在（已逾時或已回答）就不用再問
+      const tool = req.tool_name || ev.tool_name || '';
+      s.lastActivity = Math.max(s.lastActivity, at);
+      s.waitingMessage = `需要你允許使用 ${tool}`;
+      s.status = 'waiting';
+      s.notifiedWaiting = true;
+      onEvent({ kind: 'permission', session: publicSession(s), request: { id: String(ev.request_id), tool, summary: String(req.summary || '') } });
     }
     queueUpdate();
   }

@@ -394,12 +394,12 @@ test('安裝鉤子：保留原有設定與其他鉤子、先備份、重複安�
     const ours = s.hooks[ev].flatMap((g) => g.hooks).filter((h) => h.command.includes('hooks/claude-hook.js'));
     assert.strictEqual(ours.length, 1);
     assert.ok(ours[0].command.includes('/new/place/'));
-    assert.strictEqual(ours[0].timeout, 5);
+    assert.strictEqual(ours[0].timeout, ev === 'PermissionRequest' ? 90 : 5);
   }
   assert.strictEqual(installer.status(file).installed, true);
 
   const un = installer.uninstall({ file });
-  assert.strictEqual(un.removed, 3);
+  assert.strictEqual(un.removed, installer.EVENTS.length);
   assert.deepStrictEqual(JSON.parse(fs.readFileSync(file, 'utf8')), original);
   assert.strictEqual(installer.status(file).installed, false);
 });
@@ -518,4 +518,87 @@ test('圖片：使用者貼的圖與 Claude 讀取的圖都送給桌寵；啟動
     ['data:image/jpeg;base64,VE9PTA==', false]
   ]);
   assert.ok(!JSON.stringify(t.w.snapshot()).includes('base64'), '面板快照不含圖片資料');
+});
+
+// ---------------------------------------------------------------------------
+// 在泡泡上回答權限詢問（PermissionRequest）
+// ---------------------------------------------------------------------------
+const { spawn } = require('child_process');
+
+function runPermissionHook(dir, answer) {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const p = spawn(process.execPath, [HOOK, dir]);
+    let out = '';
+    p.stdout.on('data', (d) => { out += d; });
+    p.on('close', (code) => resolve({ code, out, ms: Date.now() - started }));
+    p.stdin.end(JSON.stringify({
+      hook_event_name: 'PermissionRequest', cwd: path.resolve('/x'), session_id: 'abc', transcript_path: '/a.jsonl',
+      tool_name: 'Bash', tool_input: { command: 'npm test' }
+    }));
+    if (!answer) return;
+    // 模擬桌寵：看到請求檔後寫入回答
+    const pdir = path.join(dir, 'permission');
+    const timer = setInterval(() => {
+      let names = [];
+      try { names = fs.readdirSync(pdir).filter((n) => n.endsWith('.json') && !n.endsWith('.answer.json')); } catch (e) { return; }
+      if (!names.length) return;
+      clearInterval(timer);
+      const req = JSON.parse(fs.readFileSync(path.join(pdir, names[0]), 'utf8'));
+      assert.deepStrictEqual([req.tool_name, req.summary], ['Bash', 'npm test']);
+      fs.writeFileSync(path.join(pdir, names[0].replace(/[.]json$/, '.answer.json')), JSON.stringify({ choice: answer }));
+    }, 50);
+  });
+}
+
+test('權限詢問：桌寵回答允許／拒絕 → 鉤子把決定回給 Claude；不回答（pass）→ 不輸出', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-perm-'));
+  fs.writeFileSync(path.join(dir, 'watch-projects.json'), JSON.stringify({ projects: [], sessions: ['abc'], answer: true }));
+  fs.writeFileSync(path.join(dir, 'app-alive'), 'x');
+
+  let r = await runPermissionHook(dir, 'allow');
+  assert.strictEqual(r.code, 0);
+  assert.deepStrictEqual(JSON.parse(r.out), { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } } });
+
+  r = await runPermissionHook(dir, 'deny');
+  assert.strictEqual(JSON.parse(r.out).hookSpecificOutput.decision.behavior, 'deny');
+
+  r = await runPermissionHook(dir, 'pass');
+  assert.deepStrictEqual([r.code, r.out], [0, '']);
+  assert.deepStrictEqual(fs.readdirSync(path.join(dir, 'permission')), [], '請求與回答檔用完就刪');
+  const evs = fs.readFileSync(path.join(dir, 'hook-events.jsonl'), 'utf8');
+  assert.ok(!evs.includes('npm test'), '事件紀錄不含指令內容');
+});
+
+test('權限詢問：桌寵沒開、或沒開啟「在泡泡上回答」時，鉤子立刻結束、不讓 Claude 空等', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-perm2-'));
+  fs.writeFileSync(path.join(dir, 'watch-projects.json'), JSON.stringify({ projects: [], sessions: ['abc'], answer: true }));
+  let r = await runPermissionHook(dir, null);            // 沒有 app-alive
+  assert.deepStrictEqual([r.code, r.out], [0, '']);
+  assert.ok(r.ms < 3000);
+
+  fs.writeFileSync(path.join(dir, 'app-alive'), 'x');
+  fs.writeFileSync(path.join(dir, 'watch-projects.json'), JSON.stringify({ projects: [], sessions: ['abc'] }));
+  r = await runPermissionHook(dir, null);                // 沒有 answer: true
+  assert.deepStrictEqual([r.code, r.out], [0, '']);
+  assert.ok(r.ms < 3000);
+  assert.ok(!fs.existsSync(path.join(dir, 'permission')));
+});
+
+test('權限詢問：監看器收到鉤子事件 → 發出 permission 事件（含工具與摘要），狀態變成等你', () => {
+  const hdir = fs.mkdtempSync(path.join(os.tmpdir(), 'aiwatch-perm-'));
+  const hookFile = path.join(hdir, 'hook-events.jsonl');
+  const t = setupWith({ projects: ['/p'], hookEventsFile: hookFile });
+  const f = path.join(t.root, enc('/p'), 's.jsonl');
+  append(f, [{ type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: '跑測試' } }]);
+  t.w._onAdd('claude', f, false);
+  fs.mkdirSync(path.join(hdir, 'permission'));
+  fs.writeFileSync(path.join(hdir, 'permission', 'r1.json'), JSON.stringify({ id: 'r1', tool_name: 'Bash', summary: 'npm test' }));
+  fs.writeFileSync(hookFile, '');
+  t.w._readHookEvents('skip');
+  append(hookFile, [{ event: 'PermissionRequest', cwd: '/p', transcript_path: f, request_id: 'r1', tool_name: 'Bash' }]);
+  t.w._readHookEvents();
+  const e = t.events.find((x) => x.kind === 'permission');
+  assert.deepStrictEqual(e.request, { id: 'r1', tool: 'Bash', summary: 'npm test' });
+  assert.strictEqual(e.session.status, 'waiting');
 });

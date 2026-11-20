@@ -6,14 +6,14 @@
 // ---------------------------------------------------------------------------
 const tabs = document.querySelectorAll('.tab');
 const views = document.querySelectorAll('.panel-view');
-tabs.forEach((tab) => {
-  tab.addEventListener('click', () => {
-    tabs.forEach((t) => t.classList.remove('active'));
-    views.forEach((v) => v.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('view-' + tab.dataset.tab).classList.add('active');
-  });
-});
+// 顯示某一頁；tabName 是上方要亮起的分頁（「更多」底下的子頁都算在「更多」）
+function showView(name, tabName) {
+  views.forEach((v) => v.classList.toggle('active', v.id === 'view-' + name));
+  tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === (tabName || name)));
+}
+tabs.forEach((tab) => tab.addEventListener('click', () => showView(tab.dataset.tab)));
+document.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => showView(b.dataset.open, 'more')));
+document.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', () => showView('more')));
 
 function fmtTime(iso) {
   try {
@@ -378,26 +378,9 @@ let aiState = { enabled: true, roots: null, watchProjects: [], hooks: {}, projec
 let aiHookMsg = '';
 
 function renderAiConfig() {
+  // 進階設定裡：追蹤整個資料夾的清單
   aiWatchList.innerHTML = '';
-  const list = aiState.watchProjects || [];
-  const sess = aiState.watchSessions || [];
-  if (!list.length && !sess.length) {
-    aiWatchList.appendChild(el('li', 'empty', '還沒有追蹤任何對話。按右上的「＋ 加入對話」選一段。'));
-  }
-  sess.forEach((s) => {
-    const li = el('li');
-    const name = el('span', 'ai-watch-path', '💬 ' + (s.title || s.id));
-    name.title = (s.cwd ? s.cwd + '\n' : '') + s.id;
-    li.appendChild(name);
-    const rm = el('button', '', '移除');
-    rm.addEventListener('click', async () => {
-      aiState = await window.api.removeAiSession(s.id);
-      renderAi();
-    });
-    li.appendChild(rm);
-    aiWatchList.appendChild(li);
-  });
-  list.forEach((p) => {
+  (aiState.watchProjects || []).forEach((p) => {
     const li = el('li');
     li.appendChild(el('span', 'ai-watch-path', '📁 ' + p));
     const rm = el('button', '', '移除');
@@ -417,13 +400,13 @@ function renderAiConfig() {
     aiHookStatus.textContent = '已開啟';
     aiHookStatus.className = 'ai-hook-status ok';
   } else {
-    aiHookStatus.textContent = h.partial ? '設定不完整' : '未開啟';
+    aiHookStatus.textContent = h.partial ? '需要重新開啟' : '未開啟';
     aiHookStatus.className = 'ai-hook-status';
   }
-  aiHookBtn.textContent = h.installed || h.partial ? '關閉' : '開啟';
+  aiHookBtn.textContent = h.installed ? '關閉' : (h.partial ? '重新開啟' : '開啟');
   aiHookHint.textContent = aiHookMsg || (h.installed
-    ? 'Claude 一需要你允許、或一做完，桌寵馬上提醒。沒反應時，重開那段對話一次。'
-    : '開啟後提醒更準、更快；不開也能用，只是用猜的（等超過 20 秒才提醒）。會在 Claude 的設定檔加一小段，隨時可關閉還原。');
+    ? 'Claude 一需要你、或一做完，桌寵馬上提醒。沒反應時，把那段對話關掉重開一次。'
+    : '開啟後提醒更快更準。會在 Claude 的設定檔加一小段，隨時可以關閉還原。');
 }
 
 // 「加入對話」：列出最近的 Claude Code 對話，點一下就加入追蹤
@@ -469,6 +452,7 @@ function addPickerRow(s) {
     btn.addEventListener('click', async () => {
       aiState = await window.api.addAiSession({ id: s.id, title: s.title, cwd: s.cwd });
       btn.textContent = '已加入';
+      aiPicker.hidden = true;   // 加完就收起清單，回到對話列表
       btn.disabled = true;
       li.className = 'watched';
       renderAi();
@@ -501,7 +485,7 @@ aiHookBtn.addEventListener('click', async () => {
 
 const AI_STATUS = {
   working: { text: '進行中', cls: 'working' },
-  waiting: { text: '可能在等你', cls: 'waiting' },
+  waiting: { text: '等你', cls: 'waiting' },
   done: { text: '完成', cls: 'done' },
   idle: { text: '閒置', cls: 'idle' }
 };
@@ -522,59 +506,61 @@ function el(tag, cls, text) {
   return e;
 }
 
+// 對話頁：一份清單。每一列 = 一段對話：狀態、名稱、一行說明、移除。
 function renderAi() {
   renderAiConfig();
   aiList.innerHTML = '';
-  const projects = aiState.projects || [];
-  const active = projects.reduce((n, p) =>
-    n + p.sessions.filter((s) => s.status === 'working' || s.status === 'waiting').length, 0);
-  aiBadge.textContent = active ? `${active} 個進行中` : '';
-  aiBadge.style.display = active ? '' : 'none';
-
   if (!aiState.enabled) {
-    aiList.appendChild(el('p', 'empty', '已關閉監看。可到「設定」頁開啟。'));
+    aiList.appendChild(el('p', 'empty big', '追蹤已關閉。到「更多 → 設定 → 進階」可以打開。'));
     return;
   }
-  if (!projects.length) {
-    if ((aiState.watchProjects || []).length || (aiState.watchSessions || []).length) {
-      aiList.appendChild(el('p', 'empty', '追蹤中的對話最近 24 小時沒有動靜。對話一有進展，這裡會即時更新。'));
+  // 目前有動靜的對話（依檔名對應回加入的那一段）
+  const live = new Map();
+  (aiState.projects || []).forEach((p) => p.sessions.forEach((s) => {
+    const m = /([^\\/]+)\.jsonl$/.exec(s.id || '');
+    live.set(m ? m[1] : s.id, s);
+  }));
+  const rows = [];
+  (aiState.watchSessions || []).forEach((w) => {
+    rows.push({ id: w.id, title: w.title || '對話', s: live.get(w.id), removable: true });
+    live.delete(w.id);
+  });
+  // 透過「整個資料夾」追蹤到的其他對話
+  live.forEach((s, id) => rows.push({ id, title: s.title, s, removable: false }));
+
+  if (!rows.length) {
+    aiList.appendChild(el('p', 'empty big', '還沒有對話。按上面的「＋ 加入對話」選一段，桌寵就會幫你盯著。'));
+    return;
+  }
+  const order = { waiting: 0, working: 1, done: 2, idle: 3 };
+  rows.sort((a, b) => (order[(a.s || {}).status] ?? 4) - (order[(b.s || {}).status] ?? 4));
+
+  rows.forEach((r) => {
+    const s = r.s;
+    const st = s ? (AI_STATUS[s.status] || AI_STATUS.idle) : { text: '沒有動靜', cls: 'idle' };
+    const row = el('div', 'ai-row ' + st.cls);
+    row.appendChild(el('span', 'ai-row-status ' + st.cls, s && s.interrupted && s.status === 'done' ? '已中斷' : st.text));
+    const body = el('div', 'ai-row-body');
+    body.appendChild(el('div', 'ai-row-title', (s && s.title && s.title !== '（尚無指令）') ? s.title : r.title));
+    let line = '';
+    if (s) {
+      if (s.status === 'waiting') line = s.waitingMessage || '可能在等你按允許';
+      else if (s.status === 'done') line = s.lastText || '';
+      else if (s.status === 'working') line = s.lastAction || s.lastPrompt || '';
+      if (line) body.appendChild(el('div', 'ai-row-line', line));
+      body.appendChild(el('div', 'ai-row-time', timeAgo(s.lastActivity)));
     }
-    return;
-  }
-  projects.forEach((p) => {
-    const card = el('div', 'ai-project');
-    const head = el('div', 'ai-project-head');
-    head.appendChild(el('span', 'ai-project-name', p.name));
-    head.appendChild(el('span', 'ai-project-path', p.project));
-    card.appendChild(head);
-
-    p.sessions.forEach((s) => {
-      const row = el('div', 'ai-session');
-      const top = el('div', 'ai-session-top');
-      top.appendChild(el('span', 'ai-tool ' + s.tool, s.label));
-      const st = AI_STATUS[s.status] || AI_STATUS.idle;
-      top.appendChild(el('span', 'ai-status ' + st.cls, s.interrupted && s.status === 'done' ? '已中斷' : st.text));
-      top.appendChild(el('span', 'ai-title', s.title));
-      top.appendChild(el('span', 'ai-time', timeAgo(s.lastActivity)));
-      row.appendChild(top);
-
-      if (s.status === 'waiting' && s.waitingMessage) row.appendChild(el('div', 'ai-line ai-alert', s.waitingMessage));
-      if (s.lastPrompt) row.appendChild(el('div', 'ai-line', '指令：' + s.lastPrompt));
-      if (s.status === 'done' && s.lastText) row.appendChild(el('div', 'ai-line', '回覆：' + s.lastText));
-      else if (s.lastAction) row.appendChild(el('div', 'ai-line', '動作：' + s.lastAction));
-
-      if (s.files && s.files.length) {
-        const files = el('div', 'ai-files');
-        s.files.slice(0, 6).forEach((f) => {
-          const chip = el('span', 'ai-file', f.split(/[\\/]/).pop());
-          chip.title = f;
-          files.appendChild(chip);
-        });
-        row.appendChild(files);
-      }
-      card.appendChild(row);
-    });
-    aiList.appendChild(card);
+    row.appendChild(body);
+    if (r.removable) {
+      const rm = el('button', 'ai-row-remove', '✕');
+      rm.title = '不再追蹤這段對話';
+      rm.addEventListener('click', async () => {
+        aiState = await window.api.removeAiSession(r.id);
+        renderAi();
+      });
+      row.appendChild(rm);
+    }
+    aiList.appendChild(row);
   });
 }
 

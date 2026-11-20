@@ -374,7 +374,41 @@ function clip(text, n) {
   return t.length > n ? t.slice(0, n) + '…' : t;
 }
 
-function onAiEvent({ kind, session: s, image, fromUser }) {
+// --- 在泡泡上回答 Claude 的權限詢問 ---
+const pendingPermissions = new Set();   // 還在等使用者回答的請求 id
+
+// 讓鉤子知道桌寵開著（沒開的話鉤子不會讓 Claude 空等）
+function touchAlive() {
+  try {
+    fs.mkdirSync(aiHooksDir(), { recursive: true });
+    fs.writeFileSync(path.join(aiHooksDir(), 'app-alive'), String(Date.now()));
+  } catch (e) { /* ignore */ }
+}
+
+// choice：'allow'｜'deny'｜'pass'（不回答，交回 Claude 自己的詢問畫面）
+function answerPermission(id, choice) {
+  if (!/^[\w-]+$/.test(String(id || '')) || !pendingPermissions.delete(id)) return;
+  try {
+    const dir = path.join(aiHooksDir(), 'permission');
+    if (!fs.existsSync(path.join(dir, id + '.json'))) return;   // 鉤子已經結束（逾時）
+    fs.writeFileSync(path.join(dir, id + '.answer.json'), JSON.stringify({ choice }));
+  } catch (e) {
+    console.error('寫入權限回答失敗:', e.message);
+  }
+}
+
+function onAiEvent({ kind, session: s, image, fromUser, request }) {
+  if (kind === 'permission') {
+    pendingPermissions.add(request.id);
+    setPetPose('idle');
+    speak({
+      text: `可以用 ${request.tool} 嗎？`,
+      attribution: request.summary,
+      ai: true, sticky: true, action: 'choice', requestId: request.id,
+      choices: [{ id: 'allow', label: '允許' }, { id: 'deny', label: '拒絕' }]
+    });
+    return;
+  }
   // 使用者自己貼的圖不顯示（自己已經看過），只顯示 Claude 在對話中開的圖
   if (kind === 'image' && fromUser) return;
   const key = s.id + ':' + kind;
@@ -427,7 +461,11 @@ function onAiUpdate(list) {
   if (petWindow && !petWindow.isDestroyed()) {
     const st = petStatusOf(list);
     petWindow.webContents.send('pet:status', st);
-    if (st.cls !== 'waiting') petWindow.webContents.send('pet:dismiss-reply');
+    if (st.cls !== 'waiting') {
+      petWindow.webContents.send('pet:dismiss-reply');
+      // 已經不在等了（例如你在 Claude 裡回答了）：放掉還在等的鉤子
+      [...pendingPermissions].forEach((id) => answerPermission(id, 'pass'));
+    }
   }
   if (panelWindow && !panelWindow.isDestroyed()) {
     panelWindow.webContents.send('ai:update', list);
@@ -455,7 +493,8 @@ function writeWatchProjects() {
   try {
     fs.mkdirSync(aiHooksDir(), { recursive: true });
     const on = config.settings.aiWatch !== false;
-    const data = { projects: on ? aiProjects() : [], sessions: on ? aiSessions().map((s) => s.id) : [] };
+    // answer：允許鉤子等使用者在泡泡上按「允許／拒絕」
+    const data = { projects: on ? aiProjects() : [], sessions: on ? aiSessions().map((s) => s.id) : [], answer: on };
     fs.writeFileSync(path.join(aiHooksDir(), 'watch-projects.json'), JSON.stringify(data, null, 2));
   } catch (e) {
     console.error('寫入監看專案清單失敗:', e.message);
@@ -504,6 +543,9 @@ function registerIpc() {
   ipcMain.on('panel:toggle', () => togglePanel());
   ipcMain.on('pet:menu', () => showPetMenu());
   ipcMain.on('claude:focus', () => focusClaudeWindow());
+  ipcMain.on('pet:choice', (e, { requestId, choice }) => {
+    answerPermission(requestId, choice === 'allow' ? 'allow' : choice === 'deny' ? 'deny' : 'pass');
+  });
 
   // --- 資料夾 ---
   ipcMain.handle('folders:pick', async () => {
@@ -864,6 +906,8 @@ app.whenReady().then(() => {
   setupReminder();
   setupQuoteTimer();
   setupAiWatch();
+  touchAlive();
+  setInterval(touchAlive, 5000);
 
   // 第一次使用（還沒追蹤任何對話）：自動打開面板，並由桌寵說明怎麼操作
   if (!config.settings.welcomed && !aiSessions().length && !aiProjects().length) {

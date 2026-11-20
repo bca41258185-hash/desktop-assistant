@@ -11,7 +11,9 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const EVENTS = ['UserPromptSubmit', 'Notification', 'Stop'];
+const EVENTS = ['UserPromptSubmit', 'Notification', 'Stop', 'PermissionRequest'];
+// 每個鉤子的逾時（秒）。PermissionRequest 要等使用者在泡泡上按允許／拒絕，所以給得長
+const TIMEOUTS = { PermissionRequest: 90 };
 const MARKER = 'hooks/claude-hook.js';
 
 function claudeDir() {
@@ -134,7 +136,7 @@ function install({ scriptPath, dataDir, file }) {
   const command = buildCommand(scriptPath, dataDir);
   for (const ev of EVENTS) {
     if (!Array.isArray(settings.hooks[ev])) settings.hooks[ev] = [];
-    settings.hooks[ev].push({ hooks: [{ type: 'command', command, timeout: 5 }] });
+    settings.hooks[ev].push({ hooks: [{ type: 'command', command, timeout: TIMEOUTS[ev] || 5 }] });
   }
   writeSettings(file, settings);
   return { file, backup: bak, command };

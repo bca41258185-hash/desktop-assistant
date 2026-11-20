@@ -31,6 +31,7 @@ const bubbleTextEl = bubbleEl.querySelector('.bubble-text') || bubbleEl;
 const bubbleAttrEl = bubbleEl.querySelector('.bubble-attr');
 const bubbleImgEl = bubbleEl.querySelector('.bubble-img');
 const bubbleHintEl = document.getElementById('bubbleHint');
+const bubbleChoicesEl = document.getElementById('bubbleChoices');
 let bubbleTimer = null;
 let stickyOpen = false;
 let stickyAction = '';   // 'confirm'：點一下就收起；'reply'：點一下跳到 Claude 去回覆
@@ -66,13 +67,30 @@ function showBubble(payload) {
   // 先請主行程把視窗展開，再顯示泡泡；泡泡消失後收回，只留角色大小
   if (window.api.setBubbleOpen) window.api.setBubbleOpen(true);
   bubbleEl.classList.add('show');
-  stickyAction = sticky ? (payload.action === 'reply' ? 'reply' : 'confirm') : '';
+  stickyAction = sticky ? (['reply', 'choice'].includes(payload.action) ? payload.action : 'confirm') : '';
+  // 選擇題：在泡泡裡放幾顆大選項，點了就把答案送回去
+  if (bubbleChoicesEl) {
+    bubbleChoicesEl.innerHTML = '';
+    const choices = stickyAction === 'choice' && Array.isArray(payload.choices) ? payload.choices : [];
+    choices.forEach((c) => {
+      const b = document.createElement('button');
+      b.className = 'bubble-choice ' + c.id;
+      b.textContent = c.label;
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.api.answerChoice) window.api.answerChoice(payload.requestId, c.id);
+        hideBubble();
+      });
+      bubbleChoicesEl.appendChild(b);
+    });
+    bubbleChoicesEl.hidden = !choices.length;
+  }
   bubbleEl.classList.toggle('sticky', sticky);
   bubbleEl.classList.toggle('confirm', stickyAction === 'confirm');
-  bubbleEl.classList.toggle('reply', stickyAction === 'reply');
+  bubbleEl.classList.toggle('reply', stickyAction === 'reply' || stickyAction === 'choice');
   if (bubbleHintEl) {
     bubbleHintEl.textContent = stickyAction === 'reply' ? '點一下去回覆' : '點一下確認';
-    bubbleHintEl.hidden = !sticky;
+    bubbleHintEl.hidden = !sticky || stickyAction === 'choice';
   }
   stickyOpen = sticky;
   if (bubbleTimer) clearTimeout(bubbleTimer);
@@ -86,18 +104,19 @@ function hideBubble() {
   stickyAction = '';
   bubbleEl.classList.remove('show', 'sticky', 'confirm', 'reply');
   if (bubbleHintEl) bubbleHintEl.hidden = true;
+  if (bubbleChoicesEl) bubbleChoicesEl.hidden = true;
   if (window.api.setBubbleOpen) window.api.setBubbleOpen(false);
 }
 // 點泡泡本身就是確認；等你回覆的泡泡點了會把 Claude 視窗叫到最前面
 bubbleEl.addEventListener('click', () => {
-  if (!stickyOpen) return;
+  if (!stickyOpen || stickyAction === 'choice') return;   // 選擇題要點選項才算
   const action = stickyAction;
   hideBubble();
   if (action === 'reply' && window.api.focusClaude) window.api.focusClaude();
 });
 // Claude 已經不再等你（例如你已在 Claude 裡回覆）→ 自動收起「等你回覆」的泡泡
 if (window.api.onDismissReply) {
-  window.api.onDismissReply(() => { if (stickyOpen && stickyAction === 'reply') hideBubble(); });
+  window.api.onDismissReply(() => { if (stickyOpen && (stickyAction === 'reply' || stickyAction === 'choice')) hideBubble(); });
 }
 
 // 視窗被推回螢幕內時，角色反向位移以維持在原位
