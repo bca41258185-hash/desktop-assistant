@@ -9,23 +9,23 @@
 </head>
 <body>
   <nav class="tabs">
-    <button class="tab active" data-tab="chat">聊天</button>
-    <button class="tab" data-tab="ai">AI 專案</button>
-    <button class="tab" data-tab="folders">資料夾</button>
+    <button class="tab active" data-tab="ai">AI 對話</button>
     <button class="tab" data-tab="tasks">任務</button>
+    <button class="tab" data-tab="folders">檔案變更</button>
     <button class="tab" data-tab="quotes">名言</button>
+    <button class="tab" data-tab="chat">聊天</button>
     <button class="tab" data-tab="settings">設定</button>
   </nav>
 
   <!-- 聊天 -->
-  <section class="panel-view active" id="view-chat">
+  <section class="panel-view" id="view-chat">
     <div class="chat-log" id="chatLog"></div>
     <label class="ctx-row">
       <input type="checkbox" id="withContext" />
       帶上近期資料夾變更作為上下文
     </label>
     <div class="chat-input">
-      <textarea id="chatInput" rows="2" placeholder="輸入訊息，按 Enter 送出（Shift+Enter 換行）"></textarea>
+      <textarea id="chatInput" rows="2" placeholder="和大師聊天（要先到「設定」填 API Key）。Enter 送出"></textarea>
       <button id="chatSend">送出</button>
     </div>
   </section>
@@ -36,7 +36,7 @@
       <h2>監看中的資料夾</h2>
       <button id="pickFolders">+ 加入資料夾</button>
     </div>
-    <p class="hint">本版本為「唯讀監看」：只會通知變更，絕不會刪除、搬移或改名任何檔案。</p>
+    <p class="hint">資料夾裡有檔案新增或修改時通知你。只看不動：不會刪除、搬移或改名任何檔案。</p>
     <ul class="folder-list" id="folderList"></ul>
 
     <h2 class="mt">近期檔案變更</h2>
@@ -57,30 +57,30 @@
 
 
   <!-- AI 專案：Claude Code / Codex 對話進度（唯讀） -->
-  <section class="panel-view" id="view-ai">
+  <section class="panel-view active" id="view-ai">
     <div class="section-head">
-      <h2>AI 專案進度 <span id="aiBadge" class="progress-badge"></span></h2>
+      <h2>AI 對話進度 <span id="aiBadge" class="progress-badge"></span></h2>
     </div>
-    <p class="hint">只讀取「監看的專案」資料夾內，或個別加入的 Claude Code／Codex 對話，只看不改。雲端（網頁版）的對話不在本機，看不到。</p>
+    <p class="hint">選好要追蹤的對話，桌寵就會在它開始、等你、完成時提醒你。只看不改。</p>
 
     <div class="ai-config">
       <div class="ai-config-row">
-        <strong>監看的專案／對話</strong>
+        <strong>追蹤中</strong>
         <span class="ai-config-buttons">
-          <button id="aiAddSession">加入對話</button>
-          <button id="aiAddProject">加入專案資料夾</button>
+          <button id="aiAddSession" class="primary">＋ 加入對話</button>
+          <button id="aiAddProject" title="追蹤某個資料夾裡的所有對話">＋ 整個資料夾</button>
         </span>
       </div>
       <div class="ai-session-picker" id="aiSessionPicker" hidden>
         <div class="ai-picker-head">
-          <span>選擇要追蹤的對話（與 Claude 桌面版側欄同名）</span>
+          <span>近三天用過的對話（名稱和 Claude 側欄一樣）</span>
           <button id="aiPickerClose">關閉</button>
         </div>
         <ul class="ai-picker-list" id="aiPickerList"></ul>
       </div>
       <ul class="ai-watch-list" id="aiWatchList"></ul>
       <div class="ai-config-row">
-        <span><strong>Claude Code 通知鉤子</strong> <span id="aiHookStatus" class="ai-hook-status"></span></span>
+        <span><strong>即時提醒</strong> <span id="aiHookStatus" class="ai-hook-status"></span></span>
         <button id="aiHookBtn"></button>
       </div>
       <p class="hint" id="aiHookHint"></p>
@@ -105,7 +105,7 @@
     <p class="hint">私人用的 Q 版致敬造型，點選即可即時換角色。</p>
     <div class="char-picker" id="charPicker"></div>
 
-    <h2 class="mt">AI 供應商設定</h2>
+    <h2 class="mt">聊天功能設定（選用，不用聊天可以不填）</h2>
     <label class="field">
       供應商
       <select id="setProvider">
@@ -129,26 +129,23 @@
 
     <h2 class="mt">提醒設定</h2>
     <label class="field">
-      工作進度提醒間隔（分鐘，0 = 關閉）
+      任務還沒做完時，每隔幾分鐘提醒我（0 = 不提醒）
       <input type="number" id="setReminder" min="0" step="1" />
     </label>
     <label class="field">
-      名言氣泡間隔（分鐘，0 = 關閉；預設 20）
+      每隔幾分鐘說一句名言（0 = 不說；預設 20）
       <input type="number" id="setQuoteInterval" min="0" step="1" />
     </label>
     <p class="hint">也可在桌寵上按右鍵，或到「名言」分頁點選，立即讓大師說一句。</p>
     <label class="ctx-row">
       <input type="checkbox" id="setAiWatch" />
-      監看 Claude Code／Codex 對話進度（唯讀，只在本機處理）
+      追蹤 AI 對話進度（只看不改，資料不離開這台電腦）
     </label>
 
     <button id="saveSettings" class="primary">儲存設定</button>
     <span id="saveStatus" class="save-status"></span>
 
-    <p class="hint mt">
-      提示：也可用環境變數設定金鑰，啟動前設定
-      <code>OPENAI_API_KEY</code>、<code>OPENAI_BASE_URL</code>、<code>OPENAI_MODEL</code>（環境變數優先於此處設定）。金鑰只存在本機，不會進入 repo。
-    </p>
+    <p class="hint mt">金鑰只存在這台電腦。</p>
   </section>
 
   <script src="characters-philosophers.js"></script>

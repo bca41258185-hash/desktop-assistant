@@ -117,10 +117,42 @@ function effectiveSettings() {
 // ---------------------------------------------------------------------------
 // 視窗
 // ---------------------------------------------------------------------------
+// 桌寵視窗平常只有角色大小（不擋住後面的畫面），說話時才向上展開放泡泡。
+// 兩種大小都以「角色底部中央」為錨點，所以角色不會跳動。
+const PET_SMALL = { width: 240, height: 250 };
+const PET_BIG = { width: 520, height: 640 };
+let petExpanded = false;
+let petShift = 0;   // 展開時因貼近螢幕邊緣而把視窗推回的距離（角色在視窗內反向位移）
+
+function setPetExpanded(open) {
+  if (!petWindow || petWindow.isDestroyed() || open === petExpanded) return;
+  const from = petExpanded ? PET_BIG : PET_SMALL;
+  const to = open ? PET_BIG : PET_SMALL;
+  const b = petWindow.getBounds();
+  const anchorX = b.x + from.width / 2 + petShift;   // 角色水平中心（含展開時的位移）
+  const bottom = b.y + from.height;           // 角色腳底
+  let x = Math.round(anchorX - to.width / 2);
+  const y = Math.round(bottom - to.height);
+  let shift = 0;
+  if (open) {
+    // 靠近螢幕邊緣時把視窗推回畫面內，並請角色反向位移，維持原位
+    const wa = screen.getDisplayNearestPoint({ x: Math.round(anchorX), y: bottom - 10 }).workArea;
+    const clamped = Math.min(Math.max(x, wa.x), wa.x + wa.width - to.width);
+    shift = x - clamped;
+    x = clamped;
+  }
+  petExpanded = open;
+  petShift = shift;
+  petWindow.setBounds({ x, y, width: to.width, height: to.height });
+  petWindow.webContents.send('pet:layout', { shift });
+}
+
 function createPetWindow() {
+  petExpanded = false;
+  petShift = 0;
   petWindow = new BrowserWindow({
-    width: 520,
-    height: 640,
+    width: PET_SMALL.width,
+    height: PET_SMALL.height,
     frame: false,
     transparent: true,
     resizable: false,
@@ -147,8 +179,8 @@ function createPetWindow() {
   // 預設放在主螢幕右下角
   const { workArea } = screen.getPrimaryDisplay();
   petWindow.setPosition(
-    workArea.x + workArea.width - 540,
-    workArea.y + workArea.height - 660
+    workArea.x + workArea.width - PET_SMALL.width - 40,
+    workArea.y + workArea.height - PET_SMALL.height - 20
   );
 }
 
@@ -357,41 +389,41 @@ function onAiEvent({ kind, session: s, image, fromUser }) {
     return;
   }
 
-  // 個別加入的對話用它的標題（與 Claude 桌面版側欄相同）稱呼，比資料夾名稱好認
-  const sid = path.basename(String(s.id || ''), '.jsonl');
-  if (aiSessions().some((x) => x.id === sid) && s.title && s.title !== '（尚無指令）') {
-    s = Object.assign({}, s, { projectName: clip(s.title, 18) });
-  }
-
+  // 泡泡只說發生了什麼，不寫專案／對話名稱（字大、空間小，名稱只是雜訊）
   if (kind === 'image') {
     if (petWindow && !petWindow.isDestroyed()) {
-      petWindow.webContents.send('pet:speak', {
-        text: 'Claude 看的圖',
-        image,
-        duration: 15000
-      });
+      petWindow.webContents.send('pet:speak', { text: '我在看的圖', image, duration: 15000 });
     }
   } else if (kind === 'start') {
     setPetPose('think');
-    speak(`${s.label} 開始處理「${s.projectName}」：${clip(s.lastPrompt, 26)}`);
+    speak(`開始處理：${clip(s.lastPrompt, 30)}`);
   } else if (kind === 'waiting') {
     setPetPose('idle');
-    speak(s.waitingMessage
-      ? `「${s.projectName}」的 ${s.label}${s.waitingMessage}`
-      : `「${s.projectName}」的 ${s.label} 可能在等你確認（或指令執行較久）`);
+    speak(s.waitingMessage || 'Claude 可能在等你按允許');
   } else if (kind === 'done') {
     if (s.interrupted) {
       setPetPose('idle');
-      speak(`「${s.projectName}」的 ${s.label} 已中斷`);
+      speak('已中斷');
     } else {
       setPetPose('happy');
-      speak(`「${s.projectName}」完成了：${clip(s.lastText, 30) || s.lastAction}`);
+      speak(`完成了：${clip(s.lastText, 34) || s.lastAction}`);
     }
   }
 }
 
+// 角色頭上的小狀態標籤：等你 > 進行中 > 剛完成（10 分鐘內）；都沒有就不顯示
+function petStatusOf(list) {
+  const all = [].concat(...(list || []).map((p) => p.sessions || []));
+  if (all.some((s) => s.status === 'waiting')) return { text: '等你確認', cls: 'waiting' };
+  const working = all.filter((s) => s.status === 'working').length;
+  if (working) return { text: working > 1 ? `${working} 段進行中` : '進行中', cls: 'working' };
+  if (all.some((s) => s.status === 'done' && Date.now() - s.lastActivity < 10 * 60 * 1000)) return { text: '完成', cls: 'done' };
+  return { text: '', cls: '' };
+}
+
 function onAiUpdate(list) {
   aiSnapshot = list;
+  if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:status', petStatusOf(list));
   if (panelWindow && !panelWindow.isDestroyed()) {
     panelWindow.webContents.send('ai:update', list);
   }
@@ -454,12 +486,18 @@ function registerIpc() {
   // 桌寵拖曳：依位移移動視窗
   ipcMain.on('pet:move-by', (e, { dx, dy }) => {
     if (!petWindow) return;
-    const [x, y] = petWindow.getPosition();
-    petWindow.setPosition(Math.round(x + dx), Math.round(y + dy));
+    // 一律帶上寬高，避免在非 100% 顯示比例下拖曳時視窗大小漂移
+    const b = petWindow.getBounds();
+    const size = petExpanded ? PET_BIG : PET_SMALL;
+    petWindow.setBounds({ x: Math.round(b.x + dx), y: Math.round(b.y + dy), width: size.width, height: size.height });
   });
+
+  // 泡泡出現／消失 → 展開／收起桌寵視窗
+  ipcMain.on('pet:bubble', (e, open) => setPetExpanded(!!open));
 
   // 點擊桌寵 → 開/關面板
   ipcMain.on('panel:toggle', () => togglePanel());
+  ipcMain.on('pet:menu', () => showPetMenu());
 
   // --- 資料夾 ---
   ipcMain.handle('folders:pick', async () => {
@@ -511,7 +549,8 @@ function registerIpc() {
   // 列出最近的 Claude Code 對話，讓使用者挑選要追蹤哪一段（標題與 Claude 桌面版側欄相同）
   ipcMain.handle('ai:recent-sessions', () => {
     const watched = new Set(aiSessions().map((s) => s.id));
-    return listClaudeSessions(defaultRoots().claude, { limit: 40 })
+    // 只列近三天用過的對話，太久沒用的不出現
+    return listClaudeSessions(defaultRoots().claude, { limit: 60, maxAgeMs: 3 * 24 * 3600 * 1000 })
       .map((s) => ({ id: s.id, title: s.title, cwd: s.cwd, mtime: s.mtime, watched: watched.has(s.id) }));
   });
 
@@ -544,18 +583,17 @@ function registerIpc() {
     const file = hooksInstaller.settingsPath();
     const { response } = await dialog.showMessageBox(panelWindow, {
       type: 'question',
-      buttons: ['安裝', '取消'],
+      buttons: ['開啟', '取消'],
       defaultId: 1,
       cancelId: 1,
-      title: '安裝 Claude Code 通知鉤子',
-      message: '要在 Claude Code 設定中加入桌面大師的通知鉤子嗎？',
+      title: '開啟即時提醒',
+      message: '要讓 Claude 在「需要你允許」和「做完」時，立刻通知桌寵嗎？',
       detail:
-        `將修改：${file}\n\n` +
-        '・加入 3 個鉤子（送出指令、需要你允許、回合結束），每次執行最多 5 秒，不會阻擋或改變 Claude 的行為。\n' +
-        '・保留你原有的所有設定與其他鉤子，修改前會先備份原檔。\n' +
-        '・鉤子只記錄「指定專案」的事件種類與時間，不記錄指令內容與回覆。\n' +
-        '・需要電腦上可執行 node 指令。\n' +
-        '・隨時可在此處移除。'
+        '・不會影響 Claude 的運作，也不會記錄你打的內容或 Claude 的回覆。\n' +
+        '・只對你加入追蹤的對話有作用。\n' +
+        '・會在 Claude 的設定檔加一小段（先自動備份），隨時可以關閉還原。\n' +
+        '・電腦需要裝有 Node.js。\n\n' +
+        `設定檔位置：${file}`
     });
     if (response !== 0) return { ok: false, canceled: true, state: aiState() };
     try {
@@ -573,12 +611,12 @@ function registerIpc() {
   ipcMain.handle('ai:hooks-uninstall', async () => {
     const { response } = await dialog.showMessageBox(panelWindow, {
       type: 'question',
-      buttons: ['移除', '取消'],
+      buttons: ['關閉提醒', '取消'],
       defaultId: 1,
       cancelId: 1,
-      title: '移除 Claude Code 通知鉤子',
-      message: '要從 Claude Code 設定中移除桌面大師的通知鉤子嗎？',
-      detail: `將修改：${hooksInstaller.settingsPath()}\n只移除桌面大師加入的鉤子，其他設定不受影響；修改前會先備份。`
+      title: '關閉即時提醒',
+      message: '要關閉即時提醒嗎？',
+      detail: `會把桌面大師加進 Claude 設定檔的那一小段拿掉，其他設定不受影響（先自動備份）。\n\n設定檔位置：${hooksInstaller.settingsPath()}`
     });
     if (response !== 0) return { ok: false, canceled: true, state: aiState() };
     try {
@@ -759,6 +797,43 @@ function registerIpc() {
 // ---------------------------------------------------------------------------
 // 生命週期
 // ---------------------------------------------------------------------------
+// 只允許開一個桌寵：重複點捷徑時，改成把面板叫出來
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!panelWindow) return;
+    panelWindow.show();
+    panelWindow.focus();
+  });
+}
+
+// 開機自動啟動（未打包時要帶上程式資料夾當參數）
+function loginItemOptions() {
+  return app.isPackaged ? {} : { path: process.execPath, args: [app.getAppPath()] };
+}
+function autoStartEnabled() {
+  try { return !!app.getLoginItemSettings(loginItemOptions()).openAtLogin; } catch (e) { return false; }
+}
+
+// 桌寵的右鍵選單：所有「桌寵本身」的操作都在這裡，包含結束程式
+function showPetMenu() {
+  if (!petWindow || petWindow.isDestroyed()) return;
+  Menu.buildFromTemplate([
+    { label: '打開面板', click: () => { if (!panelWindow.isVisible()) togglePanel(); else panelWindow.focus(); } },
+    { label: '說一句名言', click: () => speakRandomQuote() },
+    { type: 'separator' },
+    {
+      label: '開機時自動啟動',
+      type: 'checkbox',
+      checked: autoStartEnabled(),
+      click: (item) => app.setLoginItemSettings(Object.assign({ openAtLogin: item.checked }, loginItemOptions()))
+    },
+    { type: 'separator' },
+    { label: '結束桌面大師', click: () => app.quit() }
+  ]).popup({ window: petWindow });
+}
+
 app.whenReady().then(() => {
   config = loadConfig();
   // 移除整個應用程式的原生選單（避免出現英文 File/Edit/View... 選單列）
@@ -772,6 +847,16 @@ app.whenReady().then(() => {
   setupReminder();
   setupQuoteTimer();
   setupAiWatch();
+
+  // 第一次使用（還沒追蹤任何對話）：自動打開面板，並由桌寵說明怎麼操作
+  if (!config.settings.welcomed && !aiSessions().length && !aiProjects().length) {
+    config.settings.welcomed = true;
+    saveConfig();
+    setTimeout(() => {
+      if (!panelWindow.isVisible()) panelWindow.show();
+      speak({ text: '點我一下開面板，右鍵有選單。先按「＋ 加入對話」吧。', duration: 15000 });
+    }, 7000);
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createPetWindow();

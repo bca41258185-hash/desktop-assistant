@@ -7,10 +7,14 @@ contextBridge.exposeInMainWorld('api', {
   // --- 桌寵 ---
   movePetBy: (dx, dy) => ipcRenderer.send('pet:move-by', { dx, dy }),
   togglePanel: () => ipcRenderer.send('panel:toggle'),
+  showPetMenu: () => ipcRenderer.send('pet:menu'),
   onSpeak: (cb) => ipcRenderer.on('pet:speak', (_e, text) => cb(text)),
   // 角色與姿勢
   onCharacter: (cb) => ipcRenderer.on('pet:character', (_e, payload) => cb(payload)),
   onPose: (cb) => ipcRenderer.on('pet:pose', (_e, pose) => cb(pose)),
+  setBubbleOpen: (open) => ipcRenderer.send('pet:bubble', !!open),
+  onLayout: (cb) => ipcRenderer.on('pet:layout', (_e, layout) => cb(layout)),
+  onStatus: (cb) => ipcRenderer.on('pet:status', (_e, status) => cb(status)),
   setCharacter: (id) => ipcRenderer.invoke('character:set', id),
   onCharacterChanged: (cb) => ipcRenderer.on('character:changed', (_e, id) => cb(id)),
 

@@ -346,6 +346,13 @@ button.primary:hover, button#chatSend:hover { background: var(--graphite-hi); }
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 5px 0; border-bottom: 1px dashed var(--line);
 }
+.ai-picker-list li.ai-picker-group {
+  position: sticky; top: 0; background: #f1ede2; border-bottom: 1px solid var(--line);
+  padding: 4px 6px; margin-top: 4px; font-size: 12px; font-weight: 700; color: #4a4942;
+}
+.ai-picker-list li.ai-picker-group:first-child { margin-top: 0; }
+.ai-picker-group-count { font-weight: 400; color: var(--muted); font-size: 11px; }
+.ai-picker-list li:not(.ai-picker-group):not(.empty) { padding-left: 6px; }
 .ai-picker-list li.empty { color: var(--muted); font-size: 12px; border-bottom: none; }
 .ai-picker-list li.watched .ai-picker-title { color: #2f6a3f; }
 .ai-picker-list li button { font-size: 11px; padding: 2px 8px; flex-shrink: 0; }

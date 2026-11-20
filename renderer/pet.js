@@ -57,9 +57,33 @@ function showBubble(payload) {
     bubbleAttrEl.hidden = !attr;
   }
   bubbleEl.classList.toggle('has-attr', !!attr);
+  // 先請主行程把視窗展開，再顯示泡泡；泡泡消失後收回，只留角色大小
+  if (window.api.setBubbleOpen) window.api.setBubbleOpen(true);
   bubbleEl.classList.add('show');
   if (bubbleTimer) clearTimeout(bubbleTimer);
-  bubbleTimer = setTimeout(() => bubbleEl.classList.remove('show'), duration);
+  bubbleTimer = setTimeout(() => {
+    bubbleEl.classList.remove('show');
+    if (window.api.setBubbleOpen) window.api.setBubbleOpen(false);
+  }, duration);
+}
+
+// 視窗被推回螢幕內時，角色反向位移以維持在原位
+const stageEl = document.getElementById('stage');
+if (window.api.onLayout) {
+  window.api.onLayout((layout) => {
+    stageEl.style.setProperty('--pet-shift', ((layout && layout.shift) || 0) + 'px');
+  });
+}
+
+// 小狀態標籤
+const statusEl = document.getElementById('status');
+if (window.api.onStatus && statusEl) {
+  window.api.onStatus((st) => {
+    const text = (st && st.text) || '';
+    statusEl.textContent = text;
+    statusEl.className = 'status-chip' + (st && st.cls ? ' ' + st.cls : '');
+    statusEl.hidden = !text;
+  });
 }
 
 // 先以預設角色渲染，避免切換前空白
@@ -86,7 +110,9 @@ let moved = 0;
 
 petEl.addEventListener('contextmenu', (e) => {
   e.preventDefault();
-  if (window.api.speakRandomQuote) window.api.speakRandomQuote();
+  // 右鍵 → 選單（打開面板、說名言、開機啟動、結束）
+  if (window.api.showPetMenu) window.api.showPetMenu();
+  else if (window.api.speakRandomQuote) window.api.speakRandomQuote();
 });
 
 petEl.addEventListener('mousedown', (e) => {
