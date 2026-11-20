@@ -68,16 +68,16 @@
         <circle class="hand" cx="26" cy="157" r="6" fill="${SKIN}"/>
       </g>
       <g class="head">
-        <ellipse cx="80" cy="60" rx="43" ry="41" fill="#4b4b4b"/>
-        <ellipse class="face" cx="80" cy="66" rx="39" ry="40" fill="${SKIN}"/>
-        <path d="M40 62 Q40 29 80 26 Q120 29 120 62 Q100 50 80 52 Q60 50 40 62 Z" fill="#4b4b4b"/>
-        <path d="M40 60 Q36 90 45 100 L52 95 Q45 78 47 60 Z" fill="#4b4b4b"/>
-        <path d="M120 60 Q124 90 115 100 L108 95 Q115 78 113 60 Z" fill="#4b4b4b"/>
-        <line x1="58" y1="58" x2="71" y2="61" stroke="#3a3a3a" stroke-width="2.6" stroke-linecap="round"/>
-        <line x1="102" y1="58" x2="89" y2="61" stroke="#3a3a3a" stroke-width="2.6" stroke-linecap="round"/>
-        <g class="eyes">${eyes(66, 94, 70)}</g>
-        <path class="mouth" d="M72 92 Q80 95 88 92" fill="none" stroke="#9a5a4a" stroke-width="2.6" stroke-linecap="round"/>
-        <path class="mouth-happy" display="none" d="M70 90 Q80 100 90 90 Q80 96 70 90 Z" fill="#b5674f"/>
+        <path d="M39 55 Q39 24 80 23 Q121 24 121 55 L117 83 L43 83 Z" fill="#373839"/>
+        <path class="face" d="M44 51 L116 51 L114 83 Q113 99 100 105 L60 105 Q47 99 46 83 Z" fill="${SKIN}"/>
+        <path d="M40 57 L40 48 Q42 23 80 23 Q118 23 120 48 L120 57 L112 56 L112 62 L101 59 L94 61 L86 59 L78 61 L70 59 L62 61 L54 59 L48 62 L48 57 Z" fill="#373839"/>
+        <path d="M47 42 Q77 28 110 39" fill="none" stroke="#626262" stroke-width="2" opacity=".6"/>
+        <path d="M55 66 L71 68 M89 68 L105 66" stroke="#333" stroke-width="3" stroke-linecap="round"/>
+        <ellipse class="eye" cx="64" cy="74" rx="4.5" ry="2.8" fill="#242424"/><ellipse class="eye" cx="96" cy="74" rx="4.5" ry="2.8" fill="#242424"/>
+        <circle class="shine" cx="65" cy="73" r="1" fill="white"/><circle class="shine" cx="97" cy="73" r="1" fill="white"/>
+        <path d="M80 73 L77 85 L83 86" fill="none" stroke="#c69879" stroke-width="1.5"/>
+        <path class="mouth" d="M70 96 Q80 93 90 96" fill="none" stroke="#87564c" stroke-width="2.3" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M70 94 Q80 101 90 94" fill="none" stroke="#87564c" stroke-width="2.5" stroke-linecap="round"/>
         ${THINK_DOTS}
       </g>
       ${SKETCH}
@@ -94,32 +94,25 @@
     </g>
     <g class="pet-body">
       <g class="body">
-        <path d="M50 172 Q47 123 80 119 Q113 123 110 172 Z" fill="#cdd7e0" stroke="#9fb0bd" stroke-width="2"/>
-        <path d="M74 120 L80 138 L86 120" fill="#e7edf2" stroke="#9fb0bd" stroke-width="1.5"/>
+        <path d="M50 172 Q47 123 80 119 Q113 123 110 172 Z" fill="#30373b" stroke="#222a2e" stroke-width="2"/>
+        <path d="M74 120 L80 138 L86 120" fill="#596166" stroke="#222a2e" stroke-width="1.5"/>
       </g>
       <g class="gesture-arm">
-        <path d="M55 136 Q38 150 27 150" fill="none" stroke="#cdd7e0" stroke-width="9" stroke-linecap="round"/>
+        <path d="M55 136 Q38 150 27 150" fill="none" stroke="#30373b" stroke-width="9" stroke-linecap="round"/>
         <circle class="hand" cx="26" cy="151" r="6" fill="${SKIN}"/>
       </g>
       <g class="head">
-        <g stroke="#d4d8db" stroke-width="0.8">
-          <ellipse cx="80" cy="58" rx="40" ry="34" fill="#eceff1"/>
-          <path d="M44 52 Q36 30 54 32 Q48 42 56 52 Z" fill="#eceff1"/>
-          <path d="M60 40 Q62 24 74 32 Q68 40 72 48 Z" fill="#eceff1"/>
-          <path d="M84 38 Q92 24 98 36 Q92 42 96 50 Z" fill="#eceff1"/>
-          <path d="M104 46 Q118 32 118 50 Q110 48 108 56 Z" fill="#eceff1"/>
-        </g>
-        <ellipse class="face" cx="80" cy="66" rx="40" ry="39" fill="${SKIN}"/>
-        <g class="eyes">${eyes(66, 94, 70, 5)}</g>
-        <g class="glasses">
-          <circle cx="66" cy="70" r="11" fill="none" stroke="#3a3a3a" stroke-width="2.2"/>
-          <circle cx="94" cy="70" r="11" fill="none" stroke="#3a3a3a" stroke-width="2.2"/>
-          <line x1="77" y1="70" x2="83" y2="70" stroke="#3a3a3a" stroke-width="2.2"/>
-          <line x1="55" y1="68" x2="46" y2="65" stroke="#3a3a3a" stroke-width="1.8"/>
-          <line x1="105" y1="68" x2="114" y2="65" stroke="#3a3a3a" stroke-width="1.8"/>
-        </g>
-        <path class="mouth" d="M70 90 Q80 97 90 90" fill="none" stroke="#9a5a4a" stroke-width="2.4" stroke-linecap="round"/>
-        <path class="mouth-happy" display="none" d="M68 89 Q80 101 92 89 Q80 96 68 89 Z" fill="#b5674f"/>
+        <path d="M42 64 Q33 59 37 50 Q31 43 40 39 Q37 30 48 32 Q48 25 57 29 L59 75 L43 91 Q35 88 39 79 Q33 72 42 64 Z M118 64 Q127 59 123 50 Q129 43 120 39 Q123 30 112 32 Q112 25 103 29 L101 75 L117 91 Q125 88 121 79 Q127 72 118 64 Z" fill="#edf0ef" stroke="#d1d6d5" stroke-width="1.5"/>
+        <path class="face" d="M48 55 Q48 26 80 25 Q112 26 112 55 Q120 66 116 81 Q115 97 103 101 Q94 110 80 108 Q66 110 57 101 Q45 97 44 81 Q40 66 48 55 Z" fill="${SKIN}"/>
+        <path d="M53 43 Q80 36 107 43 M58 48 Q80 44 102 48" fill="none" stroke="#d4ab8f" stroke-width="1.2"/>
+        <path d="M48 57 Q43 45 47 37 M112 57 Q117 45 113 37" fill="none" stroke="#fafafa" stroke-width="5" stroke-linecap="round"/>
+        <path d="M55 82 Q56 94 64 96 M105 82 Q104 94 96 96" fill="none" stroke="#d5a98c" stroke-width="1.6"/>
+        <ellipse class="eye" cx="65" cy="70" rx="4" ry="3.4" fill="#242424"/><ellipse class="eye" cx="95" cy="70" rx="4" ry="3.4" fill="#242424"/>
+        <circle class="shine" cx="66" cy="69" r="1.1" fill="white"/><circle class="shine" cx="96" cy="69" r="1.1" fill="white"/>
+        <g class="glasses" fill="none" stroke="#555b60" stroke-width="1.7"><circle cx="65" cy="70" r="12"/><circle cx="95" cy="70" r="12"/><path d="M77 69 Q80 66 83 69 M53 68 L45 65 M107 68 L115 65"/></g>
+        <path d="M79 73 Q75 83 81 84" fill="none" stroke="#c99b7f" stroke-width="1.5"/>
+        <path class="mouth" d="M65 90 Q80 105 95 90 Q80 96 65 90 Z" fill="#92564b"/><path class="mouth" d="M69 92 Q80 97 91 92" fill="none" stroke="#fff9ed" stroke-width="2.5"/>
+        <path class="mouth-happy" display="none" d="M62 88 Q80 110 98 88 Q80 98 62 88 Z" fill="#9b514a"/>
         ${THINK_DOTS}
       </g>
       ${SKETCH}
@@ -136,7 +129,7 @@
     <g class="pet-body">
       <g class="body">
         <path d="M48 172 Q46 122 80 118 Q114 122 112 172 Z" fill="#23232b" stroke="#141418" stroke-width="2"/>
-        <path d="M66 126 Q80 141 94 126" fill="none" stroke="#c9a24a" stroke-width="1.5"/>
+        <path d="M53 145 L101 128 M51 155 L106 135 M58 171 L110 145" fill="none" stroke="#51505b" stroke-width="2"/><path d="M66 126 Q80 141 94 126" fill="none" stroke="#c9a24a" stroke-width="1.5"/>
         <circle cx="74" cy="134" r="2.4" fill="#d9b25a"/><circle cx="80" cy="137" r="2.8" fill="#e0bd6a"/><circle cx="86" cy="134" r="2.4" fill="#d9b25a"/>
       </g>
       <g class="gesture-arm">
@@ -144,15 +137,17 @@
         <circle class="hand" cx="23" cy="145" r="6" fill="${SKIN}"/>
       </g>
       <g class="head">
-        <ellipse cx="80" cy="60" rx="43" ry="42" fill="#242027"/>
-        <ellipse class="face" cx="80" cy="66" rx="38" ry="40" fill="${SKIN}"/>
-        <path d="M40 64 Q38 28 80 26 Q122 28 120 64 Q110 44 86 46 Q70 40 40 64 Z" fill="#242027"/>
-        <path d="M86 46 Q62 50 52 80 Q60 54 88 54 Z" fill="#1b181f"/>
-        <path d="M58 59 Q66 55 73 59" stroke="#1a1a1a" stroke-width="2.6" fill="none" stroke-linecap="round"/>
-        <path d="M87 59 Q94 55 102 59" stroke="#1a1a1a" stroke-width="2.6" fill="none" stroke-linecap="round"/>
-        <g class="eyes">${eyes(66, 94, 70)}</g>
-        <path class="mouth" d="M70 91 Q80 97 90 91 Q80 94 70 91 Z" fill="#9c3b4a"/>
-        <path class="mouth-happy" display="none" d="M68 90 Q80 100 92 90 Q80 95 68 90 Z" fill="#b4475a"/>
+        <path d="M36 91 Q28 72 35 49 Q38 20 68 20 Q83 13 96 22 Q123 21 127 51 Q135 75 123 101 L107 108 L49 108 Z" fill="#242027"/>
+        <path class="face" d="M49 49 Q55 34 80 34 Q103 32 112 52 L109 81 Q106 98 91 104 L80 107 L68 104 Q52 97 49 81 Z" fill="${SKIN}"/>
+        <path d="M44 62 Q40 35 60 25 Q75 17 85 26 Q107 19 118 42 Q122 53 117 70 Q110 49 96 43 Q77 36 49 56 L48 91 Q39 83 44 62 Z" fill="#242027"/>
+        <path d="M96 29 Q111 33 115 51 M47 53 Q50 37 64 31" fill="none" stroke="#51434f" stroke-width="2"/>
+        <path d="M55 63 Q64 57 73 62 M87 62 Q96 57 105 62" fill="none" stroke="#2a2023" stroke-width="2.5"/>
+        <path d="M54 70 Q64 62 74 70 M86 70 Q96 62 106 70 M55 70 L51 66 M105 70 L109 66" fill="none" stroke="#211b21" stroke-width="2.5" stroke-linecap="round"/>
+        <ellipse class="eye" cx="64" cy="71" rx="5" ry="5.5" fill="#242024"/><ellipse class="eye" cx="96" cy="71" rx="5" ry="5.5" fill="#242024"/>
+        <circle class="shine" cx="65.5" cy="69" r="1.5" fill="white"/><circle class="shine" cx="97.5" cy="69" r="1.5" fill="white"/>
+        <path d="M80 72 L77 85 Q80 87 83 85" fill="none" stroke="#c28f76" stroke-width="1.5"/>
+        <path class="mouth" d="M69 94 Q75 89 80 92 Q85 89 91 94 Q80 99 69 94 Z" fill="#9c3547"/>
+        <path class="mouth-happy" display="none" d="M67 92 Q80 104 93 92 Q80 97 67 92 Z" fill="#ad3d50"/>
         ${THINK_DOTS}
       </g>
       ${SKETCH}
@@ -180,20 +175,16 @@
         <circle class="hand" cx="26" cy="153" r="6" fill="${SKIN}"/>
       </g>
       <g class="head">
-        <path d="M41 70 Q39 48 54 44 Q48 60 50 74 Z" fill="#b9b9b9"/>
-        <path d="M119 70 Q121 48 106 44 Q112 60 110 74 Z" fill="#b9b9b9"/>
-        <ellipse class="face" cx="80" cy="66" rx="39" ry="39" fill="${SKIN}"/>
-        <path d="M48 52 Q80 40 112 52 Q80 46 48 52 Z" fill="#c4c4c4"/>
-        <g class="eyes">${eyes(66, 94, 70, 5)}</g>
-        <g class="glasses">
-          <circle cx="66" cy="70" r="12" fill="#ffffff" fill-opacity="0.15" stroke="#1e1e1e" stroke-width="2.4"/>
-          <circle cx="94" cy="70" r="12" fill="#ffffff" fill-opacity="0.15" stroke="#1e1e1e" stroke-width="2.4"/>
-          <line x1="78" y1="70" x2="82" y2="70" stroke="#1e1e1e" stroke-width="2.4"/>
-          <line x1="54" y1="68" x2="44" y2="64" stroke="#1e1e1e" stroke-width="2"/>
-          <line x1="106" y1="68" x2="116" y2="64" stroke="#1e1e1e" stroke-width="2"/>
-        </g>
-        <path class="mouth" d="M68 90 Q80 99 92 90" fill="none" stroke="#9a5a4a" stroke-width="2.6" stroke-linecap="round"/>
-        <path class="mouth-happy" display="none" d="M66 89 Q80 102 94 89 Q80 97 66 89 Z" fill="#b5674f"/>
+        <path d="M48 59 Q46 31 59 28 Q70 21 80 24 Q102 21 111 37 L112 61 Z" fill="#aeb2b2"/>
+        <path class="face" d="M51 48 Q54 27 80 27 Q106 27 109 48 L108 78 Q107 96 97 104 Q90 110 80 110 Q70 110 63 104 Q53 96 52 78 Z" fill="${SKIN}"/>
+        <path d="M51 52 Q49 37 57 31 Q64 24 78 26 Q65 29 61 38 Q72 30 91 29 Q102 30 108 39 L108 52 Q104 41 101 39 Q80 34 58 43 L55 53 Z" fill="#b6baba"/>
+        <path d="M58 35 Q72 27 92 29 M58 39 Q76 31 96 32" fill="none" stroke="#e3e4e1" stroke-width="1.2"/>
+        <ellipse class="eye" cx="66" cy="70" rx="3.5" ry="3.4" fill="#242424"/><ellipse class="eye" cx="94" cy="70" rx="3.5" ry="3.4" fill="#242424"/>
+        <circle class="shine" cx="67" cy="69" r="1" fill="white"/><circle class="shine" cx="95" cy="69" r="1" fill="white"/>
+        <g class="glasses" fill="none" stroke="#1d1e20" stroke-width="3.6"><circle cx="65" cy="70" r="13.5"/><circle cx="95" cy="70" r="13.5"/><path d="M78.5 69 Q80 67 81.5 69 M51.5 68 L48 66 M108.5 68 L112 66"/></g>
+        <path d="M79 73 L77 83 L82 84" fill="none" stroke="#c89b7e" stroke-width="1.4"/>
+        <path class="mouth" d="M65 91 Q80 104 95 91 Q80 96 65 91 Z" fill="#99594c"/><path class="mouth" d="M69 92 Q80 96 91 92" fill="none" stroke="#fff9ee" stroke-width="2"/>
+        <path class="mouth-happy" display="none" d="M62 89 Q80 109 98 89 Q80 97 62 89 Z" fill="#a85b4e"/>
         ${THINK_DOTS}
       </g>
       ${SKETCH}
@@ -208,7 +199,7 @@
     </g>
     <g class="pet-body">
       <g class="body">
-        <path d="M54 172 Q52 124 80 120 Q108 124 106 172 Z" fill="#1c1c1f" stroke="#101012" stroke-width="2"/>
+        <path d="M61 172 L61 131 Q62 118 80 116 Q98 118 99 131 L99 172 Z" fill="#1c1c1f" stroke="#101012" stroke-width="2"/>
         <path d="M74 122 L80 134 L86 122" fill="none" stroke="#39393d" stroke-width="1.5"/>
       </g>
       <g class="gesture-arm">
@@ -216,16 +207,15 @@
         <circle class="hand" cx="29" cy="151" r="5.5" fill="${SKIN}"/>
       </g>
       <g class="head">
-        <ellipse class="face" cx="80" cy="64" rx="35" ry="40" fill="${SKIN}"/>
-        <path d="M47 50 Q52 40 60 38" fill="none" stroke="#e7cbab" stroke-width="2" opacity="0.6"/>
-        <path d="M113 50 Q108 40 100 38" fill="none" stroke="#e7cbab" stroke-width="2" opacity="0.6"/>
-        <path d="M60 80 Q62 88 66 92" fill="none" stroke="#dcb892" stroke-width="1.4" opacity="0.7"/>
-        <path d="M100 80 Q98 88 94 92" fill="none" stroke="#dcb892" stroke-width="1.4" opacity="0.7"/>
-        <line x1="58" y1="58" x2="70" y2="58" stroke="#5b5b5b" stroke-width="2.4" stroke-linecap="round"/>
-        <line x1="90" y1="58" x2="102" y2="58" stroke="#5b5b5b" stroke-width="2.4" stroke-linecap="round"/>
-        <g class="eyes">${eyes(66, 94, 68, 5)}</g>
-        <path class="mouth" d="M70 88 L90 88" fill="none" stroke="#8a5346" stroke-width="2.4" stroke-linecap="round"/>
-        <path class="mouth-happy" display="none" d="M72 88 Q80 94 88 88" fill="none" stroke="#8a5346" stroke-width="2.4" stroke-linecap="round"/>
+        <path class="face" d="M52 48 Q52 17 80 16 Q108 17 108 48 L106 74 Q105 87 99 92 L95 103 Q90 111 80 113 Q70 111 65 103 L61 92 Q55 87 54 74 Z" fill="${SKIN}"/>
+        <path d="M58 77 L67 82 L63 88 M102 77 L93 82 L97 88" fill="none" stroke="#cda687" stroke-width="1.8"/>
+        <path d="M59 59 Q66 56 73 60 M87 60 Q94 56 101 59" fill="none" stroke="#65564e" stroke-width="2.6"/>
+        <path d="M59 67 Q66 63 73 67 M87 67 Q94 63 101 67" fill="none" stroke="#a9806d" stroke-width="1.6"/>
+        <ellipse class="eye" cx="66" cy="68" rx="3.6" ry="2.8" fill="#242424"/><ellipse class="eye" cx="94" cy="68" rx="3.6" ry="2.8" fill="#242424"/>
+        <circle class="shine" cx="67" cy="67" r=".9" fill="white"/><circle class="shine" cx="95" cy="67" r=".9" fill="white"/>
+        <path d="M80 69 L76 84 L82 85" fill="none" stroke="#bd947b" stroke-width="1.8"/>
+        <path class="mouth" d="M71 96 L89 96" fill="none" stroke="#805b50" stroke-width="2" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M71 95 Q80 100 89 95" fill="none" stroke="#805b50" stroke-width="2" stroke-linecap="round"/>
         ${THINK_DOTS}
       </g>
       ${SKETCH}
@@ -243,7 +233,7 @@
     </g>
     <g class="pet-body">
       <g class="body">
-        <path d="M50 172 Q48 124 80 120 Q112 124 110 172 Z" fill="#f4f4f4" stroke="#cfcfcf" stroke-width="2"/>
+        <path d="M46 172 L49 137 Q50 123 70 120 L90 120 Q110 123 111 137 L114 172 Z" fill="#f4f4f4" stroke="#cfcfcf" stroke-width="2"/>
         <path d="M72 122 L80 132 L88 122" fill="none" stroke="#cfcfcf" stroke-width="1.5"/>
       </g>
       <g class="gesture-arm">
@@ -251,16 +241,16 @@
         <circle class="hand" cx="27" cy="151" r="5.5" fill="${SKIN}"/>
       </g>
       <g class="head">
-        <ellipse cx="80" cy="58" rx="42" ry="40" fill="#1e1e1e"/>
-        <ellipse class="face" cx="80" cy="66" rx="36" ry="39" fill="${SKIN}"/>
-        <path d="M39 60 Q40 30 80 27 Q120 30 121 60 Q100 52 80 54 Q60 52 39 60 Z" fill="#1e1e1e"/>
-        <path d="M39 58 L39 96 Q45 100 50 96 L50 58 Z" fill="#1e1e1e"/>
-        <path d="M121 58 L121 96 Q115 100 110 96 L110 58 Z" fill="#1e1e1e"/>
-        <line x1="60" y1="60" x2="72" y2="60" stroke="#2a2a2a" stroke-width="1.8" stroke-linecap="round"/>
-        <line x1="100" y1="60" x2="88" y2="60" stroke="#2a2a2a" stroke-width="1.8" stroke-linecap="round"/>
-        <g class="eyes">${eyes(67, 93, 70, 5)}</g>
-        <path class="mouth" d="M74 90 Q80 94 86 90" fill="none" stroke="#b07a6a" stroke-width="2.2" stroke-linecap="round"/>
-        <path class="mouth-happy" display="none" d="M72 90 Q80 97 88 90" fill="none" stroke="#b07a6a" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M47 55 Q47 23 80 23 Q113 23 113 55 L113 101 L101 104 L59 104 L47 101 Z" fill="#1e1e20"/>
+        <path class="face" d="M56 51 L104 51 L103 80 Q101 98 80 103 Q59 98 57 80 Z" fill="${SKIN}"/>
+        <path d="M48 54 Q48 24 80 24 Q112 24 112 54 L104 55 L104 58 L56 58 L56 55 Z" fill="#1e1e20"/>
+        <path d="M47 53 L56 53 L56 101 L47 100 Z M104 53 L113 53 L113 100 L104 101 Z" fill="#1e1e20"/>
+        <path d="M59 65 L71 65 M89 65 L101 65" stroke="#39302e" stroke-width="1.5" stroke-linecap="round"/>
+        <ellipse class="eye" cx="65" cy="72" rx="3.2" ry="3.5" fill="#242424"/><ellipse class="eye" cx="95" cy="72" rx="3.2" ry="3.5" fill="#242424"/>
+        <circle class="shine" cx="66" cy="71" r=".9" fill="white"/><circle class="shine" cx="96" cy="71" r=".9" fill="white"/>
+        <path d="M80 73 L78 82 L81 83" fill="none" stroke="#cea58b" stroke-width="1.2"/>
+        <path class="mouth" d="M76 91 L84 91" fill="none" stroke="#a96f64" stroke-width="1.7" stroke-linecap="round"/>
+        <path class="mouth-happy" display="none" d="M74 90 Q80 95 86 90" fill="none" stroke="#a96f64" stroke-width="1.9" stroke-linecap="round"/>
         ${THINK_DOTS}
       </g>
       ${SKETCH}
