@@ -371,9 +371,9 @@ const aiLastBubble = new Map();   // sessionId+kind -> 時間，避免同一事�
 
 // 給泡泡用的一句話：取回覆的第一行、去掉 Markdown 符號，只留第一句；太長才截斷
 function petLine(text, n) {
-  const first = String(text || '').split('\n').map((l) => l.trim()).find((l) => l && !/^[-=*_#>|\s]+$/.test(l)) || '';
+  const first = String(text || '').split('\n').map((l) => l.trim()).find((l) => l && !/^[-=*_#>|\s]+$/.test(l) && !l.startsWith('#')) || '';   // 標題行不算
   const plain = first.replace(/^[#>*\s-]+/, '').replace(/[*_`]/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').trim();
-  const m = /^(.+?[。！？!?])/.exec(plain);
+  const m = /^(.+?[。！？!?])(?![」』）)"'])/.exec(plain);   // 引號裡的問號不算句尾
   const sentence = m && m[1].length <= n ? m[1] : plain;
   return sentence.length > n ? sentence.slice(0, n - 1) + '…' : sentence;
 }
