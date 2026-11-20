@@ -349,3 +349,7 @@ html, body {
 .bubble-input-label { margin-top: 10px; font-size: 17px; line-height: 1.35; color: #5c5b54; }
 .bubble-input-label[hidden] { display: none; }
 .bubble-input-label + .bubble-input { margin-top: 4px; }
+
+/* 助手之間閒聊的小泡泡：窄而小，放在自己頭上 */
+.bubble.chat { max-width: 232px; padding: 8px 12px; }
+.bubble.chat .bubble-text { font-size: 21px !important; line-height: 1.4 !important; }

@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('api', {
   onCharacter: (cb) => ipcRenderer.on('pet:character', (_e, payload) => cb(payload)),
   onPose: (cb) => ipcRenderer.on('pet:pose', (_e, pose) => cb(pose)),
   setBubbleOpen: (open) => ipcRenderer.send('pet:bubble', !!open),
+  reportShape: (rects) => ipcRenderer.send('pet:shape', rects),
   onLayout: (cb) => ipcRenderer.on('pet:layout', (_e, layout) => cb(layout)),
   onStatus: (cb) => ipcRenderer.on('pet:status', (_e, status) => cb(status)),
   setCharacter: (id) => ipcRenderer.invoke('character:set', id),

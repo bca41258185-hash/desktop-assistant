@@ -207,6 +207,8 @@ function showBubble(payload) {
   bubbleEl.classList.toggle('sticky', sticky);
   bubbleEl.classList.toggle('confirm', stickyAction === 'confirm');
   bubbleEl.classList.toggle('compose', stickyAction === 'compose');
+  // 助手之間閒聊：用小一點、窄一點的泡泡，各自出現在自己頭上，兩位站很近也不會疊在一起
+  bubbleEl.classList.toggle('chat', !!(payload && payload.chat));
   bubbleEl.classList.toggle('reply', stickyAction === 'reply' || stickyAction === 'choice');
   if (bubbleHintEl) {
     const canReplyHere = stickyAction === 'confirm' && !!payload.inputPlaceholder && (!!payload.requestId || !!payload.composeTo);
@@ -225,7 +227,7 @@ function hideBubble() {
   if (bubbleTimer) clearTimeout(bubbleTimer);
   bubbleTimer = null;
   stickyAction = '';
-  bubbleEl.classList.remove('show', 'sticky', 'confirm', 'reply', 'compose');
+  bubbleEl.classList.remove('show', 'sticky', 'confirm', 'reply', 'compose', 'chat');
   if (bubbleHintEl) bubbleHintEl.hidden = true;
   if (bubbleChoicesEl) bubbleChoicesEl.hidden = true;
   if (bubbleInputEl) bubbleInputEl.hidden = true;
@@ -355,3 +357,39 @@ if (panelBtn) {
   panelBtn.addEventListener('mousedown', (e) => e.stopPropagation());
   panelBtn.addEventListener('click', (e) => { e.stopPropagation(); window.api.togglePanel(); });
 }
+
+// ---------------------------------------------------------------------------
+// 可見區域：視窗大小固定，這裡把「現在看得到的東西」所在的幾塊矩形回報給主行程，
+// 其餘地方不畫、滑鼠會穿過去。內容一有變化（泡泡出現／消失、狀態標籤、位移）就重新回報。
+// ---------------------------------------------------------------------------
+let lastShape = '';
+function reportShape() {
+  if (!window.api.reportShape) return;
+  const rects = [];
+  const add = (node, pad) => {
+    if (!node || node.hidden) return;
+    const r = node.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return;
+    rects.push({ x: r.left - pad, y: r.top - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+  };
+  add(petEl, 22);                                  // 角色（留一點邊給開心時的彈跳）
+  add(document.getElementById('status'), 6);
+  add(document.getElementById('panelBtn'), 6);
+  add(document.getElementById('composeBtn'), 6);
+  if (bubbleEl.classList.contains('show')) add(bubbleEl, 36);   // 泡泡（含發光的外框）
+  const key = JSON.stringify(rects.map((r) => [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]));
+  if (key === lastShape) return;
+  lastShape = key;
+  window.api.reportShape(rects);
+}
+// 泡泡有淡入與縮放動畫，內容也可能晚一點才排好版：變化後多回報幾次
+function reportShapeSoon() {
+  requestAnimationFrame(reportShape);
+  setTimeout(reportShape, 120);
+  setTimeout(reportShape, 320);
+}
+new MutationObserver(reportShapeSoon).observe(document.getElementById('stage'), { attributes: true, childList: true, subtree: true, characterData: true });
+window.addEventListener('resize', reportShapeSoon);
+window.addEventListener('load', reportShapeSoon);
+setInterval(reportShape, 1000);    // 保險：萬一漏掉某次變化
+reportShapeSoon();

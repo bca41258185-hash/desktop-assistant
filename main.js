@@ -153,61 +153,74 @@ function sendToPet(characterId, channel, payload) {
   if (p && !p.win.isDestroyed()) p.win.webContents.send(channel, payload);
 }
 
-function setPetExpanded(pet, open) {
-  if (!pet || pet.win.isDestroyed() || open === pet.expanded) return;
-  const from = pet.expanded ? PET_BIG : PET_SMALL;
-  const to = open ? PET_BIG : PET_SMALL;
-  const b = pet.win.getBounds();
-  const anchorX = b.x + from.width / 2 + pet.shift;   // 角色水平中心（含展開時的位移）
-  const bottom = b.y + from.height;                   // 角色腳底
-  let x = Math.round(anchorX - to.width / 2);
-  const y = Math.round(bottom - to.height);
-  let shift = 0;
-  if (open) {
-    // 靠近螢幕邊緣時把視窗推回畫面內，並請角色反向位移，維持原位
-    const wa = screen.getDisplayNearestPoint({ x: Math.round(anchorX), y: bottom - 10 }).workArea;
-    const clamped = Math.min(Math.max(x, wa.x), wa.x + wa.width - to.width);
-    shift = x - clamped;
-    x = clamped;
+// 助手視窗的大小固定不變（PET_BIG，放得下最大的泡泡）。
+// 以前是說話時把視窗放大、說完再縮小，每說一句就閃一下；現在改成只切換「可見區域」：
+// 視窗裡只有角色、按鈕、泡泡所在的那幾塊會顯示、能點，其餘完全透明而且滑鼠會穿過去。
+//
+// 每位助手記的是「錨點」＝角色腳底中央在螢幕上的位置（anchor.x、anchor.bottom）。
+// 視窗貼著錨點擺；太靠近螢幕左右邊緣時視窗會被推回畫面內，角色在視窗裡反向位移（shift）補回來。
+
+function placePet(pet) {
+  if (!pet || pet.win.isDestroyed()) return;
+  const want = Math.round(pet.anchor.x - PET_BIG.width / 2);
+  const wa = screen.getDisplayNearestPoint({ x: Math.round(pet.anchor.x), y: Math.round(pet.anchor.bottom) - 10 }).workArea;
+  const x = Math.min(Math.max(want, wa.x), wa.x + wa.width - PET_BIG.width);
+  const y = Math.round(pet.anchor.bottom - PET_BIG.height);
+  const shift = want - x;
+  pet.win.setBounds({ x, y, width: PET_BIG.width, height: PET_BIG.height });
+  if (shift !== pet.shift) {
+    pet.shift = shift;
+    pet.win.webContents.send('pet:layout', { shift });
   }
-  pet.expanded = open;
-  pet.shift = shift;
-  pet.win.setBounds({ x, y, width: to.width, height: to.height });
-  pet.win.webContents.send('pet:layout', { shift });
-  if (open) pet.win.moveTop();   // 說話的那位站到最前面，泡泡不被旁邊的助手擋住
 }
 
-// 第 index 位助手的預設位置：從主螢幕右下角往左一位一位排
-function defaultPetPosition(index) {
+// 泡泡開著與否（由助手視窗回報）：用來讓說話的那位站到最前面，以及判斷他現在方不方便聊天
+function setPetExpanded(pet, open) {
+  if (!pet || pet.win.isDestroyed()) return;
+  pet.expanded = open;
+  if (open) pet.win.moveTop();
+}
+
+// 助手視窗回報目前要顯示的幾塊區域（視窗內座標）；其餘地方不畫、滑鼠穿過去
+function setPetShape(pet, rects) {
+  if (!pet || pet.win.isDestroyed() || !Array.isArray(rects) || !rects.length) return;
+  const clean = rects.slice(0, 12).map((r) => ({
+    x: Math.max(0, Math.round(r.x)), y: Math.max(0, Math.round(r.y)),
+    width: Math.max(1, Math.round(r.width)), height: Math.max(1, Math.round(r.height))
+  })).filter((r) => r.x < PET_BIG.width && r.y < PET_BIG.height);
+  if (!clean.length) return;
+  try { pet.win.setShape(clean); } catch (e) { /* 這個平台不支援就維持整個視窗 */ }
+}
+
+// 第 index 位助手的預設錨點：從主螢幕右下角往左一位一位排
+function defaultPetAnchor(index) {
   const { workArea } = screen.getPrimaryDisplay();
   return {
-    x: workArea.x + workArea.width - 40 - (index + 1) * PET_SMALL.width - index * 8,
-    y: workArea.y + workArea.height - PET_SMALL.height - 20
+    x: workArea.x + workArea.width - 40 - index * (PET_SMALL.width + 8) - PET_SMALL.width / 2,
+    bottom: workArea.y + workArea.height - 20
   };
 }
 
-// 使用者把這位助手拖到哪裡，下次開啟就站在哪裡（位置還在某個螢幕裡才採用）
-function savedPetPosition(characterId) {
+// 使用者把這位助手拖到哪裡，下次開啟就站在哪裡（錨點還在某個螢幕裡才採用）
+// 設定檔裡存的是「角色小方塊的左上角」（PET_SMALL），這裡換算成錨點
+function savedPetAnchor(characterId) {
   const p = (config.settings.petPositions || {})[characterId];
   if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
+  const a = { x: Math.round(p.x + PET_SMALL.width / 2), bottom: Math.round(p.y + PET_SMALL.height) };
   const visible = screen.getAllDisplays().some((d) => {
     const w = d.workArea;
-    return p.x + PET_SMALL.width / 2 >= w.x && p.x + PET_SMALL.width / 2 <= w.x + w.width &&
-      p.y + PET_SMALL.height / 2 >= w.y && p.y + PET_SMALL.height / 2 <= w.y + w.height;
+    return a.x >= w.x && a.x <= w.x + w.width && a.bottom - 100 >= w.y && a.bottom - 100 <= w.y + w.height;
   });
-  return visible ? { x: Math.round(p.x), y: Math.round(p.y) } : null;
+  return visible ? a : null;
 }
 
 let petPositionTimer = null;
 function rememberPetPosition(pet) {
   if (!pet || pet.win.isDestroyed()) return;
-  // 一律換算成「沒有泡泡時的小視窗」位置（角色腳底中央不變）
-  const b = pet.win.getBounds();
-  const size = pet.expanded ? PET_BIG : PET_SMALL;
-  const anchorX = b.x + size.width / 2 + pet.shift;
-  const bottom = b.y + size.height;
   if (!config.settings.petPositions) config.settings.petPositions = {};
-  config.settings.petPositions[pet.id] = { x: Math.round(anchorX - PET_SMALL.width / 2), y: Math.round(bottom - PET_SMALL.height) };
+  config.settings.petPositions[pet.id] = {
+    x: Math.round(pet.anchor.x - PET_SMALL.width / 2), y: Math.round(pet.anchor.bottom - PET_SMALL.height)
+  };
   // 拖曳時事件很密，停手半秒後才寫入設定檔
   if (petPositionTimer) clearTimeout(petPositionTimer);
   petPositionTimer = setTimeout(saveConfig, 500);
@@ -216,8 +229,9 @@ function rememberPetPosition(pet) {
 // greeting：這位助手出現時要說的第一句話（不說就留空）
 function createPet(characterId, index, greeting) {
   const win = new BrowserWindow({
-    width: PET_SMALL.width,
-    height: PET_SMALL.height,
+    width: PET_BIG.width,
+    height: PET_BIG.height,
+    show: false,                     // 等可見區域設定好再顯示，避免一開始整塊視窗擋住滑鼠
     frame: false,
     transparent: true,
     resizable: false,
@@ -231,20 +245,24 @@ function createPet(characterId, index, greeting) {
       nodeIntegration: false
     }
   });
-  const pet = { id: characterId, win, expanded: false, shift: 0 };
+  const pet = {
+    id: characterId, win, expanded: false, shift: 0,
+    anchor: savedPetAnchor(characterId) || defaultPetAnchor(index)
+  };
   pets.set(characterId, pet);
 
   win.loadFile(path.join(__dirname, 'renderer', 'pet.html'));
   win.setAlwaysOnTop(true, 'screen-saver');
+  placePet(pet);
 
   // 載入完成後，告知這個視窗它是哪一位大師；需要時顯示問候語
   win.webContents.on('did-finish-load', () => {
+    win.webContents.send('pet:layout', { shift: pet.shift });
     win.webContents.send('pet:character', { id: characterId, greeting: greeting || undefined });
     win.webContents.send('pet:status', petStatusOf(sessionsOfPet(characterId)));
+    // 保險：就算可見區域沒回報成功，也在一小段時間後把視窗顯示出來
+    setTimeout(() => { if (!win.isDestroyed() && !win.isVisible()) win.showInactive(); }, 1200);
   });
-
-  const pos = savedPetPosition(characterId) || defaultPetPosition(index);
-  win.setPosition(pos.x, pos.y);
   return pet;
 }
 
@@ -846,8 +864,8 @@ function playChat(chat, force) {
     }
     const [who, text] = chat.lines[i];
     // 一般泡泡（不是 ai 通知）：有等你回答／完成的泡泡開著時不會蓋掉它
-    // 泡泡在下一句出現前就收起來，兩位站得近時才不會疊在一起
-    speak({ text, duration: CHAT_LINE_MS - 500 }, who);
+    // 小泡泡各自在自己頭上；留到對方說完下一句，看起來像你一句我一句
+    speak({ text, chat: true, duration: CHAT_LINE_MS * 2 - 600 }, who);
     setTimeout(() => sayLine(i + 1), CHAT_LINE_MS);
   };
   sayLine(0);
@@ -944,15 +962,22 @@ function registerIpc() {
   ipcMain.on('pet:move-by', (e, { dx, dy }) => {
     const pet = petBySender(e.sender);
     if (!pet) return;
-    // 一律帶上寬高，避免在非 100% 顯示比例下拖曳時視窗大小漂移
-    const b = pet.win.getBounds();
-    const size = pet.expanded ? PET_BIG : PET_SMALL;
-    pet.win.setBounds({ x: Math.round(b.x + dx), y: Math.round(b.y + dy), width: size.width, height: size.height });
+    // 移動的是錨點（角色腳底中央）；視窗跟著錨點重新擺放
+    pet.anchor.x += dx;
+    pet.anchor.bottom += dy;
+    placePet(pet);
     rememberPetPosition(pet);
   });
 
-  // 泡泡出現／消失 → 展開／收起桌寵視窗
+  // 泡泡出現／消失（視窗大小不變，只記錄狀態）
   ipcMain.on('pet:bubble', (e, open) => setPetExpanded(petBySender(e.sender), !!open));
+  // 助手視窗回報可見區域；第一次回報後才把視窗顯示出來
+  ipcMain.on('pet:shape', (e, rects) => {
+    const pet = petBySender(e.sender);
+    if (!pet) return;
+    setPetShape(pet, rects);
+    if (!pet.win.isVisible()) pet.win.showInactive();
+  });
 
   // 點擊桌寵 → 開/關面板
   ipcMain.on('panel:toggle', () => togglePanel());
