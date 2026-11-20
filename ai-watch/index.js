@@ -141,6 +141,10 @@ function createAiWatcher(options) {
       case 'title':
         s.aiTitle = shorten(sig.text, 60);
         break;
+      case 'image':
+        // 圖片不放進面板快照（太大），只隨事件送給桌寵
+        if (!silent) onEvent({ kind: 'image', image: sig.url, fromUser: !!sig.fromUser, session: publicSession(s) });
+        break;
       case 'customTitle':
         s.customTitle = shorten(sig.text, 60);
         break;

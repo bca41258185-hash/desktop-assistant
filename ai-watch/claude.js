@@ -31,6 +31,17 @@ function isSystemText(t) {
   return !s || s.startsWith('<') || s.startsWith('Caveat:');
 }
 
+// 紀錄中的 base64 圖片區塊 → data: 網址；太大（> 6MB）的略過，避免拖慢桌寵
+const IMAGE_TYPES = /^image\/(png|jpeg|gif|webp)$/;
+const MAX_IMAGE_CHARS = 6 * 1024 * 1024;
+function imageUrl(b) {
+  if (!b || b.type !== 'image' || !b.source || b.source.type !== 'base64') return '';
+  const mt = String(b.source.media_type || '');
+  const data = String(b.source.data || '');
+  if (!IMAGE_TYPES.test(mt) || !data || data.length > MAX_IMAGE_CHARS) return '';
+  return `data:${mt};base64,${data}`;
+}
+
 function describeTool(name, input) {
   input = input || {};
   const file = input.file_path || input.notebook_path || input.path || '';
@@ -80,9 +91,17 @@ function parse(entry) {
 
   if (entry.type === 'user') {
     const content = msg.content;
+    const images = [];
     if (Array.isArray(content)) {
       for (const b of content) {
-        if (b && b.type === 'tool_result') out.push({ type: 'toolDone', id: b.tool_use_id });
+        if (b && b.type === 'tool_result') {
+          out.push({ type: 'toolDone', id: b.tool_use_id });
+          // Claude 讀取圖片檔（例如截圖）時，圖片會出現在工具結果裡
+          if (Array.isArray(b.content)) b.content.forEach((x) => { const u = imageUrl(x); if (u) images.push(u); });
+        } else {
+          const u = imageUrl(b);                 // 使用者貼上的圖片
+          if (u) images.push(u);
+        }
       }
     }
     const t = textOf(content);
@@ -91,6 +110,8 @@ function parse(entry) {
     } else if (!entry.isMeta && !isSystemText(t) && !(Array.isArray(content) && content.some((b) => b && b.type === 'tool_result'))) {
       out.push({ type: 'prompt', text: t.trim() });
     }
+    // 同一則訊息有多張圖時只取最後一張
+    if (images.length) out.push({ type: 'image', url: images[images.length - 1], fromUser: !content.some((b) => b && b.type === 'tool_result') });
   } else if (entry.type === 'assistant') {
     const content = Array.isArray(msg.content) ? msg.content : [];
     for (const b of content) {

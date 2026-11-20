@@ -29,19 +29,28 @@ function setPose(pose) {
 // --- 說話氣泡（字串＝一般訊息；物件可帶出處，用於名言） ---
 const bubbleTextEl = bubbleEl.querySelector('.bubble-text') || bubbleEl;
 const bubbleAttrEl = bubbleEl.querySelector('.bubble-attr');
+const bubbleImgEl = bubbleEl.querySelector('.bubble-img');
 let bubbleTimer = null;
 function showBubble(payload) {
   let text = '';
   let attr = '';
+  let image = '';
   let duration = 6000;
   if (payload && typeof payload === 'object') {
     text = payload.text || payload.zh || '';
     attr = payload.attribution || payload.sourceZh || '';
+    // 只接受 data: 圖片（對話紀錄裡的截圖／貼上的圖片），不載入任何外部網址
+    image = /^data:image\/(png|jpeg|gif|webp);base64,/.test(payload.image || '') ? payload.image : '';
     duration = Number(payload.duration) || (attr ? 12000 : 6000);
   } else {
     text = String(payload || '');
   }
-  if (!text) return;
+  if (!text && !image) return;
+  if (bubbleImgEl) {
+    if (image) bubbleImgEl.src = image; else bubbleImgEl.removeAttribute('src');
+    bubbleImgEl.hidden = !image;
+  }
+  bubbleEl.classList.toggle('has-img', !!image);
   bubbleTextEl.textContent = text;
   if (bubbleAttrEl) {
     bubbleAttrEl.textContent = attr;

@@ -187,6 +187,19 @@ html, body {
   font-style: italic;
 }
 .bubble-attr[hidden] { display: none; }
+/* 對話中的圖片：放在文字上方，限制在泡泡寬度與視窗可用高度內 */
+.bubble-img {
+  display: block;
+  max-width: 100%;
+  max-height: 300px;
+  margin: 2px auto 6px;
+  border: 1px solid #d8d2c2;
+  border-radius: 3px;
+  background: #fff;
+  object-fit: contain;
+}
+.bubble-img[hidden] { display: none; }
+.bubble.has-img .bubble-text { font-size: 26px; }
 .bubble.has-attr { max-width: 500px; padding-bottom: 8px; }
 
 /* 折角 */

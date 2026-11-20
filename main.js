@@ -342,11 +342,18 @@ function clip(text, n) {
   return t.length > n ? t.slice(0, n) + '…' : t;
 }
 
-function onAiEvent({ kind, session: s }) {
+function onAiEvent({ kind, session: s, image, fromUser }) {
   const key = s.id + ':' + kind;
   const t = Date.now();
-  if (t - (aiLastBubble.get(key) || 0) < 4000) return;
+  // 圖片不節流：連續好幾張時一律顯示最新的一張
+  if (kind !== 'image' && t - (aiLastBubble.get(key) || 0) < 4000) return;
   aiLastBubble.set(key, t);
+  // 剛顯示圖片的幾秒內，「開始」等文字訊息不要蓋掉圖片
+  if (kind !== 'image' && t - (aiLastBubble.get(s.id + ':image') || 0) < 8000 && kind !== 'waiting') {
+    if (kind === 'start') setPetPose('think');
+    if (kind === 'done') setPetPose('happy');
+    return;
+  }
 
   // 個別加入的對話用它的標題（與 Claude 桌面版側欄相同）稱呼，比資料夾名稱好認
   const sid = path.basename(String(s.id || ''), '.jsonl');
@@ -354,7 +361,15 @@ function onAiEvent({ kind, session: s }) {
     s = Object.assign({}, s, { projectName: clip(s.title, 18) });
   }
 
-  if (kind === 'start') {
+  if (kind === 'image') {
+    if (petWindow && !petWindow.isDestroyed()) {
+      petWindow.webContents.send('pet:speak', {
+        text: `「${s.projectName}」${fromUser ? '你貼的圖' : 'Claude 看的圖'}`,
+        image,
+        duration: 15000
+      });
+    }
+  } else if (kind === 'start') {
     setPetPose('think');
     speak(`${s.label} 開始處理「${s.projectName}」：${clip(s.lastPrompt, 26)}`);
   } else if (kind === 'waiting') {

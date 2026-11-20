@@ -495,3 +495,27 @@ test('列出最近對話：標題優先序 custom-title > ai-title > 第一句�
   assert.strictEqual(byId.c.cwd, '/p');
   assert.ok(!byId.d);
 });
+
+// ---------------------------------------------------------------------------
+// 對話中的圖片
+// ---------------------------------------------------------------------------
+test('圖片：使用者貼的圖與 Claude 讀取的圖都送給桌寵；啟動時的舊圖不送；非圖片格式略過', () => {
+  const t = setupWith({ projects: ['/p'] });
+  const f = path.join(t.root, enc('/p'), 's.jsonl');
+  const img = (data, mt) => ({ type: 'image', source: { type: 'base64', media_type: mt || 'image/png', data } });
+  append(f, [{ type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: [img('T0xE')] } }]);
+  t.w._onAdd('claude', f, true);   // 啟動時已存在的內容：不送
+  append(f, [
+    { type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: [{ type: 'text', text: '看這張' }, img('VVNFUg==')] } },
+    { type: 'assistant', cwd: '/p', timestamp: t.iso(), message: { role: 'assistant', content: [{ type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: 'a.png' } }] } },
+    { type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'r1', content: [img('VE9PTA==', 'image/jpeg')] }] } },
+    { type: 'user', cwd: '/p', timestamp: t.iso(), message: { role: 'user', content: [img('PHN2Zz4=', 'image/svg+xml')] } }
+  ]);
+  t.w._onChange('claude', f);
+  const imgs = t.events.filter((e) => e.kind === 'image');
+  assert.deepStrictEqual(imgs.map((e) => [e.image, e.fromUser]), [
+    ['data:image/png;base64,VVNFUg==', true],
+    ['data:image/jpeg;base64,VE9PTA==', false]
+  ]);
+  assert.ok(!JSON.stringify(t.w.snapshot()).includes('base64'), '面板快照不含圖片資料');
+});
