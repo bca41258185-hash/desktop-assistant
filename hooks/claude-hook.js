@@ -24,6 +24,9 @@ const path = require('path');
 // 最多等使用者 10 分鐘。等待期間 Claude 自己的詢問畫面照常可用（兩邊誰先回答算誰的），
 // 桌寵發現對話不再等待時也會主動放掉，所以等久一點不會卡住任何東西。
 const PERMISSION_WAIT_MS = 10 * 60 * 1000;
+// 從桌寵送給 Claude 的訊息，前後各加一小段說明
+const REPLY_PREFIX = '使用者透過桌面大師（桌寵）傳來新的訊息，請當成使用者的下一則訊息來處理：\n';
+const REPLY_SUFFIX = '\n\n（你的回覆會顯示在桌寵的小泡泡上：第一行請用一句 30 字以內的完整句子直接講結論，細節寫在後面。）';
 const STOP_BASE_WAIT_MS = 20 * 1000;    // 回合結束後先等 20 秒，看使用者要不要在泡泡上回覆
 const MAX_BYTES = 1024 * 1024;   // 事件檔超過 1MB 就換新，避免無限成長
 
@@ -84,6 +87,18 @@ function main(raw) {
     fs.writeFileSync(reqFile, JSON.stringify({ id, tool_name: String(input.tool_name || ''), summary: summarize(input.tool_name, input.tool_input), questions: questions || undefined }));
     ev.request_id = id;
     ev.tool_name = String(input.tool_name || '');
+  }
+
+  // 回合結束時先看「待送信箱」：使用者在 Claude 做事途中從桌寵打的話，這時交給 Claude 繼續做
+  if (input.hook_event_name === 'Stop' && /^[\w-]+$/.test(String(input.session_id || ''))) {
+    const ob = path.join(dir, 'outbox', String(input.session_id) + '.json');
+    let queued = '';
+    try { queued = String(JSON.parse(fs.readFileSync(ob, 'utf8')).text || '').trim(); } catch (e) { /* 沒有待送的 */ }
+    if (queued) {
+      try { fs.unlinkSync(ob); } catch (e) { /* ignore */ }
+      process.stdout.write(JSON.stringify({ decision: 'block', reason: REPLY_PREFIX + queued + REPLY_SUFFIX }));
+      return null;
+    }
   }
 
   // 回合結束：使用者開了「做完後可在泡泡回覆」且桌寵開著時，留一個回覆請求給桌寵
@@ -192,8 +207,7 @@ function waitForReply(reqFile) {
       let ans = null;
       try { ans = JSON.parse(fs.readFileSync(ansFile, 'utf8')); } catch (e) { /* 還沒回答 */ }
       if (ans && ans.choice === 'reply' && typeof ans.message === 'string' && ans.message.trim()) {
-        return finish({ decision: 'block', reason: '使用者透過桌面大師（桌寵）傳來新的訊息，請當成使用者的下一則訊息來處理：\n' + ans.message.trim() +
-          '\n\n（你的回覆會顯示在桌寵的小泡泡上：第一行請用一句 30 字以內的完整句子直接講結論，細節寫在後面。）' }, 'reply');
+        return finish({ decision: 'block', reason: REPLY_PREFIX + ans.message.trim() + REPLY_SUFFIX }, 'reply');
       }
       if (ans) return finish(null, 'pass');
       const waited = Date.now() - started;

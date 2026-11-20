@@ -1,7 +1,7 @@
 // 主行程：負責視窗、IPC、資料夾監看、設定讀寫、提醒、AI 呼叫。
 // Main process: windows, IPC, folder watching, config I/O, reminders, AI calls.
 
-const { app, BrowserWindow, ipcMain, dialog, screen, Menu, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, Menu, shell, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
@@ -9,6 +9,7 @@ const { createProvider } = require('./providers');
 const { createAiWatcher, defaultRoots } = require('./ai-watch');
 const hooksInstaller = require('./ai-watch/hooks-installer');
 const { listClaudeSessions, desktopSessionMeta } = require('./ai-watch/claude-sessions');
+const compose = require('./ai-watch/compose');
 const { CHARACTERS, DEFAULT_ID, categoryOf } = require('./renderer/characters');
 
 // 名言資料：讀取 data/ 下所有 quotes*.json（每個職業一個檔，方便擴充）
@@ -440,6 +441,7 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
     permLog(`${id} reply-open`);
     pendingPermissions.add(id);
     pendingReplies.add(id);
+    replyBySession.set(sessionIdOf(s), id);
     setPetPose('happy');
     speak({
       text: petLine(s.lastTextFull || s.lastText, 44) || '完成了',
@@ -507,6 +509,73 @@ function onAiEvent({ kind, session: s, image, fromUser, request }) {
       // 「完成」要等使用者按確認才消失，不會自己不見，也不會被名言／提醒蓋掉
       speak({ text: petLine(s.lastTextFull || s.lastText, 44) || '完成了', ai: true, sticky: true });
     }
+  }
+}
+
+// --- 主動對 Claude 說話 ---
+const replyBySession = new Map();   // 對話 ID → 做完後還在等回覆的鉤子請求 id
+
+function sessionIdOf(s) {
+  return path.basename(String((s && s.id) || ''), '.jsonl');
+}
+
+// 要送給哪一段對話：追蹤中的對話裡，等你的 > 進行中的 > 最近有動靜的
+function composeTarget() {
+  const live = [].concat(...(aiSnapshot || []).map((p) => p.sessions || []));
+  const rank = { waiting: 0, working: 1, done: 2, idle: 3 };
+  live.sort((a, b) => (rank[a.status] - rank[b.status]) || (b.lastActivity - a.lastActivity));
+  if (live.length) {
+    const s = live[0];
+    return { id: sessionIdOf(s), title: (s.title && s.title !== '（尚無指令）') ? s.title : '對話', status: s.status };
+  }
+  const w = aiSessions()[0];
+  return w ? { id: w.id, title: w.title || '對話', status: 'idle' } : null;
+}
+
+function openCompose() {
+  const t = composeTarget();
+  if (!t) {
+    speak({ text: '先點我兩下，按「＋ 加入對話」選一段對話。', duration: 8000 });
+    return;
+  }
+  speak({
+    text: '要跟 Claude 說什麼？',
+    attribution: '送到：' + clip(t.title, 22),
+    ai: true, sticky: true, action: 'compose', inputPlaceholder: '打字，按 Enter 送出'
+  });
+}
+
+async function sendCompose(text) {
+  text = String(text || '').trim().slice(0, 4000);
+  const t = composeTarget();
+  if (!text || !t) return;
+  const say = (msg) => speak({ text: msg, ai: true, duration: 7000 });
+  try {
+    // 1. Claude 剛做完、鉤子還在等：直接交給它
+    const rid = replyBySession.get(t.id);
+    if (rid && pendingReplies.delete(rid)) {
+      answerPermission(rid, 'reply', null, text);
+      return say('送出了。');
+    }
+    // 2. Claude 正在做事：先放進待送信箱，這一回合做完就會交給它
+    if (t.status === 'working' || t.status === 'waiting') {
+      compose.queueMessage(aiHooksDir(), t.id, text);
+      return say('收到，Claude 做完手上的事就會看到。');
+    }
+    // 3. Claude 閒著：用官方連結開到那段對話，把字貼進去送出
+    let meta = null;
+    try { meta = desktopSessionMeta().get(t.id); } catch (e) { /* 沒有桌面版資料 */ }
+    clipboard.writeText(text);
+    if (!meta || !/^local_[A-Za-z0-9-]+$/.test(meta.localId || '')) {
+      focusClaudeWindow();
+      return say('已經複製好了，請到 Claude 按 Ctrl+V 貼上。');
+    }
+    await shell.openExternal('claude://code/continue?session=' + meta.localId);
+    const r = await compose.pasteIntoClaude();
+    say(r === 'sent' ? '送出了。' : '已經複製好了，請到 Claude 按 Ctrl+V 貼上。');
+  } catch (e) {
+    console.error('送出訊息失敗:', e.message);
+    say('沒送出去，請到 Claude 直接打字。');
   }
 }
 
@@ -610,6 +679,8 @@ function registerIpc() {
   // 點擊桌寵 → 開/關面板
   ipcMain.on('panel:toggle', () => togglePanel());
   ipcMain.on('pet:menu', () => showPetMenu());
+  ipcMain.on('pet:compose-open', () => openCompose());
+  ipcMain.on('pet:compose-send', (e, text) => { sendCompose(text); });
   ipcMain.on('claude:focus', () => focusClaudeWindow());
   // 使用者開始在泡泡上打字：請鉤子繼續等
   ipcMain.on('pet:typing', (e, requestId) => {
@@ -988,6 +1059,7 @@ function showPetMenu() {
   if (!petWindow || petWindow.isDestroyed()) return;
   Menu.buildFromTemplate([
     { label: '打開面板', click: () => { if (!panelWindow.isVisible()) togglePanel(); else panelWindow.focus(); } },
+    { label: '✏️ 對 Claude 說話', click: () => openCompose() },
     { label: '說一句名言', click: () => speakRandomQuote() },
     { type: 'separator' },
     {

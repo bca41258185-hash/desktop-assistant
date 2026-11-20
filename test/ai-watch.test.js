@@ -671,3 +671,19 @@ test('做完後回覆：Stop 鉤子等桌寵的回覆 → 以 decision:block 把
   assert.ok(r.ms < 3000);
   assert.deepStrictEqual(fs.readdirSync(path.join(dir, 'permission')), []);
 });
+
+test('主動說話：Claude 做事途中打的話放進待送信箱，回合結束時由 Stop 鉤子交給 Claude，送完就清掉', () => {
+  const composeLib = require('../ai-watch/compose');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-outbox-'));
+  fs.writeFileSync(path.join(dir, 'watch-projects.json'), JSON.stringify({ projects: [], sessions: ['abc'], answer: true }));
+  composeLib.queueMessage(dir, 'abc', '順便把標題改成藍色');
+  composeLib.queueMessage(dir, 'abc', '還有字放大');
+  const run = (sid) => spawnSync(process.execPath, [HOOK, dir], { encoding: 'utf8', input: JSON.stringify({ hook_event_name: 'Stop', cwd: path.resolve('/x'), session_id: sid, transcript_path: '/a.jsonl' }) });
+  assert.strictEqual(run('zzz').stdout, '', '別的對話收不到');
+  const o = JSON.parse(run('abc').stdout);
+  assert.strictEqual(o.decision, 'block');
+  assert.ok(o.reason.includes('順便把標題改成藍色') && o.reason.includes('還有字放大'));
+  assert.ok(!fs.existsSync(composeLib.outboxFile(dir, 'abc')));
+  assert.strictEqual(run('abc').stdout, '', '送過就不再送');
+  assert.throws(() => composeLib.queueMessage(dir, '../x', 'hi'));
+});

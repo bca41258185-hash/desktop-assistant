@@ -40,6 +40,11 @@ if (bubbleInputEl) {
     e.preventDefault();
     const text = bubbleTextInput.value.trim();
     const id = bubbleInputEl.dataset.requestId;
+    if (text && stickyAction === 'compose') {       // 主動說話：不屬於任何一個等待中的詢問
+      hideBubble();
+      if (window.api.composeSend) window.api.composeSend(text);
+      return;
+    }
     if (!text || !id) return;
     if (window.api.answerChoice) window.api.answerChoice(id, 'text', text);
     hideBubble();
@@ -94,7 +99,7 @@ function showBubble(payload) {
   // 先請主行程把視窗展開，再顯示泡泡；泡泡消失後收回，只留角色大小
   if (window.api.setBubbleOpen) window.api.setBubbleOpen(true);
   bubbleEl.classList.add('show');
-  stickyAction = sticky ? (['reply', 'choice'].includes(payload.action) ? payload.action : 'confirm') : '';
+  stickyAction = sticky ? (['reply', 'choice', 'compose'].includes(payload.action) ? payload.action : 'confirm') : '';
   // 選擇題：在泡泡裡放幾顆大選項，點了就把答案送回去
   if (bubbleChoicesEl) {
     bubbleChoicesEl.innerHTML = '';
@@ -116,17 +121,19 @@ function showBubble(payload) {
   }
   // 打字回覆：選項之外也可以自己輸入
   if (bubbleInputEl) {
-    const canType = sticky && !!payload.inputPlaceholder && !!payload.requestId;
+    const canType = sticky && !!payload.inputPlaceholder && (!!payload.requestId || stickyAction === 'compose');
     bubbleInputEl.hidden = !canType;
-    bubbleInputEl.dataset.requestId = canType ? payload.requestId : '';
+    bubbleInputEl.dataset.requestId = canType ? (payload.requestId || '') : '';
+    if (stickyAction === 'compose') setTimeout(() => bubbleTextInput.focus(), 150);
     bubbleTextInput.value = '';
     bubbleTextInput.placeholder = canType ? payload.inputPlaceholder : '';
   }
   bubbleEl.classList.toggle('sticky', sticky);
   bubbleEl.classList.toggle('confirm', stickyAction === 'confirm');
+  bubbleEl.classList.toggle('compose', stickyAction === 'compose');
   bubbleEl.classList.toggle('reply', stickyAction === 'reply' || stickyAction === 'choice');
   if (bubbleHintEl) {
-    bubbleHintEl.textContent = stickyAction === 'reply' ? '點一下去回覆' : '點一下確認';
+    bubbleHintEl.textContent = stickyAction === 'reply' ? '點一下去回覆' : stickyAction === 'compose' ? '點泡泡取消' : '點一下確認';
     bubbleHintEl.hidden = !sticky || stickyAction === 'choice';
   }
   stickyOpen = sticky;
@@ -139,7 +146,7 @@ function hideBubble() {
   if (bubbleTimer) clearTimeout(bubbleTimer);
   bubbleTimer = null;
   stickyAction = '';
-  bubbleEl.classList.remove('show', 'sticky', 'confirm', 'reply');
+  bubbleEl.classList.remove('show', 'sticky', 'confirm', 'reply', 'compose');
   if (bubbleHintEl) bubbleHintEl.hidden = true;
   if (bubbleChoicesEl) bubbleChoicesEl.hidden = true;
   if (bubbleInputEl) bubbleInputEl.hidden = true;
@@ -244,3 +251,10 @@ window.addEventListener('mouseup', () => {
   }
 });
 let clickTimer = null;
+
+// ✏️ 按鈕：隨時對 Claude 說話
+const composeBtn = document.getElementById('composeBtn');
+if (composeBtn) {
+  composeBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+  composeBtn.addEventListener('click', (e) => { e.stopPropagation(); if (window.api.openCompose) window.api.openCompose(); });
+}

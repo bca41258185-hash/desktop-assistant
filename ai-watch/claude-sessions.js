@@ -165,6 +165,7 @@ function desktopSessionMeta(dirs) {
     const parent = o.spawnedFrom && byLocal.get(o.spawnedFrom.sessionId);
     out.set(String(o.cliSessionId), {
       title: String(o.title || ''),
+      localId: String(o.sessionId || ''),      // 桌面版的對話代號（claude:// 連結用）
       archived: !!o.isArchived,
       group: base(root.originCwd || root.cwd),
       parentTitle: parent ? String(parent.title || '') : ''
