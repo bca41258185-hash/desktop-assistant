@@ -343,6 +343,8 @@ function clip(text, n) {
 }
 
 function onAiEvent({ kind, session: s, image, fromUser }) {
+  // 使用者自己貼的圖不顯示（自己已經看過），只顯示 Claude 在對話中開的圖
+  if (kind === 'image' && fromUser) return;
   const key = s.id + ':' + kind;
   const t = Date.now();
   // 圖片不節流：連續好幾張時一律顯示最新的一張
@@ -364,7 +366,7 @@ function onAiEvent({ kind, session: s, image, fromUser }) {
   if (kind === 'image') {
     if (petWindow && !petWindow.isDestroyed()) {
       petWindow.webContents.send('pet:speak', {
-        text: fromUser ? '你貼的圖' : 'Claude 看的圖',
+        text: 'Claude 看的圖',
         image,
         duration: 15000
       });
