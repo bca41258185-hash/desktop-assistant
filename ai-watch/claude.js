@@ -72,6 +72,8 @@ function parse(entry) {
   if (entry.cwd) out.push({ type: 'cwd', cwd: entry.cwd });
   // Claude Code 自動產生的對話標題
   if (entry.type === 'ai-title' && entry.aiTitle) out.push({ type: 'title', text: String(entry.aiTitle) });
+  // 使用者（或 Claude 桌面版側欄）命名的標題，優先於自動標題
+  if (entry.type === 'custom-title' && entry.customTitle) out.push({ type: 'customTitle', text: String(entry.customTitle) });
   if (entry.isSidechain) return out;            // 子代理內部的對話，不視為主線進度
   const msg = entry.message;
   if (!msg || typeof msg !== 'object') return out;

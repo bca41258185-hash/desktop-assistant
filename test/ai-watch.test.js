@@ -437,3 +437,61 @@ test('安裝→移除：Windows 常見格式（BOM、CRLF、4 格／Tab 縮排�
     assert.strictEqual(fs.readFileSync(file, 'utf8'), orig, `第 ${i} 例未逐位元組還原`);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 個別指定的對話（session ID）
+// ---------------------------------------------------------------------------
+test('指定對話：不在指定專案的資料夾，只要 session ID 在清單就追蹤；標題用使用者命名的標題', () => {
+  const hookFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'aiwatch-s-')), 'hook-events.jsonl');
+  const t = setupWith({ projects: [], sessions: ['sess-keep'], hookEventsFile: hookFile });
+  const keep = path.join(t.root, enc('/anywhere/else'), 'sess-keep.jsonl');
+  const other = path.join(t.root, enc('/anywhere/else'), 'sess-other.jsonl');
+  const lines = (text) => [
+    { type: 'user', cwd: '/anywhere/else', timestamp: t.iso(), message: { role: 'user', content: text } },
+    { type: 'ai-title', aiTitle: '自動標題' },
+    { type: 'custom-title', customTitle: 'Install desktop-assistant (PR #1) on this PC' }
+  ];
+  append(keep, lines('要追蹤'));
+  append(other, lines('不追蹤'));
+  t.w._onAdd('claude', keep, false);
+  t.w._onAdd('claude', other, false);
+  assert.deepStrictEqual(t.events.map((e) => e.session.lastPrompt), ['要追蹤']);
+  assert.strictEqual(t.w.snapshot()[0].sessions[0].title, 'Install desktop-assistant (PR #1) on this PC');
+
+  fs.writeFileSync(hookFile, '');
+  t.w._readHookEvents('skip');
+  append(hookFile, [{ event: 'Notification', cwd: '/anywhere/else', transcript_path: keep, notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' }]);
+  t.w._readHookEvents();
+  assert.deepStrictEqual(t.events.map((e) => e.kind), ['start', 'waiting']);
+});
+
+test('鉤子腳本：新格式 { projects, sessions } 依 session ID 記錄；舊陣列格式仍可用', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-s-'));
+  const run = (input) => spawnSync(process.execPath, [HOOK, dir], { input: JSON.stringify(input), encoding: 'utf8' });
+  const ev = path.join(dir, 'hook-events.jsonl');
+  fs.writeFileSync(path.join(dir, 'watch-projects.json'), JSON.stringify({ projects: [], sessions: ['abc'] }));
+  run({ hook_event_name: 'Stop', cwd: path.resolve('/x'), session_id: 'abc', transcript_path: '/a.jsonl' });
+  run({ hook_event_name: 'Stop', cwd: path.resolve('/x'), session_id: 'zzz', transcript_path: '/z.jsonl' });
+  assert.deepStrictEqual(fs.readFileSync(ev, 'utf8').trim().split('\n').map((l) => JSON.parse(l).session_id), ['abc']);
+
+  fs.writeFileSync(path.join(dir, 'watch-projects.json'), JSON.stringify([path.resolve('/x')]));
+  run({ hook_event_name: 'Stop', cwd: path.resolve('/x/sub'), session_id: 'zzz', transcript_path: '/z.jsonl' });
+  assert.strictEqual(fs.readFileSync(ev, 'utf8').trim().split('\n').length, 2);
+});
+
+test('列出最近對話：標題優先序 custom-title > ai-title > 第一句指令；空對話不列出', () => {
+  const { listClaudeSessions } = require('../ai-watch/claude-sessions');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cl-list-'));
+  const mk = (id, entries) => append(path.join(root, '-p', id + '.jsonl'), entries);
+  mk('a', [{ type: 'user', cwd: '/p', message: { role: 'user', content: '第一句指令' } }]);
+  mk('b', [{ type: 'user', cwd: '/p', message: { role: 'user', content: 'x' } }, { type: 'ai-title', aiTitle: 'AI 標題' }]);
+  mk('c', [{ type: 'user', cwd: '/p', message: { role: 'user', content: 'x' } }, { type: 'ai-title', aiTitle: 'AI 標題' },
+    { type: 'custom-title', customTitle: '舊名' }, { type: 'custom-title', customTitle: '側欄名稱' }]);
+  mk('d', [{ type: 'user', cwd: '/p', message: { role: 'user', content: '<command-name>/clear</command-name>' } }]);
+  const byId = Object.fromEntries(listClaudeSessions(root).map((s) => [s.id, s]));
+  assert.strictEqual(byId.a.title, '第一句指令');
+  assert.strictEqual(byId.b.title, 'AI 標題');
+  assert.strictEqual(byId.c.title, '側欄名稱');
+  assert.strictEqual(byId.c.cwd, '/p');
+  assert.ok(!byId.d);
+});

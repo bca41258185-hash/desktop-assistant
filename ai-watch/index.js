@@ -79,6 +79,10 @@ function createAiWatcher(options) {
   // null = 不限制（測試用）；陣列 = 只處理這些專案資料夾（含子資料夾）
   const projects = Array.isArray(opt.projects) ? opt.projects.filter(Boolean) : null;
   const projectNorms = projects ? projects.map(normPath) : null;
+  // 個別指定的 Claude Code 對話（session ID）：不論在哪個資料夾都追蹤
+  const sessionIds = new Set((Array.isArray(opt.sessions) ? opt.sessions : []).filter(Boolean).map(String));
+  const fileSessionId = (file) => path.basename(String(file || ''), '.jsonl');
+  const watchedSession = (file) => sessionIds.has(fileSessionId(file));
 
   function inProjects(cwd) {
     if (!projectNorms) return true;
@@ -136,6 +140,9 @@ function createAiWatcher(options) {
         break;
       case 'title':
         s.aiTitle = shorten(sig.text, 60);
+        break;
+      case 'customTitle':
+        s.customTitle = shorten(sig.text, 60);
         break;
       case 'prompt': {
         // 去重：同一句指令短時間內重複出現（例如 Codex 同時寫兩種格式）
@@ -239,6 +246,7 @@ function createAiWatcher(options) {
   // 判斷這個紀錄檔是否屬於指定專案：true／false／null（還無法判斷，例如檔案剛建立）
   function admit(tool, file) {
     if (!projects) return true;
+    if (tool === 'claude' && watchedSession(file)) return true;
     if (tool === 'claude' && !claudeDirMayMatch(file)) return false;
     const r = readFrom(file, 0, opt.peekBytes);
     if (!r) return null;
@@ -348,7 +356,7 @@ function createAiWatcher(options) {
     return {
       id: s.id, tool: s.tool, label: s.label, project,
       projectName: s.cwd ? path.basename(s.cwd) : '未知專案',
-      title: s.aiTitle || s.title || '（尚無指令）', status: s.status, interrupted: !!s.interrupted,
+      title: s.customTitle || s.aiTitle || s.title || '（尚無指令）', status: s.status, interrupted: !!s.interrupted,
       lastPrompt: shorten(s.lastPrompt, 120), lastAction: s.lastAction,
       lastText: shorten(s.lastText, 200), files: s.files.slice(0, 8),
       waitingMessage: s.waitingMessage, viaHooks: s.viaHooks,
@@ -390,9 +398,9 @@ function createAiWatcher(options) {
 
   function handleHook(ev) {
     if (!ev || !ev.event) return;
-    if (ev.cwd && !inProjects(ev.cwd)) return;
     const s = findSessionByTranscript(ev.transcript_path);
     if (!s) return;
+    if (ev.cwd && !inProjects(ev.cwd) && !watchedSession(s.id)) return;
     s.viaHooks = true;
     const at = now();
     if (ev.event === 'UserPromptSubmit') {
@@ -440,7 +448,7 @@ function createAiWatcher(options) {
         .on('error', (err) => console.error('鉤子事件監看錯誤:', err.message));
       watchers.push(hw);
     }
-    if (projects && projects.length === 0) {
+    if (projects && projects.length === 0 && sessionIds.size === 0) {
       // 沒有指定任何專案：不讀取任何對話紀錄
       timer = setInterval(tick, opt.tickMs);
       return api;

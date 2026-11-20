@@ -380,12 +380,26 @@ let aiHookMsg = '';
 function renderAiConfig() {
   aiWatchList.innerHTML = '';
   const list = aiState.watchProjects || [];
-  if (!list.length) {
-    aiWatchList.appendChild(el('li', 'empty', '尚未指定專案：目前不讀取任何對話。'));
+  const sess = aiState.watchSessions || [];
+  if (!list.length && !sess.length) {
+    aiWatchList.appendChild(el('li', 'empty', '尚未指定專案或對話：目前不讀取任何對話。'));
   }
+  sess.forEach((s) => {
+    const li = el('li');
+    const name = el('span', 'ai-watch-path', '💬 ' + (s.title || s.id));
+    name.title = (s.cwd ? s.cwd + '\n' : '') + s.id;
+    li.appendChild(name);
+    const rm = el('button', '', '移除');
+    rm.addEventListener('click', async () => {
+      aiState = await window.api.removeAiSession(s.id);
+      renderAi();
+    });
+    li.appendChild(rm);
+    aiWatchList.appendChild(li);
+  });
   list.forEach((p) => {
     const li = el('li');
-    li.appendChild(el('span', 'ai-watch-path', p));
+    li.appendChild(el('span', 'ai-watch-path', '📁 ' + p));
     const rm = el('button', '', '移除');
     rm.addEventListener('click', async () => {
       aiState = await window.api.removeAiProject(p);
@@ -411,6 +425,45 @@ function renderAiConfig() {
     ? '已能精準提醒「需要你允許」與「回合結束」。Claude Code 通常會自動載入；若沒有反應，請重新開啟該對話。'
     : '安裝後可精準提醒「需要你允許」；未安裝時以「工具呼叫超過 20 秒沒結果」推測。會修改 Claude Code 的 settings.json（先備份、可移除）。');
 }
+
+// 「加入對話」：列出最近的 Claude Code 對話，點一下就加入追蹤
+const aiPicker = document.getElementById('aiSessionPicker');
+const aiPickerList = document.getElementById('aiPickerList');
+
+async function openSessionPicker() {
+  aiPicker.hidden = false;
+  aiPickerList.innerHTML = '';
+  aiPickerList.appendChild(el('li', 'empty', '讀取中…'));
+  const items = await window.api.recentAiSessions();
+  aiPickerList.innerHTML = '';
+  if (!items.length) {
+    aiPickerList.appendChild(el('li', 'empty', '最近 14 天沒有 Claude Code 對話。'));
+    return;
+  }
+  items.forEach((s) => {
+    const li = el('li', s.watched ? 'watched' : '');
+    const text = el('div', 'ai-picker-text');
+    text.appendChild(el('span', 'ai-picker-title', s.title));
+    text.appendChild(el('span', 'ai-picker-meta', `${timeAgo(s.mtime)}・${s.cwd || '未知資料夾'}`));
+    li.appendChild(text);
+    const btn = el('button', '', s.watched ? '已加入' : '加入');
+    btn.disabled = s.watched;
+    btn.addEventListener('click', async () => {
+      aiState = await window.api.addAiSession({ id: s.id, title: s.title, cwd: s.cwd });
+      btn.textContent = '已加入';
+      btn.disabled = true;
+      li.className = 'watched';
+      renderAi();
+    });
+    li.appendChild(btn);
+    aiPickerList.appendChild(li);
+  });
+}
+
+document.getElementById('aiAddSession').addEventListener('click', () => {
+  if (aiPicker.hidden) openSessionPicker(); else aiPicker.hidden = true;
+});
+document.getElementById('aiPickerClose').addEventListener('click', () => { aiPicker.hidden = true; });
 
 document.getElementById('aiAddProject').addEventListener('click', async () => {
   aiState = await window.api.addAiProject();
@@ -465,8 +518,8 @@ function renderAi() {
     return;
   }
   if (!projects.length) {
-    if ((aiState.watchProjects || []).length) {
-      aiList.appendChild(el('p', 'empty', '指定專案最近 24 小時沒有 Claude Code 或 Codex 的對話。開始一段對話後，這裡會即時更新。'));
+    if ((aiState.watchProjects || []).length || (aiState.watchSessions || []).length) {
+      aiList.appendChild(el('p', 'empty', '指定的專案／對話最近 24 小時沒有 Claude Code 或 Codex 的對話。開始一段對話後，這裡會即時更新。'));
     }
     return;
   }

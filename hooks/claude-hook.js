@@ -7,12 +7,13 @@
 // 安全原則（這支腳本在每次 Claude Code 事件時都會執行）：
 //  - 一律 exit 0、stdout 不輸出任何東西 → 絕不阻擋或改變 Claude 的行為
 //    （UserPromptSubmit 的 stdout 會被加進 Claude 的上下文，所以必須保持安靜）。
-//  - 只記錄「指定專案」內的事件；不在清單內的對話直接略過、不寫任何東西。
+//  - 只記錄「指定專案」內或「指定對話」（session ID）的事件；其他對話直接略過、不寫任何東西。
 //  - 不記錄你輸入的指令內容與 Claude 的回覆，只記事件種類、時間、對話檔路徑。
 //  - 不依賴任何套件；任何錯誤都吞掉。
 //
 // 用法：node claude-hook.js <資料夾>
-//   <資料夾>/watch-projects.json  ← 桌寵寫入的指定專案清單（JSON 陣列）
+//   <資料夾>/watch-projects.json  ← 桌寵寫入的清單：{ projects: [...], sessions: [...] }
+//                                    （舊版為專案路徑陣列，仍相容）
 //   <資料夾>/hook-events.jsonl    ← 這支腳本附加事件的檔案
 
 const fs = require('fs');
@@ -41,9 +42,12 @@ function main(raw) {
   try { input = JSON.parse(raw); } catch (e) { return; }
   if (!input || !input.cwd) return;
 
-  let projects = [];
-  try { projects = JSON.parse(fs.readFileSync(path.join(dir, 'watch-projects.json'), 'utf8')); } catch (e) { return; }
-  if (!Array.isArray(projects) || !inProjects(input.cwd, projects)) return;
+  let watch;
+  try { watch = JSON.parse(fs.readFileSync(path.join(dir, 'watch-projects.json'), 'utf8')); } catch (e) { return; }
+  const projects = Array.isArray(watch) ? watch : (watch && Array.isArray(watch.projects) ? watch.projects : []);
+  const sessions = watch && Array.isArray(watch.sessions) ? watch.sessions.map(String) : [];
+  const ok = inProjects(input.cwd, projects) || (input.session_id && sessions.includes(String(input.session_id)));
+  if (!ok) return;
 
   const ev = {
     t: new Date().toISOString(),

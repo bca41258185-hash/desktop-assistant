@@ -6,8 +6,9 @@ const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
 const { createProvider } = require('./providers');
-const { createAiWatcher } = require('./ai-watch');
+const { createAiWatcher, defaultRoots } = require('./ai-watch');
 const hooksInstaller = require('./ai-watch/hooks-installer');
+const { listClaudeSessions } = require('./ai-watch/claude-sessions');
 const { CHARACTERS, DEFAULT_ID, categoryOf } = require('./renderer/characters');
 
 // 名言資料：讀取 data/ 下所有 quotes*.json（每個職業一個檔，方便擴充）
@@ -118,8 +119,8 @@ function effectiveSettings() {
 // ---------------------------------------------------------------------------
 function createPetWindow() {
   petWindow = new BrowserWindow({
-    width: 290,
-    height: 440,
+    width: 520,
+    height: 640,
     frame: false,
     transparent: true,
     resizable: false,
@@ -146,8 +147,8 @@ function createPetWindow() {
   // 預設放在主螢幕右下角
   const { workArea } = screen.getPrimaryDisplay();
   petWindow.setPosition(
-    workArea.x + workArea.width - 310,
-    workArea.y + workArea.height - 460
+    workArea.x + workArea.width - 540,
+    workArea.y + workArea.height - 660
   );
 }
 
@@ -383,12 +384,19 @@ function aiProjects() {
   return Array.isArray(list) ? list.filter((p) => typeof p === 'string' && p) : [];
 }
 
-// 把指定專案清單寫給鉤子腳本讀（鉤子據此決定要不要記錄事件）
+// 個別指定的 Claude Code 對話：[{ id, title, cwd }]
+function aiSessions() {
+  const list = config.settings.aiSessions;
+  return Array.isArray(list) ? list.filter((s) => s && typeof s.id === 'string' && s.id) : [];
+}
+
+// 把指定專案／對話清單寫給鉤子腳本讀（鉤子據此決定要不要記錄事件）
 function writeWatchProjects() {
   try {
     fs.mkdirSync(aiHooksDir(), { recursive: true });
-    const list = config.settings.aiWatch !== false ? aiProjects() : [];
-    fs.writeFileSync(path.join(aiHooksDir(), 'watch-projects.json'), JSON.stringify(list, null, 2));
+    const on = config.settings.aiWatch !== false;
+    const data = { projects: on ? aiProjects() : [], sessions: on ? aiSessions().map((s) => s.id) : [] };
+    fs.writeFileSync(path.join(aiHooksDir(), 'watch-projects.json'), JSON.stringify(data, null, 2));
   } catch (e) {
     console.error('寫入監看專案清單失敗:', e.message);
   }
@@ -400,6 +408,7 @@ function setupAiWatch() {
   if (config.settings.aiWatch === false) { onAiUpdate([]); return; }
   aiWatcher = createAiWatcher({
     projects: aiProjects(),
+    sessions: aiSessions().map((s) => s.id),
     hookEventsFile: path.join(aiHooksDir(), 'hook-events.jsonl'),
     onEvent: onAiEvent,
     onUpdate: onAiUpdate
@@ -412,6 +421,7 @@ function aiState() {
     enabled: !!aiWatcher,
     roots: aiWatcher ? aiWatcher.roots : null,
     watchProjects: aiProjects(),
+    watchSessions: aiSessions(),
     hooks: hooksInstaller.status(),
     projects: aiSnapshot
   };
@@ -470,6 +480,30 @@ function registerIpc() {
     const set = new Set(aiProjects());
     res.filePaths.forEach((p) => set.add(p));
     config.settings.aiProjects = [...set];
+    saveConfig();
+    setupAiWatch();
+    return aiState();
+  });
+
+  // 列出最近的 Claude Code 對話，讓使用者挑選要追蹤哪一段（標題與 Claude 桌面版側欄相同）
+  ipcMain.handle('ai:recent-sessions', () => {
+    const watched = new Set(aiSessions().map((s) => s.id));
+    return listClaudeSessions(defaultRoots().claude, { limit: 40 })
+      .map((s) => ({ id: s.id, title: s.title, cwd: s.cwd, mtime: s.mtime, watched: watched.has(s.id) }));
+  });
+
+  ipcMain.handle('ai:add-session', (e, s) => {
+    if (!s || typeof s.id !== 'string' || !/^[\w-]+$/.test(s.id)) return aiState();
+    const list = aiSessions().filter((x) => x.id !== s.id);
+    list.push({ id: s.id, title: String(s.title || '').slice(0, 80), cwd: String(s.cwd || '') });
+    config.settings.aiSessions = list;
+    saveConfig();
+    setupAiWatch();
+    return aiState();
+  });
+
+  ipcMain.handle('ai:remove-session', (e, id) => {
+    config.settings.aiSessions = aiSessions().filter((x) => x.id !== id);
     saveConfig();
     setupAiWatch();
     return aiState();
