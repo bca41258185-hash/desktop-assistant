@@ -1095,8 +1095,8 @@ function focusClaudeWindow() {
 function showPetMenu() {
   if (!petWindow || petWindow.isDestroyed()) return;
   Menu.buildFromTemplate([
-    { label: '打開面板', click: () => { if (!panelWindow.isVisible()) togglePanel(); else panelWindow.focus(); } },
-    { label: '✏️ 對 Claude 說話', click: () => openCompose() },
+    { label: '📋 打開對話清單', click: () => { if (!panelWindow.isVisible()) togglePanel(); else panelWindow.focus(); } },
+    { label: '✏️ 對 Claude 說', click: () => openCompose() },
     { label: '說一句名言', click: () => speakRandomQuote() },
     { type: 'separator' },
     {
@@ -1132,7 +1132,7 @@ app.whenReady().then(() => {
     saveConfig();
     setTimeout(() => {
       if (!panelWindow.isVisible()) panelWindow.show();
-      speak({ text: '面板打開了。請按面板上面的「＋ 加入對話」。', duration: 20000 });
+      speak({ text: '對話清單打開了。請按上面的「＋ 加入對話」。', duration: 20000 });
     }, 7000);
   }
 

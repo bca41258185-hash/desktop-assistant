@@ -78,6 +78,7 @@ if (bubbleInputEl) {
 }
 let bubbleTimer = null;
 let stickyOpen = false;
+let deferredBubble = null;   // 使用者忙著回答／打字時被擋下、稍後要補顯示的通知
 let stickyAction = '';   // 'confirm'：點一下就收起；'reply'：點一下跳到 Claude 去回覆
 function showBubble(payload) {
   let text = '';
@@ -89,7 +90,11 @@ function showBubble(payload) {
   if (stickyOpen && !(payload && payload.ai)) return;
   // 使用者正在回答（選擇題／允許拒絕）或正在打字（說話）時，不讓「開始處理」「完成」這類通知
   // 把它蓋掉——否則按鈕和打到一半的字會突然消失。只有新的詢問（choice）可以取代。
-  if (stickyOpen && (stickyAction === 'choice' || stickyAction === 'compose') && !(payload && payload.action === 'choice')) return;
+  if (stickyOpen && (stickyAction === 'choice' || stickyAction === 'compose') && !(payload && payload.action === 'choice')) {
+    // 被擋下的重要通知（等你回答、完成）先記著，等使用者答完／送出後再顯示；回覆框那時多半已過期，所以拿掉
+    if (payload && payload.sticky) deferredBubble = Object.assign({}, payload, { requestId: '', inputPlaceholder: '' });
+    return;
+  }
   if (payload && typeof payload === 'object') {
     text = payload.text || payload.zh || '';
     attr = payload.attribution || payload.sourceZh || '';
@@ -203,6 +208,11 @@ function hideBubble() {
   if (bubbleTargetsEl) bubbleTargetsEl.hidden = true;
   if (bubbleSkipEl) bubbleSkipEl.hidden = true;
   if (window.api.setBubbleOpen) window.api.setBubbleOpen(false);
+  if (deferredBubble) {
+    const later = deferredBubble;
+    deferredBubble = null;
+    setTimeout(() => { if (!stickyOpen) showBubble(later); }, 1500);
+  }
 }
 // 點泡泡本身就是確認；等你回覆的泡泡點了會把 Claude 視窗叫到最前面
 bubbleEl.addEventListener('click', () => {
@@ -216,7 +226,10 @@ bubbleEl.addEventListener('click', () => {
 });
 // Claude 已經不再等你（例如你已在 Claude 裡回覆）→ 自動收起「等你回覆」的泡泡
 if (window.api.onDismissReply) {
-  window.api.onDismissReply(() => { if (stickyOpen && (stickyAction === 'reply' || stickyAction === 'choice')) hideBubble(); });
+  window.api.onDismissReply(() => {
+    // Claude 已經不在等了：之前記著要補顯示的「等你回答」也不用了
+    if (deferredBubble && deferredBubble.action === 'reply') deferredBubble = null;
+    if (stickyOpen && (stickyAction === 'reply' || stickyAction === 'choice')) hideBubble(); });
 }
 
 // 視窗被推回螢幕內時，角色反向位移以維持在原位

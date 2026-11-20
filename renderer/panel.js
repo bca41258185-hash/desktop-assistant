@@ -405,7 +405,7 @@ function renderAiConfig() {
   }
   aiHookBtn.textContent = h.installed ? '關閉' : (h.partial ? '重新開啟' : '開啟');
   aiHookHint.textContent = aiHookMsg || (h.installed
-    ? 'Claude 一需要你、或一做完，大師馬上提醒。沒反應時，到 Claude 把那個對話關掉，再重新打開。'
+    ? 'Claude 一需要你、或一做完，大師馬上提醒。沒反應時，把 Claude 整個關掉再重新打開。'
     : '開啟後提醒更快更準。會在 Claude 的設定檔加一小段，隨時可以關閉還原。');
 }
 
