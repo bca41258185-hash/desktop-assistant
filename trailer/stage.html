@@ -69,41 +69,84 @@
   .lineup .think-dots, .lineup .sketch-lines, .lineup .mouth-happy { display: none; }
   .lineup .who svg * { animation: none !important; }
 
+  /* ---------- 角色逐一登場：一人一張大卡 ---------- */
+  #cast { position: absolute; inset: 0; z-index: 35; display: flex; align-items: center; justify-content: center; gap: 60px; background: var(--ctint, #f4f1e9); opacity: 0; pointer-events: none; transition: opacity 0.2s, background 0.25s; }
+  #cast.on { opacity: 1; }
+  #cast .head { position: absolute; left: 0; right: 0; top: 54px; text-align: center; font-size: 46px; font-weight: 800; letter-spacing: 0.24em; color: rgba(43, 43, 40, 0.5); }
+  #cast .head b { color: var(--cacc, #d9532b); letter-spacing: 0.08em; margin-left: 18px; }
+  #cast .art { width: 600px; height: 675px; flex-shrink: 0; }
+  #cast .art svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 18px 22px rgba(50, 40, 20, 0.25)); }
+  #cast .art svg * { animation: none !important; }
+  #cast .think-dots, #cast .sketch-lines, #cast .mouth-happy { display: none; }
+  #cast .info { width: 920px; }
+  #cast .ctag { font-size: 62px; font-weight: 800; color: var(--cacc, #d9532b); letter-spacing: 0.08em; }
+  #cast .cname { font-size: 250px; font-weight: 900; line-height: 1.08; letter-spacing: 0.06em; white-space: nowrap; }
+  #cast .cdesc { font-size: 44px; font-weight: 600; color: #5c5b54; margin-top: 4px; }
+  #cast .cline { position: relative; display: inline-block; margin-top: 34px; padding: 20px 30px; font-size: 50px; font-weight: 700; background: #faf8f1; border: 3px solid #d8d2c2; border-radius: 12px; box-shadow: 0 10px 26px rgba(60, 60, 50, 0.2); }
+  #cast .cline::before { content: ""; position: absolute; left: -22px; top: 34px; border: 12px solid transparent; border-right-color: #d8d2c2; }
+  #cast.play .art { animation: artIn 0.4s cubic-bezier(.2,1.4,.3,1) both; }
+  #cast.play .ctag { animation: capIn 0.3s ease 0.05s both; }
+  #cast.play .cname { animation: nameIn 0.34s cubic-bezier(.2,1.5,.3,1) 0.08s both; }
+  #cast.play .cdesc { animation: capIn 0.3s ease 0.2s both; }
+  #cast.play .cline { animation: lineIn 0.34s cubic-bezier(.2,1.6,.3,1) 0.42s both; }
+  @keyframes artIn { from { opacity: 0; transform: translateX(-260px) rotate(-10deg) scale(0.7); } }
+  @keyframes nameIn { from { opacity: 0; transform: translateX(200px) scale(1.3); } }
+  @keyframes lineIn { from { opacity: 0; transform: scale(0.3) rotate(-6deg); } }
+
   /* ---------- 功能快剪：大數字＋大標語 ---------- */
   #num { position: absolute; left: 70px; top: 14px; z-index: 12; font-size: 300px; font-weight: 900; line-height: 1; color: transparent; -webkit-text-stroke: 5px rgba(43, 43, 40, 0.22); opacity: 0; transform: translateX(-120px); }
   #num.in { animation: slideIn 0.4s cubic-bezier(.2,1.3,.3,1) forwards; }
-  #cap { position: absolute; left: 96px; top: 190px; z-index: 13; width: 880px; opacity: 0; }
+  #cap { position: absolute; left: 96px; top: 150px; z-index: 13; width: 900px; opacity: 0; }
   #cap.in { animation: capIn 0.42s cubic-bezier(.2,1.3,.3,1) forwards; }
-  #cap .big { font-size: 104px; font-weight: 900; line-height: 1.18; letter-spacing: 0.02em; }
+  #cap .big { font-size: 96px; font-weight: 900; line-height: 1.18; letter-spacing: 0.02em; }
   #cap .big em { font-style: normal; color: var(--accent, #d9532b); }
-  #cap .sub { margin-top: 18px; font-size: 42px; font-weight: 600; color: #5c5b54; }
+  #cap .sub { margin-top: 12px; font-size: 38px; font-weight: 600; color: #5c5b54; }
   @keyframes slideIn { to { opacity: 1; transform: none; } }
   @keyframes capIn { from { opacity: 0; transform: translateY(60px) scale(0.92); } to { opacity: 1; transform: none; } }
   #num.out, #cap.out { opacity: 0 !important; transition: opacity 0.18s; animation: none; }
 
-  /* 示意的 Claude 視窗（縮小放在左下，交代情境） */
-  #chatwin { position: absolute; left: 96px; top: 610px; width: 800px; height: 400px; z-index: 11; background: #1f1e1c; border-radius: 18px; box-shadow: 0 26px 70px rgba(50, 40, 20, 0.4); overflow: hidden; opacity: 0; transform: translateY(80px); transition: opacity 0.4s, transform 0.5s cubic-bezier(.2,1.2,.3,1); }
-  #chatwin.on { opacity: 1; transform: none; }
-  #chatwin .bar { height: 50px; display: flex; align-items: center; gap: 10px; padding: 0 20px; background: #292826; color: #d9d5cb; font-size: 22px; }
-  #chatwin .dot { width: 14px; height: 14px; border-radius: 50%; background: #d97757; }
-  #msgs { padding: 20px 26px; display: flex; flex-direction: column; gap: 14px; }
-  .msg { max-width: 84%; padding: 13px 20px; border-radius: 16px; font-size: 28px; line-height: 1.45; animation: msgIn 0.3s cubic-bezier(.2,1.3,.3,1) both; }
-  @keyframes msgIn { from { opacity: 0; transform: translateY(18px) scale(0.9); } }
-  .msg.me { align-self: flex-end; background: #3b3a37; color: #f1ede2; }
-  .msg.ai { align-self: flex-start; color: #cfcabd; border: 1px solid #3b3a37; }
-  .msg.ai .work { display: inline-block; width: 13px; height: 13px; margin-right: 12px; border-radius: 50%; background: #d97757; animation: pulse 0.9s ease-in-out infinite; }
-  .msg.sys { align-self: center; font-size: 24px; color: #9ad0a4; padding: 2px 0; }
+  /* 前景：使用者自己在做的事（繪圖軟體）。重點是「人不在 Claude 那個視窗」 */
+  #workwin { position: absolute; left: 96px; top: 560px; width: 820px; height: 400px; z-index: 11; background: #fdfcf8; border-radius: 16px; border: 2px solid #c9c4b6; box-shadow: 0 26px 70px rgba(50, 40, 20, 0.32); overflow: hidden; opacity: 0; transform: translateY(80px); transition: opacity 0.4s, transform 0.5s cubic-bezier(.2,1.2,.3,1); }
+  #workwin.on { opacity: 1; transform: none; }
+  #workwin .bar { height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 18px; background: #e7e2d4; color: #3a3a36; font-size: 23px; font-weight: 700; }
+  #workwin .bar .here { margin-left: auto; font-size: 20px; font-weight: 700; color: #1f7a3f; background: #dcefdf; border-radius: 999px; padding: 3px 14px; }
+  #workwin .bar .here::before { content: "●"; margin-right: 6px; font-size: 13px; vertical-align: 2px; }
+  #workwin svg { display: block; width: 100%; height: 352px; }
+  #plan path, #plan rect, #plan line { fill: none; stroke: #2b2b28; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 7s linear infinite; }
+  #plan .thin { stroke-width: 2; stroke: #8a887d; }
+  #plan .d2 { animation-delay: -1.2s; } #plan .d3 { animation-delay: -2.4s; } #plan .d4 { animation-delay: -3.6s; } #plan .d5 { animation-delay: -4.8s; }
+  @keyframes draw { 0% { stroke-dashoffset: 1; } 45%, 88% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+
+  /* 工作列：Claude 只是一顆在背景跑的圖示，不在眼前 */
+  #taskbar { position: absolute; left: 0; right: 0; bottom: 0; height: 66px; z-index: 25; background: #26251f; display: flex; align-items: center; gap: 10px; padding: 0 28px; transform: translateY(70px); transition: transform 0.45s cubic-bezier(.2,1.2,.3,1); }
+  #taskbar.on { transform: none; }
+  .tb { height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 18px; border-radius: 10px; font-size: 22px; color: #cfcabd; position: relative; white-space: nowrap; }
+  .tb.active { background: #3b3a33; color: #fff; }
+  .tb.active::after { content: ""; position: absolute; left: 22%; right: 22%; bottom: 2px; height: 4px; border-radius: 2px; background: #7fb0ff; }
+  .tb .ico { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; font-size: 18px; }
+  .tb .ico.cl { background: #d97757; color: #fff; font-weight: 800; }
+  .tb .st { width: 13px; height: 13px; border-radius: 50%; background: #6b6a62; }
+  .tb.working .st { background: #6aa7ff; animation: pulse 0.9s ease-in-out infinite; }
+  .tb.waiting { background: #5a431c; color: #ffe2a8; animation: tbBlink 0.7s steps(2) infinite; }
+  .tb.waiting .st { background: #ffb347; }
+  .tb.done .st { background: #63c27c; }
+  .tb.gone { display: none; }
+  .tb small { font-size: 18px; color: #8f8a7d; margin-left: 4px; }
+  .tb.waiting small { color: #ffd98a; }
+  @keyframes tbBlink { 50% { background: #7a5a22; } }
   @keyframes pulse { 50% { opacity: 0.2; } }
+  #toast { position: absolute; left: 420px; bottom: 82px; z-index: 26; background: #26251f; color: #9ad0a4; font-size: 24px; padding: 10px 20px; border-radius: 12px; opacity: 0; transform: translateY(14px); transition: opacity 0.25s, transform 0.25s; white-space: nowrap; }
+  #toast.on { opacity: 1; transform: none; }
 
   /* ---------- 助手 ---------- */
   .petframe { position: absolute; width: 520px; height: 640px; border: 0; background: transparent; z-index: 20; transform-origin: 50% 100%; left: 0; top: 0; opacity: 0; transition: translate 0.6s cubic-bezier(.2,1.25,.3,1), scale 0.6s cubic-bezier(.2,1.25,.3,1), opacity 0.25s; }
   .petframe.on { opacity: 1; }
   /* translate 定位的是 iframe 左上角；scale 以底部中央為基準 */
-  .petframe.hide { translate: 1180px 1400px; scale: 1.4; }
-  .petframe.hero { translate: 1180px 435px; scale: 1.85; }
-  .petframe.a { translate: 140px 380px; scale: 1.75; }
-  .petframe.b { translate: 700px 380px; scale: 1.75; }
-  .petframe.c { translate: 1260px 380px; scale: 1.75; }
+  .petframe.hide { translate: 1180px 1400px; scale: 1.3; }
+  .petframe.hero { translate: 1180px 368px; scale: 1.7; }
+  .petframe.a { translate: 140px 368px; scale: 1.68; }
+  .petframe.b { translate: 700px 368px; scale: 1.68; }
+  .petframe.c { translate: 1260px 368px; scale: 1.68; }
 
   /* ---------- 特效 ---------- */
   #flash { position: absolute; inset: 0; z-index: 70; background: #fff; opacity: 0; pointer-events: none; }
@@ -149,14 +192,34 @@
     <div class="lineup" id="lineup1"></div>
   </div>
 
+  <div id="cast"><div class="head">六位古人，任你選<b id="castNo"></b></div><div class="art" id="castArt"></div><div class="info" id="castInfo"></div></div>
+
   <div id="num"></div>
   <div id="cap"></div>
   <div id="multi"></div>
 
-  <div id="chatwin">
-    <div class="bar"><span class="dot"></span>Claude</div>
-    <div id="msgs"></div>
+  <div id="workwin">
+    <div class="bar">📐 平面圖.dwg — 繪圖軟體<span class="here">你在這裡工作</span></div>
+    <svg id="plan" viewBox="0 0 820 352">
+      <rect class="thin" pathLength="1" x="0" y="0" width="820" height="352" style="stroke-dasharray:none;stroke-dashoffset:0;animation:none;stroke:#eee9dc;fill:#fdfcf8"/>
+      <path pathLength="1" d="M90 60 H520 V300 H90 Z"/>
+      <path pathLength="1" class="d2" d="M300 60 V190 M300 230 V300"/>
+      <path pathLength="1" class="d3" d="M520 150 H730 V300 H520"/>
+      <path pathLength="1" class="d4 thin" d="M300 190 A40 40 0 0 1 340 230"/>
+      <path pathLength="1" class="d5 thin" d="M130 330 H480 M130 322 V338 M480 322 V338"/>
+      <path pathLength="1" class="d3 thin" d="M150 100 H250 V160 H150 Z M360 110 H470 V200 H360 Z"/>
+      <path pathLength="1" class="d5 thin" d="M600 190 H680 V260 H600 Z"/>
+    </svg>
   </div>
+
+  <div id="taskbar">
+    <div class="tb"><span class="ico">🪟</span></div>
+    <div class="tb active"><span class="ico">📐</span>繪圖軟體</div>
+    <div class="tb" id="tb1"><span class="ico cl">C</span>Claude<span class="st"></span><small id="tb1t">在背景</small></div>
+    <div class="tb gone" id="tb2"><span class="ico cl">C</span>Claude<span class="st"></span><small id="tb2t"></small></div>
+    <div class="tb gone" id="tb3"><span class="ico cl">C</span>Claude<span class="st"></span><small id="tb3t"></small></div>
+  </div>
+  <div id="toast"></div>
 
   <iframe id="p1" class="petframe hide" src="pet-frame.html?char=mozi"></iframe>
   <iframe id="p2" class="petframe hide" src="pet-frame.html?char=zhuangzi"></iframe>
@@ -167,7 +230,7 @@
   <div id="end">
     <div class="lineup" id="lineup2"></div>
     <h1>桌面大師</h1>
-    <div class="tag">你忙你的，有事他會叫你</div>
+    <div class="tag">Claude 在背景跑，你不用一直切回去看</div>
     <div class="cta">Windows 免費下載</div>
     <div class="url">github.com/bca41258185-hash/desktop-assistant</div>
   </div>
@@ -175,7 +238,7 @@
   <div id="intro">
     <div id="i1"></div>
     <div id="iwin"><div class="bar"><span class="dot"></span>Claude</div><div class="body"><span class="spin"></span>正在處理你的要求…</div></div>
-    <div id="icount">你切回去看了 <b id="icn">0</b> 次</div>
+    <div id="icount">你切回 Claude 看了 <b id="icn">0</b> 次</div>
     <div id="stamp">別看了</div>
   </div>
   <div id="flash"></div>
@@ -218,14 +281,19 @@ function feature(no, big, sub) {
     sfx('whoosh');
   }, 200);
 }
-function say(cls, html) {
-  const m = document.createElement('div');
-  m.className = 'msg ' + cls;
-  m.innerHTML = html;
-  $('msgs').appendChild(m);
-  while ($('msgs').children.length > 4) $('msgs').firstChild.remove();
+// 工作列上 Claude 圖示的狀態（它在背景，不在畫面上）
+function claude(n, cls, text) {
+  const b = $('tb' + n);
+  b.className = 'tb ' + (cls || '');
+  $('tb' + n + 't').textContent = text || '';
+}
+function toast(text) {
+  const t = $('toast');
+  t.textContent = text;
+  t.classList.add('on');
   sfx('pop');
-  return m;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove('on'), 1900);
 }
 function flash() { const f = $('flash'); f.classList.remove('on'); void f.offsetWidth; f.classList.add('on'); }
 function punch() { $('world').classList.add('punch'); setTimeout(() => $('world').classList.remove('punch'), 110); }
@@ -280,10 +348,38 @@ async function clickAt(n, sel) {
   setTimeout(() => $('cursor').classList.remove('click'), 200);
   return p;
 }
-function parkCursor() { $('cursor').style.left = '1060px'; $('cursor').style.top = '930px'; }
+function parkCursor() { $('cursor').style.left = (380 + Math.random() * 300) + 'px'; $('cursor').style.top = (700 + Math.random() * 160) + 'px'; }
 
 async function typeInto(el, text, gap) {
   for (const ch of text) { el.textContent += ch; sfx('type'); await sleep(gap || 70); }
+}
+
+// 六位角色的介紹卡：個性標籤、一句說明、一句他會說的話（都是 app 裡的原創台詞）
+const CASTINFO = [
+  ['confucius', '溫和的老師', '會誇你，也會提醒你慢慢來', '知道哪裡不好就改，這很難得。', '#f6ecd9', '#b0661c'],
+  ['laozi', '話最少的那位', '相信少做一點，事情反而順', '讓它自己跑，別去攪它。', '#e6efe9', '#3d7d62'],
+  ['zhuangzi', '逍遙的夢想家', '愛說寓言，勸你放輕鬆', '放輕鬆，路比你想的寬。', '#e8f1df', '#4f8a3a'],
+  ['mozi', '實幹的工匠', '凡事問有沒有用，量過才算數', '光說沒用，做出來能用才算數。', '#f3e8d8', '#9a5a2a'],
+  ['hanfeizi', '冷面法家', '只信規則和證據，話短但到位', '別靠運氣。運氣不是辦法。', '#f3dedb', '#b0352b'],
+  ['guiguzi', '山中的謀略家', '先觀察、等時機，再開口', '時機沒到，說什麼都是多的。', '#e3e8ee', '#44525a']
+];
+async function castIntro() {
+  const box = $('cast');
+  for (let i = 0; i < CASTINFO.length; i++) {
+    const [id, tag, desc, line, tintColor, acc] = CASTINFO[i];
+    const c = window.CHARACTERS[id];
+    box.style.setProperty('--ctint', tintColor);
+    box.style.setProperty('--cacc', acc);
+    $('castNo').textContent = (i + 1) + ' / ' + CASTINFO.length;
+    $('castArt').innerHTML = c.svg;
+    $('castInfo').innerHTML = '<div class="ctag">' + tag + '</div><div class="cname">' + c.nameZh + '</div><div class="cdesc">' + desc + '</div><div class="cline">「' + line + '」</div>';
+    box.classList.remove('play'); void box.offsetWidth; box.classList.add('play', 'on');
+    sfx('thump');
+    punch();
+    await sleep(430);
+    sfx(i % 2 ? 'talkB' : 'talkA');
+    await sleep(1320);
+  }
 }
 
 async function run() {
@@ -293,13 +389,13 @@ async function run() {
 
   // ================= 痛點開場 =================
   await sleep(350);
-  await typeInto($('i1'), '你叫 Claude 幫你做事。', 75);
+  await typeInto($('i1'), '你叫 Claude 做事，自己去忙別的。', 62);
   await sleep(250);
   $('iwin').classList.add('on');
   sfx('pop');
   await sleep(900);
   $('i1').textContent = '';
-  await typeInto($('i1'), '然後呢？', 90);
+  await typeInto($('i1'), '結果呢？', 90);
   await sleep(350);
   $('icount').classList.add('on');
   $('iwin').classList.add('shake');
@@ -332,20 +428,26 @@ async function run() {
   sfx('whoosh');
   await sleep(350);
   for (const el of $('lineup1').children) { el.classList.add('on'); sfx('pop'); await sleep(125); }
-  await sleep(1500);
+  await sleep(1100);
+
+  // ================= 六位角色逐一登場 =================
+  await castIntro();
+  flash();
+  $('cast').classList.remove('on', 'play');
 
   // ================= 01 他幫你盯著 =================
   $('title').classList.add('off');
   tint('#f6efdc', '#d9532b');
-  feature('01', '你忙你的，<br><em>他幫你盯著</em>', 'Claude 一開始做事，他就開始看');
-  $('chatwin').classList.add('on');
+  feature('01', '你在別的視窗工作，<br><em>他幫你盯著 Claude</em>', 'Claude 在背景跑，不用切過去看');
+  $('workwin').classList.add('on');
+  $('taskbar').classList.add('on');
+  parkCursor();
   await sleep(450);
   place(1, 'hero');
   sfx('boing');
   await sleep(550);
-  say('me', '幫我整理期末報告的格式');
+  claude(1, 'working', '整理報告中…');
   await sleep(600);
-  const working = say('ai', '<span class="work"></span>正在整理…');
   pet(1).status({ text: '進行中', cls: 'working' });
   pet(1).pose('think');
   pet(1).speak({ text: 'Claude 開始處理了', attribution: '你說：幫我整理期末報告的格式', ai: true, duration: 2300 });
@@ -358,9 +460,10 @@ async function run() {
 
   // ================= 02 要你同意？按一下 =================
   tint('#fdf0d2', '#c9781a');
-  feature('02', '要你同意？<br><em>按一下就好</em>', '不用切回去找那個視窗');
+  feature('02', '它要你同意？<br><em>不用切視窗</em>', '在泡泡上按一下，繼續畫你的圖');
   parkCursor();
   await sleep(500);
+  claude(1, 'waiting', '等你同意');
   pet(1).status({ text: '等你回答', cls: 'waiting' });
   pet(1).speak({
     text: 'Claude 想修改檔案「期末報告.docx」，要讓它改嗎？', ai: true, sticky: true, action: 'choice', requestId: 'r1',
@@ -372,17 +475,20 @@ async function run() {
   const hit1 = await clickAt(1, '.bubble-choice.allow');
   flash(); confetti(hit1.x, hit1.y); pow('允許！', hit1.x, hit1.y - 60, '#3f8f55');
   sfx('yes');
-  say('sys', '✓ 已允許修改 期末報告.docx');
+  toast('✓ 已允許，Claude 繼續做');
+  claude(1, 'working', '整理報告中…');
+  setTimeout(parkCursor, 500);
   pet(1).status({ text: '進行中', cls: 'working' });
   pet(1).pose('happy');
   await sleep(1900);
 
   // ================= 03 問你問題？直接答 =================
   tint('#e9f1e4', '#2f8a4f');
-  feature('03', '問你問題？<br><em>直接回答</em>', 'Claude 的選項會出現在泡泡上');
+  feature('03', '它問你問題？<br><em>原地回答</em>', '選項直接出現在泡泡上');
   parkCursor();
   pet(1).pose('idle');
   await sleep(500);
+  claude(1, 'waiting', '有問題問你');
   pet(1).status({ text: '等你回答', cls: 'waiting' });
   pet(1).speak({
     text: '報告要用哪一種格式交？', ai: true, sticky: true, action: 'choice', requestId: 'r2',
@@ -393,16 +499,18 @@ async function run() {
   const hit2 = await clickAt(1, pdoc(1).querySelectorAll('.bubble-choice')[1]);
   flash(); pow('PDF！', hit2.x, hit2.y - 60, '#2f6fd0');
   sfx('yes');
-  say('sys', '✓ 你選了 PDF');
+  toast('✓ 已回答：PDF');
+  claude(1, 'working', '整理報告中…');
+  setTimeout(parkCursor, 500);
   pet(1).status({ text: '進行中', cls: 'working' });
   await sleep(1600);
 
   // ================= 04 做完叫你，還能回話 =================
   tint('#e4eefb', '#2f6fd0');
-  feature('04', '做完會叫你，<br><em>還能直接回話</em>', '在泡泡下面打字，就是下一個指令');
+  feature('04', '做完會叫你，<br><em>還能直接回話</em>', '打字就是下一個指令，還是不用切視窗');
   parkCursor();
   await sleep(450);
-  working.innerHTML = '格式整理好了，已經存成 PDF。';
+  claude(1, 'done', '做完了');
   pet(1).status({ text: '完成', cls: 'done' });
   pet(1).pose('happy');
   pet(1).speak({ text: '格式整理好了，已經存成 PDF。', ai: true, sticky: true, action: 'confirm', composeTo: 's1', inputPlaceholder: '回覆 Claude…' });
@@ -422,20 +530,23 @@ async function run() {
   pdoc(1).getElementById('bubble').click();
   pow('送出！', hit3.p.x - 240, hit3.p.y - 90, '#d9532b');
   sfx('send');
-  say('me', '再幫我加上頁碼');
+  toast('已送給 Claude：再幫我加上頁碼');
+  claude(1, 'working', '加頁碼中…');
+  setTimeout(parkCursor, 500);
   pet(1).status({ text: '進行中', cls: 'working' });
   pet(1).pose('idle');
   await sleep(1500);
 
   // ================= 三位同框 =================
   for (const id of ['num', 'cap']) $(id).className = 'out';
-  $('chatwin').classList.remove('on');
+  $('workwin').classList.remove('on');
   $('cursor').style.top = '1300px';
+  claude(1, '', ''); claude(2, '', ''); claude(3, '', '');
   tint('#f3e9f7', '#2f6fd0');
   pet(1).status({ text: '', cls: '' });
   place(1, 'b');
   await sleep(200);
-  $('multi').innerHTML = '<div class="big">三個對話？<em>三位助手</em></div><div class="sub">一個對話一位，誰的事一眼就知道</div>';
+  $('multi').innerHTML = '<div class="big">背景跑三個對話？<em>三位助手</em></div><div class="sub">一個對話一位，誰的事一眼就知道</div>';
   $('multi').className = 'in';
   sfx('whoosh');
   await sleep(300);
@@ -443,11 +554,11 @@ async function run() {
   await sleep(260);
   place(3, 'c'); sfx('boing');
   await sleep(550);
-  pet(2).status({ text: '完成', cls: 'done' }); sfx('pop');
+  pet(2).status({ text: '完成', cls: 'done' }); claude(1, 'done', '簡報：做完了'); sfx('pop');
   await sleep(230);
-  pet(1).status({ text: '進行中', cls: 'working' }); sfx('pop');
+  pet(1).status({ text: '進行中', cls: 'working' }); claude(2, 'working', '報告：進行中'); sfx('pop');
   await sleep(230);
-  pet(3).status({ text: '等你回答', cls: 'waiting' }); sfx('pop');
+  pet(3).status({ text: '等你回答', cls: 'waiting' }); claude(3, 'waiting', '考題：等你回答'); sfx('pop');
   await sleep(1500);
 
   // ---- 沒事的時候，他們會鬥嘴 ----
@@ -456,7 +567,8 @@ async function run() {
   $('multi').innerHTML = '<div class="big">沒事的時候，<em>他們會鬥嘴</em></div>';
   $('multi').className = 'in';
   sfx('whoosh');
-  [1, 2, 3].forEach((k) => pet(k).status({ text: '', cls: '' }));
+  [1, 2, 3].forEach((k) => { pet(k).status({ text: '', cls: '' }); claude(k, '', k === 1 ? '在背景' : ''); });
+  $('tb2').classList.add('gone'); $('tb3').classList.add('gone');
   await sleep(700);
   const chat = [
     [1, '莊先生，你今天做了什麼有用的事？', 1750],
@@ -481,6 +593,7 @@ async function run() {
   flash();
   $('multi').className = 'out';
   [1, 2, 3].forEach((k) => { $('p' + k).className = 'petframe hide'; });
+  $('taskbar').classList.remove('on');
   tint('#f4f1e9');
   $('end').classList.add('on');
   await sleep(120);

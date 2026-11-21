@@ -22,9 +22,16 @@ const ROLE = {
   guiguzi: '山中的謀略家。先觀察、等時機，再開口。'
 };
 
+// 個性標籤與一句他會說的話（都是 app 裡的原創台詞，不是真實引言）
+const TAG = { confucius: '溫和的老師', laozi: '話最少的那位', zhuangzi: '逍遙的夢想家', mozi: '實幹的工匠', hanfeizi: '冷面法家', guiguzi: '山中的謀略家' };
+const LINE = {
+  confucius: '知道哪裡不好就改，這很難得。', laozi: '讓它自己跑，別去攪它。', zhuangzi: '放輕鬆，路比你想的寬。',
+  mozi: '光說沒用，做出來能用才算數。', hanfeizi: '別靠運氣。運氣不是辦法。', guiguzi: '時機沒到，說什麼都是多的。'
+};
 const who = (id) => {
   const c = CHARACTERS[id];
-  return `<figure class="who"><div class="art">${c.svg}</div><figcaption><b>${c.nameZh}</b><span>${ROLE[id] || ''}</span></figcaption></figure>`;
+  return '<figure class="who"><div class="art">' + c.svg + '</div><figcaption><em>' + (TAG[id] || '') + '</em><b>' + c.nameZh +
+    '</b><span>' + (ROLE[id] || '') + '</span><q>' + (LINE[id] || c.greeting) + '</q></figcaption></figure>';
 };
 const face = (id) => `<span class="face">${CHARACTERS[id].svg}</span>`;
 
@@ -118,11 +125,16 @@ svg .think-dots, svg .sketch-lines, svg .mouth-happy { display: none; }
 .duo .bub { font-size: 14.5px; padding: 7px 11px; }
 
 /* ---------- 六位角色 ---------- */
-.cast { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-top: 28px; }
-.who { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 12px 16px; text-align: center; }
-.who .art svg { width: 120px; height: auto; display: block; margin: 0 auto; }
-.who figcaption b { display: block; font-size: 19px; margin-top: 4px; }
-.who figcaption span { display: block; font-size: 13.5px; color: var(--ink-soft); line-height: 1.6; margin-top: 4px; }
+.cast { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; margin-top: 28px; }
+.who { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px 18px 8px; display: flex; align-items: center; gap: 6px; }
+.who .art { flex-shrink: 0; }
+.who .art svg { width: 124px; height: auto; display: block; }
+.who figcaption { min-width: 0; }
+.who figcaption em { display: block; font-style: normal; font-size: 13px; letter-spacing: 0.12em; color: #b0661c; font-weight: 700; }
+.who figcaption b { display: block; font-size: 26px; line-height: 1.3; }
+.who figcaption span { display: block; font-size: 14px; color: var(--ink-soft); line-height: 1.6; margin-top: 2px; }
+.who figcaption q { display: block; quotes: none; margin-top: 8px; padding: 6px 10px; font-size: 14.5px; line-height: 1.5; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+.who figcaption q::before { content: "「"; } .who figcaption q::after { content: "」"; }
 
 /* ---------- 步驟、下載 ---------- */
 .steps { counter-reset: s; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 28px; padding: 0; list-style: none; }
@@ -146,7 +158,7 @@ footer p + p { margin-top: 6px; }
     <p class="tag">請幾位古人站在桌面角落，幫你盯著 Claude</p>
     <div class="dl">
       <a class="btn main" href="${DL_SETUP}">下載安裝版<small>Windows 10／11・v${V}</small></a>
-      <a class="btn alt" href="#film">先看影片<small>不到 1 分鐘</small></a>
+      <a class="btn alt" href="#film">先看影片<small>約 1 分鐘</small></a>
     </div>
     <div class="lineup" aria-hidden="true">${ORDER.map(face).join('')}</div>
   </div>
@@ -208,7 +220,7 @@ footer p + p { margin-top: 6px; }
   <div class="wrap">
     <p class="eyebrow">目前開放六位</p>
     <h2>你想請誰來盯？</h2>
-    <p class="lede">都是兩千多年前的思想家，畫成 Q 版。每位的台詞和彼此的閒聊，都照他們的想法另外寫過。</p>
+    <p class="lede">都是兩千多年前的思想家，畫成 Q 版。每位有自己的個性：Claude 做事時他會照自己的脾氣說兩句，沒事時還會和其他人鬥嘴。框裡是他們會說的話。</p>
     <div class="cast">${ORDER.map(who).join('')}</div>
   </div>
 </section>
