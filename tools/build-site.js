@@ -146,7 +146,7 @@ footer p + p { margin-top: 6px; }
     <p class="tag">請幾位古人站在桌面角落，幫你盯著 Claude</p>
     <div class="dl">
       <a class="btn main" href="${DL_SETUP}">下載安裝版<small>Windows 10／11・v${V}</small></a>
-      <a class="btn alt" href="#film">先看影片<small>約 1 分鐘</small></a>
+      <a class="btn alt" href="#film">先看影片<small>不到 1 分鐘</small></a>
     </div>
     <div class="lineup" aria-hidden="true">${ORDER.map(face).join('')}</div>
   </div>

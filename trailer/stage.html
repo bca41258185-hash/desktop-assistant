@@ -4,268 +4,495 @@
 <meta charset="utf-8">
 <title>stage</title>
 <style>
-  /* 預告片舞台：1920×1080。左邊是一個示意的「Claude 對話」視窗，右下是真的助手畫面（iframe 載入 pet-frame.html）。 */
+  /* 預告片舞台：1920×1080。
+     結構：痛點開場（黑底）→ 標題砸下來 → 四個功能快剪（大數字＋大標語＋放大的助手）→ 三位助手同框鬥嘴 → 片尾。
+     助手是真的畫面（iframe 載入 pet-frame.html），其餘是舞台佈景。每個動作用 console.log('SFX:…') 通知錄影程式配音效。 */
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 1920px; height: 1080px; overflow: hidden; }
-  body {
-    font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
-    color: #2b2b28;
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #1c1b19; }
+  body { font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif; color: #2b2b28; }
+  #world { position: absolute; inset: 0; overflow: hidden; transform-origin: 62% 70%; transition: transform 0.45s cubic-bezier(.2,.9,.2,1); }
+  #world.punch { transform: scale(1.035); transition-duration: 0.09s; }
+  #bg {
+    position: absolute; inset: 0; background: var(--tint, #f1ede2); transition: background 0.5s ease;
+  }
+  #bg::after {
+    content: ""; position: absolute; inset: -60px;
     background:
-      radial-gradient(1200px 700px at 78% 88%, rgba(255, 246, 221, 0.9), transparent 70%),
-      repeating-linear-gradient(0deg, transparent 0 39px, rgba(120, 130, 120, 0.10) 39px 40px),
-      repeating-linear-gradient(90deg, transparent 0 39px, rgba(120, 130, 120, 0.10) 39px 40px),
-      #f1ede2;
+      repeating-linear-gradient(0deg, transparent 0 39px, rgba(60, 60, 50, 0.07) 39px 40px),
+      repeating-linear-gradient(90deg, transparent 0 39px, rgba(60, 60, 50, 0.07) 39px 40px);
+    animation: drift 14s linear infinite;
   }
+  @keyframes drift { to { transform: translate(40px, 40px); } }
 
-  /* --- 標題卡 / 結尾卡 --- */
-  .card {
-    position: absolute; inset: 0; z-index: 50; display: grid; place-content: center; justify-items: center; gap: 26px;
-    background: #f4f1e9; opacity: 0; pointer-events: none; transition: opacity 0.9s ease;
+  /* ---------- 痛點開場 ---------- */
+  #intro { position: absolute; inset: 0; z-index: 60; background: #1c1b19; color: #f1ede2; transition: opacity 0.18s; }
+  #intro.off { opacity: 0; pointer-events: none; }
+  #i1 { position: absolute; left: 0; right: 0; top: 130px; text-align: center; font-size: 78px; font-weight: 800; letter-spacing: 0.06em; min-height: 100px; }
+  #iwin { position: absolute; left: 610px; top: 320px; width: 700px; height: 330px; background: #292826; border-radius: 18px; border: 1px solid #3b3a37; opacity: 0; transition: opacity 0.3s; overflow: hidden; }
+  #iwin.on { opacity: 1; }
+  #iwin.shake { animation: shake 0.16s linear infinite; }
+  @keyframes shake { 25% { transform: translate(-7px, 3px) rotate(-0.6deg); } 75% { transform: translate(7px, -3px) rotate(0.6deg); } }
+  #iwin .bar { height: 50px; display: flex; align-items: center; gap: 10px; padding: 0 20px; background: #33322f; font-size: 22px; color: #d9d5cb; }
+  #iwin .dot { width: 14px; height: 14px; border-radius: 50%; background: #d97757; }
+  #iwin .body { padding: 44px 40px; font-size: 40px; color: #cfcabd; display: flex; align-items: center; gap: 22px; }
+  .spin { width: 44px; height: 44px; border: 6px solid #55524b; border-top-color: #d97757; border-radius: 50%; animation: rot 0.8s linear infinite; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  #icount { position: absolute; left: 0; right: 0; top: 700px; text-align: center; font-size: 62px; font-weight: 800; color: #f4d98e; opacity: 0; }
+  #icount.on { opacity: 1; }
+  #icount b { display: inline-block; min-width: 120px; font-size: 130px; color: #ff7a59; vertical-align: -18px; font-variant-numeric: tabular-nums; }
+  #icount b.bump { animation: bump 0.12s ease; }
+  @keyframes bump { 50% { transform: scale(1.25); } }
+  #stamp {
+    position: absolute; left: 50%; top: 50%; z-index: 5; font-size: 330px; font-weight: 900; letter-spacing: 0.06em; color: #ff5a3c; white-space: nowrap;
+    border: 18px solid #ff5a3c; border-radius: 30px; padding: 10px 70px 26px; background: rgba(28, 27, 25, 0.92);
+    transform: translate(-50%, -50%) rotate(-7deg) scale(3.2); opacity: 0;
   }
-  .card.on { opacity: 1; }
-  .card h1 { font-size: 150px; letter-spacing: 0.16em; padding-left: 0.16em; color: #2b2b28; font-weight: 800; }
-  .card .sub { font-size: 44px; letter-spacing: 0.12em; color: #5c5b54; }
-  .card .small { font-size: 30px; color: #7a7a70; letter-spacing: 0.06em; }
-  .card .cta { margin-top: 10px; padding: 18px 54px; font-size: 40px; font-weight: 700; color: #fff; background: #3a3a36; border-radius: 999px; letter-spacing: 0.1em; }
-  .lineup { display: flex; gap: 14px; align-items: flex-end; }
-  .lineup .who { width: 190px; text-align: center; font-size: 26px; color: #4a4942; }
-  .lineup .who svg { width: 190px; height: 214px; display: block; }
-  .lineup .who * { animation: none !important; }
+  #stamp.on { animation: stampIn 0.28s cubic-bezier(.2,1.4,.3,1) forwards; }
+  @keyframes stampIn { from { transform: translate(-50%, -50%) rotate(-7deg) scale(3.2); opacity: 0; } to { transform: translate(-50%, -50%) rotate(-7deg) scale(1); opacity: 1; } }
+
+  /* ---------- 標題 ---------- */
+  #title { position: absolute; inset: 0; z-index: 30; display: grid; place-content: center; justify-items: center; gap: 18px; pointer-events: none; transition: opacity 0.35s, transform 0.45s cubic-bezier(.5,0,.8,.4); }
+  #title.off { opacity: 0; transform: scale(1.5); }
+  #title h1 { font-size: 250px; font-weight: 900; letter-spacing: 0.1em; padding-left: 0.1em; display: flex; }
+  #title h1 span { display: inline-block; opacity: 0; transform: translateY(-420px) scale(1.5) rotate(-8deg); }
+  #title h1 span.on { animation: drop 0.34s cubic-bezier(.2,1.5,.35,1) forwards; }
+  @keyframes drop { to { opacity: 1; transform: none; } }
+  #title .sub { font-size: 56px; font-weight: 700; letter-spacing: 0.14em; color: #5c5b54; opacity: 0; transform: translateY(26px); transition: all 0.45s cubic-bezier(.2,1.2,.3,1); }
+  #title .sub.on { opacity: 1; transform: none; }
+  .lineup { display: flex; gap: 6px; align-items: flex-end; margin-top: 14px; }
+  .lineup .who { width: 200px; text-align: center; font-size: 28px; font-weight: 700; color: #4a4942; opacity: 0; transform: translateY(260px) scale(0.6); }
+  .lineup .who.on { animation: hop 0.5s cubic-bezier(.2,1.6,.3,1) forwards; }
+  @keyframes hop { to { opacity: 1; transform: none; } }
+  .lineup .who svg { width: 200px; height: 225px; display: block; }
+  .lineup .who.on svg { animation: bob 1.6s ease-in-out infinite; animation-delay: var(--d, 0s); }
+  @keyframes bob { 50% { transform: translateY(-9px); } }
   .lineup .think-dots, .lineup .sketch-lines, .lineup .mouth-happy { display: none; }
+  .lineup .who svg * { animation: none !important; }
 
-  /* --- 字幕 --- */
-  #caption {
-    position: absolute; left: 90px; top: 70px; z-index: 20; max-width: 1180px;
-    font-size: 64px; font-weight: 800; line-height: 1.3; letter-spacing: 0.04em; color: #2b2b28;
-    opacity: 0; transform: translateY(14px); transition: opacity 0.5s ease, transform 0.5s ease;
-  }
-  #caption.on { opacity: 1; transform: none; }
-  #caption small { display: block; margin-top: 12px; font-size: 34px; font-weight: 500; color: #6b6a62; letter-spacing: 0.04em; }
+  /* ---------- 功能快剪：大數字＋大標語 ---------- */
+  #num { position: absolute; left: 70px; top: 14px; z-index: 12; font-size: 300px; font-weight: 900; line-height: 1; color: transparent; -webkit-text-stroke: 5px rgba(43, 43, 40, 0.22); opacity: 0; transform: translateX(-120px); }
+  #num.in { animation: slideIn 0.4s cubic-bezier(.2,1.3,.3,1) forwards; }
+  #cap { position: absolute; left: 96px; top: 190px; z-index: 13; width: 880px; opacity: 0; }
+  #cap.in { animation: capIn 0.42s cubic-bezier(.2,1.3,.3,1) forwards; }
+  #cap .big { font-size: 104px; font-weight: 900; line-height: 1.18; letter-spacing: 0.02em; }
+  #cap .big em { font-style: normal; color: var(--accent, #d9532b); }
+  #cap .sub { margin-top: 18px; font-size: 42px; font-weight: 600; color: #5c5b54; }
+  @keyframes slideIn { to { opacity: 1; transform: none; } }
+  @keyframes capIn { from { opacity: 0; transform: translateY(60px) scale(0.92); } to { opacity: 1; transform: none; } }
+  #num.out, #cap.out { opacity: 0 !important; transition: opacity 0.18s; animation: none; }
 
-  /* --- 示意的 Claude 對話視窗 --- */
-  #chatwin {
-    position: absolute; left: 90px; top: 330px; width: 860px; height: 640px; z-index: 5;
-    background: #1f1e1c; border-radius: 18px; box-shadow: 0 30px 80px rgba(60, 50, 30, 0.35); overflow: hidden;
-    opacity: 0; transform: translateY(20px); transition: opacity 0.6s ease, transform 0.6s ease;
-  }
+  /* 示意的 Claude 視窗（縮小放在左下，交代情境） */
+  #chatwin { position: absolute; left: 96px; top: 610px; width: 800px; height: 400px; z-index: 11; background: #1f1e1c; border-radius: 18px; box-shadow: 0 26px 70px rgba(50, 40, 20, 0.4); overflow: hidden; opacity: 0; transform: translateY(80px); transition: opacity 0.4s, transform 0.5s cubic-bezier(.2,1.2,.3,1); }
   #chatwin.on { opacity: 1; transform: none; }
-  #chatwin .bar { height: 54px; display: flex; align-items: center; gap: 10px; padding: 0 22px; background: #292826; color: #d9d5cb; font-size: 22px; }
+  #chatwin .bar { height: 50px; display: flex; align-items: center; gap: 10px; padding: 0 20px; background: #292826; color: #d9d5cb; font-size: 22px; }
   #chatwin .dot { width: 14px; height: 14px; border-radius: 50%; background: #d97757; }
-  #msgs { padding: 26px 30px; display: flex; flex-direction: column; gap: 18px; }
-  .msg { max-width: 78%; padding: 16px 22px; border-radius: 16px; font-size: 27px; line-height: 1.5; opacity: 0; transform: translateY(10px); transition: opacity 0.4s ease, transform 0.4s ease; }
-  .msg.on { opacity: 1; transform: none; }
+  #msgs { padding: 20px 26px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 84%; padding: 13px 20px; border-radius: 16px; font-size: 28px; line-height: 1.45; animation: msgIn 0.3s cubic-bezier(.2,1.3,.3,1) both; }
+  @keyframes msgIn { from { opacity: 0; transform: translateY(18px) scale(0.9); } }
   .msg.me { align-self: flex-end; background: #3b3a37; color: #f1ede2; }
-  .msg.ai { align-self: flex-start; background: transparent; color: #cfcabd; border: 1px solid #3b3a37; }
-  .msg.ai .work { display: inline-block; width: 12px; height: 12px; margin-right: 12px; border-radius: 50%; background: #d97757; animation: pulse 1.1s ease-in-out infinite; }
-  .msg.sys { align-self: center; font-size: 22px; color: #8f8a7d; border: none; padding: 4px 0; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+  .msg.ai { align-self: flex-start; color: #cfcabd; border: 1px solid #3b3a37; }
+  .msg.ai .work { display: inline-block; width: 13px; height: 13px; margin-right: 12px; border-radius: 50%; background: #d97757; animation: pulse 0.9s ease-in-out infinite; }
+  .msg.sys { align-self: center; font-size: 24px; color: #9ad0a4; padding: 2px 0; }
+  @keyframes pulse { 50% { opacity: 0.2; } }
 
-  /* --- 助手 --- */
-  .petframe { position: absolute; width: 520px; height: 640px; border: 0; background: transparent; z-index: 10; transition: opacity 0.6s ease, transform 0.6s ease; }
-  .petframe.off { opacity: 0; transform: translateY(30px); }
-  /* 助手放大 1.35 倍，影片裡才看得清楚；以底部中央為基準 */
-  #p1 { right: 100px; bottom: 60px; transform-origin: 50% 100%; scale: 1.35; }
-  #p2 { right: 500px; bottom: 60px; transform-origin: 50% 100%; scale: 1.35; }
+  /* ---------- 助手 ---------- */
+  .petframe { position: absolute; width: 520px; height: 640px; border: 0; background: transparent; z-index: 20; transform-origin: 50% 100%; left: 0; top: 0; opacity: 0; transition: translate 0.6s cubic-bezier(.2,1.25,.3,1), scale 0.6s cubic-bezier(.2,1.25,.3,1), opacity 0.25s; }
+  .petframe.on { opacity: 1; }
+  /* translate 定位的是 iframe 左上角；scale 以底部中央為基準 */
+  .petframe.hide { translate: 1180px 1400px; scale: 1.4; }
+  .petframe.hero { translate: 1180px 435px; scale: 1.85; }
+  .petframe.a { translate: 140px 380px; scale: 1.75; }
+  .petframe.b { translate: 700px 380px; scale: 1.75; }
+  .petframe.c { translate: 1260px 380px; scale: 1.75; }
 
-  /* --- 假滑鼠 --- */
-  #cursor { position: absolute; left: 1500px; top: 1200px; z-index: 40; width: 44px; height: 44px; transition: left 0.9s cubic-bezier(.3,.7,.2,1), top 0.9s cubic-bezier(.3,.7,.2,1); pointer-events: none; }
-  #cursor.click { animation: click 0.28s ease; }
-  @keyframes click { 50% { transform: scale(0.78); } }
+  /* ---------- 特效 ---------- */
+  #flash { position: absolute; inset: 0; z-index: 70; background: #fff; opacity: 0; pointer-events: none; }
+  #flash.on { animation: flash 0.32s ease-out; }
+  @keyframes flash { from { opacity: 0.85; } to { opacity: 0; } }
+  .bit { position: absolute; z-index: 45; width: 22px; height: 12px; border-radius: 3px; pointer-events: none; animation: fly 1s cubic-bezier(.15,.7,.3,1) forwards; }
+  @keyframes fly { to { transform: translate(var(--dx), var(--dy)) rotate(var(--r)); opacity: 0; } }
+  .pow { position: absolute; z-index: 46; white-space: nowrap; font-size: 130px; font-weight: 900; color: var(--c, #3f8f55); -webkit-text-stroke: 8px #fff; paint-order: stroke fill; pointer-events: none; animation: pow 0.9s cubic-bezier(.2,1.5,.3,1) forwards; }
+  @keyframes pow { 0% { transform: translate(-50%, -50%) scale(0.2) rotate(-12deg); opacity: 0; } 25% { opacity: 1; transform: translate(-50%, -50%) scale(1.1) rotate(-8deg); } 75% { opacity: 1; transform: translate(-50%, -62%) scale(1) rotate(-8deg); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(1) rotate(-8deg); } }
+  #cursor { position: absolute; left: 1300px; top: 1250px; z-index: 55; width: 58px; height: 58px; transition: left 0.55s cubic-bezier(.3,.8,.2,1), top 0.55s cubic-bezier(.3,.8,.2,1); pointer-events: none; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.35)); }
+  #cursor.click { animation: click 0.2s ease; }
+  @keyframes click { 50% { transform: scale(0.7); } }
+
+  /* ---------- 三位同框的大標 ---------- */
+  #multi { position: absolute; left: 0; right: 0; top: 70px; z-index: 14; text-align: center; opacity: 0; }
+  #multi.in { animation: capIn 0.42s cubic-bezier(.2,1.3,.3,1) forwards; }
+  #multi .big { font-size: 110px; font-weight: 900; letter-spacing: 0.04em; }
+  #multi .big em { font-style: normal; color: #2f6fd0; }
+  #multi .sub { font-size: 44px; font-weight: 600; color: #5c5b54; margin-top: 8px; }
+  #multi.out { opacity: 0 !important; transition: opacity 0.2s; animation: none; }
+
+  /* ---------- 片尾 ---------- */
+  #end { position: absolute; inset: 0; z-index: 40; display: grid; place-content: center; justify-items: center; gap: 20px; opacity: 0; pointer-events: none; }
+  #end.on { opacity: 1; }
+  #end h1 { font-size: 170px; font-weight: 900; letter-spacing: 0.12em; padding-left: 0.12em; opacity: 0; transform: scale(0.6); }
+  #end.on h1 { animation: hop 0.5s cubic-bezier(.2,1.5,.3,1) 1.5s forwards; }
+  #end .tag { font-size: 54px; font-weight: 700; letter-spacing: 0.1em; color: #5c5b54; opacity: 0; }
+  #end.on .tag { animation: capIn 0.45s ease 2.1s forwards; }
+  #end .cta { margin-top: 8px; padding: 20px 66px; font-size: 50px; font-weight: 800; color: #fff; background: #d9532b; border-radius: 999px; letter-spacing: 0.1em; opacity: 0; }
+  #end.on .cta { animation: capIn 0.45s cubic-bezier(.2,1.4,.3,1) 2.7s forwards, throb 1s ease-in-out 3.3s infinite; }
+  @keyframes throb { 50% { transform: scale(1.06); } }
+  #end .url { font-size: 32px; color: #7a7a70; letter-spacing: 0.04em; opacity: 0; }
+  #end.on .url { animation: capIn 0.45s ease 3.2s forwards; }
 </style>
 </head>
 <body>
-  <div id="caption"></div>
+<div id="world">
+  <div id="bg"></div>
+
+  <div id="title" class="off">
+    <h1><span>桌</span><span>面</span><span>大</span><span>師</span></h1>
+    <div class="sub">請幾位古人，幫你盯著 Claude</div>
+    <div class="lineup" id="lineup1"></div>
+  </div>
+
+  <div id="num"></div>
+  <div id="cap"></div>
+  <div id="multi"></div>
 
   <div id="chatwin">
     <div class="bar"><span class="dot"></span>Claude</div>
     <div id="msgs"></div>
   </div>
 
-  <iframe id="p1" class="petframe off" src="pet-frame.html?char=mozi"></iframe>
-  <iframe id="p2" class="petframe off" src="pet-frame.html?char=zhuangzi"></iframe>
+  <iframe id="p1" class="petframe hide" src="pet-frame.html?char=mozi"></iframe>
+  <iframe id="p2" class="petframe hide" src="pet-frame.html?char=zhuangzi"></iframe>
+  <iframe id="p3" class="petframe hide" src="pet-frame.html?char=hanfeizi"></iframe>
 
   <svg id="cursor" viewBox="0 0 24 24"><path d="M4 2 L4 19 L8.6 15 L11.6 22 L14.4 20.8 L11.4 14 L18 14 Z" fill="#fff" stroke="#1d1d1d" stroke-width="1.4" stroke-linejoin="round"/></svg>
 
-  <div id="title" class="card on">
+  <div id="end">
+    <div class="lineup" id="lineup2"></div>
     <h1>桌面大師</h1>
-    <div class="sub">請幾位古人，幫你盯著 Claude</div>
-  </div>
-
-  <div id="end" class="card">
-    <div class="lineup" id="lineup"></div>
-    <h1 style="font-size:110px">桌面大師</h1>
-    <div class="sub">你忙你的，有事他會叫你</div>
+    <div class="tag">你忙你的，有事他會叫你</div>
     <div class="cta">Windows 免費下載</div>
-    <div class="small">github.com/bca41258185-hash/desktop-assistant</div>
+    <div class="url">github.com/bca41258185-hash/desktop-assistant</div>
   </div>
 
-  <script src="../renderer/characters-philosophers.js"></script>
-  <script src="../renderer/characters.js"></script>
-  <script>
-  const $ = (id) => document.getElementById(id);
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const SCALE = 1.35;
+  <div id="intro">
+    <div id="i1"></div>
+    <div id="iwin"><div class="bar"><span class="dot"></span>Claude</div><div class="body"><span class="spin"></span>正在處理你的要求…</div></div>
+    <div id="icount">你切回去看了 <b id="icn">0</b> 次</div>
+    <div id="stamp">別看了</div>
+  </div>
+  <div id="flash"></div>
+</div>
 
-  // 結尾卡：六位角色一字排開
-  ['confucius', 'laozi', 'zhuangzi', 'mozi', 'hanfeizi', 'guiguzi'].forEach((id) => {
-    const c = window.CHARACTERS[id];
-    const d = document.createElement('div');
-    d.className = 'who';
-    d.innerHTML = c.svg + '<div>' + c.nameZh + '</div>';
-    $('lineup').appendChild(d);
+<script src="../renderer/characters-philosophers.js"></script>
+<script src="../renderer/characters.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sfx = (name) => console.log('SFX:' + name);       // 錄影程式會記下時間，之後照時間配音效
+
+// 兩排六位角色（標題與片尾）
+const CAST = ['confucius', 'laozi', 'zhuangzi', 'mozi', 'hanfeizi', 'guiguzi'];
+['lineup1', 'lineup2'].forEach((lid) => CAST.forEach((id, i) => {
+  const c = window.CHARACTERS[id];
+  const d = document.createElement('div');
+  d.className = 'who';
+  d.style.setProperty('--d', (i * 0.13) + 's');
+  d.innerHTML = c.svg + '<div>' + c.nameZh + '</div>';
+  $(lid).appendChild(d);
+}));
+
+const pet = (n) => $('p' + n).contentWindow.petCtl;
+const pdoc = (n) => $('p' + n).contentDocument;
+function place(n, cls) { const f = $('p' + n); f.className = 'petframe on ' + cls; }
+
+function tint(color, accent) {
+  $('bg').style.setProperty('--tint', color);
+  document.body.style.setProperty('--accent', accent || '#d9532b');
+}
+function feature(no, big, sub) {
+  for (const id of ['num', 'cap']) { $(id).className = 'out'; }
+  setTimeout(() => {
+    $('num').textContent = no;
+    $('cap').innerHTML = '<div class="big">' + big + '</div><div class="sub">' + sub + '</div>';
+    $('num').className = 'in';
+    $('cap').className = 'in';
+    punch();
+    sfx('whoosh');
+  }, 200);
+}
+function say(cls, html) {
+  const m = document.createElement('div');
+  m.className = 'msg ' + cls;
+  m.innerHTML = html;
+  $('msgs').appendChild(m);
+  while ($('msgs').children.length > 4) $('msgs').firstChild.remove();
+  sfx('pop');
+  return m;
+}
+function flash() { const f = $('flash'); f.classList.remove('on'); void f.offsetWidth; f.classList.add('on'); }
+function punch() { $('world').classList.add('punch'); setTimeout(() => $('world').classList.remove('punch'), 110); }
+function confetti(x, y, n) {
+  const colors = ['#d9532b', '#f4b63f', '#3f8f55', '#2f6fd0', '#b05bd6', '#ff7a59'];
+  for (let i = 0; i < (n || 34); i++) {
+    const b = document.createElement('div');
+    b.className = 'bit';
+    const ang = Math.random() * Math.PI * 2;
+    const dist = 220 + Math.random() * 520;
+    b.style.left = x + 'px'; b.style.top = y + 'px';
+    b.style.background = colors[i % colors.length];
+    b.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+    b.style.setProperty('--dy', (Math.sin(ang) * dist - 160) + 'px');
+    b.style.setProperty('--r', (Math.random() * 900 - 450) + 'deg');
+    $('world').appendChild(b);
+    setTimeout(() => b.remove(), 1100);
+  }
+}
+function pow(text, x, y, color) {
+  const p = document.createElement('div');
+  p.className = 'pow';
+  p.textContent = text;
+  p.style.left = x + 'px'; p.style.top = y + 'px';
+  p.style.setProperty('--c', color || '#3f8f55');
+  $('world').appendChild(p);
+  setTimeout(() => p.remove(), 950);
+}
+
+// 把假滑鼠移到助手畫面裡的某個元素上（依 iframe 目前的位置與放大倍率換算）
+function spot(n, el, fx, fy) {
+  const fr = $('p' + n).getBoundingClientRect();
+  const k = fr.width / 520;
+  const r = el.getBoundingClientRect();
+  return { x: fr.left + (r.left + r.width * (fx === undefined ? 0.5 : fx)) * k, y: fr.top + (r.top + r.height * (fy === undefined ? 0.55 : fy)) * k };
+}
+async function pointAt(n, sel, fx) {
+  const el = typeof sel === 'string' ? pdoc(n).querySelector(sel) : sel;
+  const p = spot(n, el, fx);
+  $('cursor').style.left = (p.x - 8) + 'px';
+  $('cursor').style.top = (p.y - 6) + 'px';
+  await sleep(620);
+  return { el, p };
+}
+async function clickAt(n, sel) {
+  const { el, p } = await pointAt(n, sel);
+  $('cursor').classList.add('click');
+  sfx('click');
+  await sleep(110);
+  el.click();
+  punch();
+  setTimeout(() => $('cursor').classList.remove('click'), 200);
+  return p;
+}
+function parkCursor() { $('cursor').style.left = '1060px'; $('cursor').style.top = '930px'; }
+
+async function typeInto(el, text, gap) {
+  for (const ch of text) { el.textContent += ch; sfx('type'); await sleep(gap || 70); }
+}
+
+async function run() {
+  await sleep(500);
+  document.title = 'GO';                       // 通知錄影程式：開始
+  sfx('start');
+
+  // ================= 痛點開場 =================
+  await sleep(350);
+  await typeInto($('i1'), '你叫 Claude 幫你做事。', 75);
+  await sleep(250);
+  $('iwin').classList.add('on');
+  sfx('pop');
+  await sleep(900);
+  $('i1').textContent = '';
+  await typeInto($('i1'), '然後呢？', 90);
+  await sleep(350);
+  $('icount').classList.add('on');
+  $('iwin').classList.add('shake');
+  // 計數器越跳越快
+  let n = 0;
+  for (let gap = 300; n < 27; gap = Math.max(45, gap * 0.86)) {
+    n += 1;
+    $('icn').textContent = n;
+    $('icn').classList.remove('bump'); void $('icn').offsetWidth; $('icn').classList.add('bump');
+    sfx('tick');
+    await sleep(gap);
+  }
+  await sleep(200);
+  $('iwin').classList.remove('shake');
+  $('stamp').classList.add('on');
+  sfx('thump');
+  punch();
+  await sleep(1150);
+
+  // ================= 標題 =================
+  sfx('drop');                                  // 音樂從這裡進節奏
+  flash();
+  tint('#f4f1e9');
+  $('intro').classList.add('off');
+  $('title').classList.remove('off');
+  const letters = $('title').querySelectorAll('h1 span');
+  for (const el of letters) { el.classList.add('on'); sfx('thump'); await sleep(250); }
+  await sleep(150);
+  $('title').querySelector('.sub').classList.add('on');
+  sfx('whoosh');
+  await sleep(350);
+  for (const el of $('lineup1').children) { el.classList.add('on'); sfx('pop'); await sleep(125); }
+  await sleep(1500);
+
+  // ================= 01 他幫你盯著 =================
+  $('title').classList.add('off');
+  tint('#f6efdc', '#d9532b');
+  feature('01', '你忙你的，<br><em>他幫你盯著</em>', 'Claude 一開始做事，他就開始看');
+  $('chatwin').classList.add('on');
+  await sleep(450);
+  place(1, 'hero');
+  sfx('boing');
+  await sleep(550);
+  say('me', '幫我整理期末報告的格式');
+  await sleep(600);
+  const working = say('ai', '<span class="work"></span>正在整理…');
+  pet(1).status({ text: '進行中', cls: 'working' });
+  pet(1).pose('think');
+  pet(1).speak({ text: 'Claude 開始處理了', attribution: '你說：幫我整理期末報告的格式', ai: true, duration: 2300 });
+  sfx('ding');
+  await sleep(2500);
+  pet(1).pose('idle');
+  pet(1).speak({ text: '跑一次、驗一次。木匠也是拿尺量過才下鋸。', duration: 2400 });
+  sfx('pop');
+  await sleep(2500);
+
+  // ================= 02 要你同意？按一下 =================
+  tint('#fdf0d2', '#c9781a');
+  feature('02', '要你同意？<br><em>按一下就好</em>', '不用切回去找那個視窗');
+  parkCursor();
+  await sleep(500);
+  pet(1).status({ text: '等你回答', cls: 'waiting' });
+  pet(1).speak({
+    text: 'Claude 想修改檔案「期末報告.docx」，要讓它改嗎？', ai: true, sticky: true, action: 'choice', requestId: 'r1',
+    choices: [{ id: 'allow', label: '允許' }, { id: 'deny', label: '拒絕' }],
+    inputLabel: '不同意？打字告訴 Claude 要怎麼改：', inputPlaceholder: '打字告訴 Claude…', inputButton: '拒絕並送出'
   });
+  sfx('alert');
+  await sleep(1700);
+  const hit1 = await clickAt(1, '.bubble-choice.allow');
+  flash(); confetti(hit1.x, hit1.y); pow('允許！', hit1.x, hit1.y - 60, '#3f8f55');
+  sfx('yes');
+  say('sys', '✓ 已允許修改 期末報告.docx');
+  pet(1).status({ text: '進行中', cls: 'working' });
+  pet(1).pose('happy');
+  await sleep(1900);
 
-  const pet = (n) => $('p' + n).contentWindow.petCtl;
-  const pdoc = (n) => $('p' + n).contentDocument;
+  // ================= 03 問你問題？直接答 =================
+  tint('#e9f1e4', '#2f8a4f');
+  feature('03', '問你問題？<br><em>直接回答</em>', 'Claude 的選項會出現在泡泡上');
+  parkCursor();
+  pet(1).pose('idle');
+  await sleep(500);
+  pet(1).status({ text: '等你回答', cls: 'waiting' });
+  pet(1).speak({
+    text: '報告要用哪一種格式交？', ai: true, sticky: true, action: 'choice', requestId: 'r2',
+    choices: [{ id: 'opt0', label: 'Word 檔' }, { id: 'opt1', label: 'PDF' }, { id: 'opt2', label: '簡報' }]
+  });
+  sfx('alert');
+  await sleep(1500);
+  const hit2 = await clickAt(1, pdoc(1).querySelectorAll('.bubble-choice')[1]);
+  flash(); pow('PDF！', hit2.x, hit2.y - 60, '#2f6fd0');
+  sfx('yes');
+  say('sys', '✓ 你選了 PDF');
+  pet(1).status({ text: '進行中', cls: 'working' });
+  await sleep(1600);
 
-  function caption(main, sub) {
-    const el = $('caption');
-    el.classList.remove('on');
-    setTimeout(() => {
-      el.innerHTML = main + (sub ? '<small>' + sub + '</small>' : '');
-      el.classList.add('on');
-    }, 380);
+  // ================= 04 做完叫你，還能回話 =================
+  tint('#e4eefb', '#2f6fd0');
+  feature('04', '做完會叫你，<br><em>還能直接回話</em>', '在泡泡下面打字，就是下一個指令');
+  parkCursor();
+  await sleep(450);
+  working.innerHTML = '格式整理好了，已經存成 PDF。';
+  pet(1).status({ text: '完成', cls: 'done' });
+  pet(1).pose('happy');
+  pet(1).speak({ text: '格式整理好了，已經存成 PDF。', ai: true, sticky: true, action: 'confirm', composeTo: 's1', inputPlaceholder: '回覆 Claude…' });
+  sfx('fanfare');
+  const fr = $('p1').getBoundingClientRect();
+  confetti(fr.left + fr.width / 2, fr.top + fr.height * 0.45, 46);
+  flash();
+  await sleep(1500);
+  const { el: input } = await pointAt(1, '#bubbleTextInput', 0.2);
+  input.focus();
+  for (const ch of '再幫我加上頁碼') { input.value += ch; sfx('type'); await sleep(105); }
+  await sleep(250);
+  const hit3 = await pointAt(1, '#bubbleSend');
+  $('cursor').classList.add('click'); sfx('click'); punch();
+  await sleep(120);
+  $('cursor').classList.remove('click');
+  pdoc(1).getElementById('bubble').click();
+  pow('送出！', hit3.p.x - 240, hit3.p.y - 90, '#d9532b');
+  sfx('send');
+  say('me', '再幫我加上頁碼');
+  pet(1).status({ text: '進行中', cls: 'working' });
+  pet(1).pose('idle');
+  await sleep(1500);
+
+  // ================= 三位同框 =================
+  for (const id of ['num', 'cap']) $(id).className = 'out';
+  $('chatwin').classList.remove('on');
+  $('cursor').style.top = '1300px';
+  tint('#f3e9f7', '#2f6fd0');
+  pet(1).status({ text: '', cls: '' });
+  place(1, 'b');
+  await sleep(200);
+  $('multi').innerHTML = '<div class="big">三個對話？<em>三位助手</em></div><div class="sub">一個對話一位，誰的事一眼就知道</div>';
+  $('multi').className = 'in';
+  sfx('whoosh');
+  await sleep(300);
+  place(2, 'a'); sfx('boing');
+  await sleep(260);
+  place(3, 'c'); sfx('boing');
+  await sleep(550);
+  pet(2).status({ text: '完成', cls: 'done' }); sfx('pop');
+  await sleep(230);
+  pet(1).status({ text: '進行中', cls: 'working' }); sfx('pop');
+  await sleep(230);
+  pet(3).status({ text: '等你回答', cls: 'waiting' }); sfx('pop');
+  await sleep(1500);
+
+  // ---- 沒事的時候，他們會鬥嘴 ----
+  $('multi').className = 'out';
+  await sleep(220);
+  $('multi').innerHTML = '<div class="big">沒事的時候，<em>他們會鬥嘴</em></div>';
+  $('multi').className = 'in';
+  sfx('whoosh');
+  [1, 2, 3].forEach((k) => pet(k).status({ text: '', cls: '' }));
+  await sleep(700);
+  const chat = [
+    [1, '莊先生，你今天做了什麼有用的事？', 1750],
+    [2, '我看了一下午的雲。', 1350],
+    [1, '雲能吃嗎？', 1100],
+    [2, '不能，但看了心情好。', 1500]
+  ];
+  for (const [k, text, hold] of chat) {
+    pet(k).speak({ text, chat: true, duration: hold + 900 });
+    sfx(k === 1 ? 'talkA' : 'talkB');
+    await sleep(hold);
   }
-  function say(cls, html) {
-    const m = document.createElement('div');
-    m.className = 'msg ' + cls;
-    m.innerHTML = html;
-    $('msgs').appendChild(m);
-    requestAnimationFrame(() => m.classList.add('on'));
-    return m;
-  }
-  function clearMsgs() { $('msgs').innerHTML = ''; }
+  pet(3).speak({ text: '……上班時間，安靜。', chat: true, duration: 2600 });
+  sfx('sting');
+  punch();
+  await sleep(450);
+  pet(1).pose('think'); pet(2).pose('think');
+  await sleep(1900);
 
-  // 把假滑鼠移到助手畫面裡的某個元素上（座標要換算 iframe 的位置與放大倍率）
-  async function pointAt(n, selector, dx, dy) {
-    const frame = $('p' + n).getBoundingClientRect();
-    const el = typeof selector === 'string' ? pdoc(n).querySelector(selector) : selector;
-    const r = el.getBoundingClientRect();
-    const x = frame.left + (r.left + r.width * (dx === undefined ? 0.5 : dx)) * SCALE;
-    const y = frame.top + (r.top + r.height * (dy === undefined ? 0.55 : dy)) * SCALE;
-    $('cursor').style.left = (x - 6) + 'px';
-    $('cursor').style.top = (y - 4) + 'px';
-    await sleep(1000);
-    return el;
-  }
-  async function clickAt(n, selector) {
-    const el = await pointAt(n, selector);
-    $('cursor').classList.add('click');
-    await sleep(160);
-    el.click();
-    await sleep(200);
-    $('cursor').classList.remove('click');
-  }
-  function parkCursor() { $('cursor').style.left = '1180px'; $('cursor').style.top = '960px'; }
-
-  async function run() {
-    await sleep(600);
-    document.title = 'GO';                         // 告訴錄影程式：開始
-    await sleep(3600);
-
-    // ---------- 一：你忙你的，他幫你盯著 ----------
-    $('title').classList.remove('on');
-    await sleep(700);
-    $('chatwin').classList.add('on');
-    $('p1').classList.remove('off');
-    caption('你忙你的，他幫你盯著 Claude', 'Claude 開始、等你、做完的時候，他會告訴你');
-    await sleep(1300);
-    say('me', '幫我整理期末報告的格式');
-    await sleep(1100);
-    const working = say('ai', '<span class="work"></span>正在整理…');
-    pet(1).status({ text: '進行中', cls: 'working' });
-    pet(1).pose('think');
-    pet(1).speak({ text: 'Claude 開始處理了', attribution: '你說：幫我整理期末報告的格式', ai: true, duration: 3600 });
-    await sleep(4300);
-    pet(1).pose('idle');
-    pet(1).speak({ text: '跑一次、驗一次。木匠也是拿尺量過才下鋸。', duration: 3800 });
-    await sleep(4400);
-
-    // ---------- 二：需要你同意 ----------
-    caption('需要你同意？在泡泡上按一下', '不用切回 Claude 找那個視窗');
-    parkCursor();
-    await sleep(900);
-    pet(1).status({ text: '等你回答', cls: 'waiting' });
-    pet(1).speak({
-      text: 'Claude 想修改檔案「期末報告.docx」，要讓它改嗎？', ai: true, sticky: true, action: 'choice', requestId: 'r1',
-      choices: [{ id: 'allow', label: '允許' }, { id: 'deny', label: '拒絕' }],
-      inputLabel: '不同意？打字告訴 Claude 要怎麼改：', inputPlaceholder: '打字告訴 Claude…', inputButton: '拒絕並送出'
-    });
-    await sleep(2600);
-    await clickAt(1, '.bubble-choice.allow');
-    say('sys', '✓ 已允許修改 期末報告.docx');
-    pet(1).status({ text: '進行中', cls: 'working' });
-    await sleep(2600);
-
-    // ---------- 三：Claude 問你問題 ----------
-    caption('Claude 問你問題，也能直接回答', '點選項，或自己打字');
-    parkCursor();
-    await sleep(900);
-    pet(1).status({ text: '等你回答', cls: 'waiting' });
-    pet(1).speak({
-      text: '報告要用哪一種格式交？', ai: true, sticky: true, action: 'choice', requestId: 'r2',
-      choices: [{ id: 'opt0', label: 'Word 檔' }, { id: 'opt1', label: 'PDF' }, { id: 'opt2', label: '簡報' }],
-      inputLabel: '都不是？自己打字回答：', inputPlaceholder: '打字，按 Enter 送出'
-    });
-    await sleep(2400);
-    const opts = pdoc(1).querySelectorAll('.bubble-choice');
-    await clickAt(1, opts[1]);
-    say('sys', '你選了：PDF');
-    pet(1).status({ text: '進行中', cls: 'working' });
-    await sleep(2400);
-
-    // ---------- 四：做完了會叫你 ----------
-    caption('做完了會叫你，還能直接回話', '在泡泡下面打字，就是下一個指令');
-    parkCursor();
-    await sleep(700);
-    working.innerHTML = '格式整理好了，已經存成 PDF。';
-    pet(1).status({ text: '完成', cls: 'done' });
-    pet(1).pose('happy');
-    pet(1).speak({ text: '格式整理好了，已經存成 PDF。', ai: true, sticky: true, action: 'confirm', composeTo: 's1', inputPlaceholder: '回覆 Claude…' });
-    await sleep(2400);
-    const input = await pointAt(1, '#bubbleTextInput', 0.2);
-    input.focus();
-    for (const ch of '再幫我加上頁碼') { input.value += ch; await sleep(190); }
-    await sleep(500);
-    await pointAt(1, '#bubbleSend');
-    $('cursor').classList.add('click');
-    await sleep(180);
-    $('cursor').classList.remove('click');
-    pdoc(1).getElementById('bubble').click();          // 收起泡泡（示意送出）
-    say('me', '再幫我加上頁碼');
-    pet(1).speak({ text: '送出了。', ai: true, duration: 2200 });
-    pet(1).status({ text: '進行中', cls: 'working' });
-    pet(1).pose('idle');
-    await sleep(2800);
-
-    // ---------- 五：一個對話一位助手，沒事時會聊天 ----------
-    caption('一個對話，一位助手', '沒事的時候，他們自己會聊起來');
-    parkCursor();
-    $('cursor').style.top = '1200px';
-    await sleep(600);
-    pet(1).status({ text: '', cls: '' });
-    $('p2').classList.remove('off');
-    await sleep(1500);
-    const chat = [
-      [1, '莊先生，你今天做了什麼有用的事？'],
-      [2, '我看了一下午的雲，算嗎？'],
-      [1, '雲能擋雨，還是能吃？'],
-      [2, '不能，但看了心情好。'],
-      [1, '……這倒是實話。']
-    ];
-    for (const [n, text] of chat) {
-      pet(n).speak({ text, chat: true, duration: 4200 });
-      await sleep(2300);
-    }
-    await sleep(2200);
-
-    // ---------- 結尾 ----------
-    $('caption').classList.remove('on');
-    $('end').classList.add('on');
-    await sleep(6500);
-    document.title = 'END';                        // 告訴錄影程式：結束
-  }
-  window.addEventListener('load', () => setTimeout(run, 800));
-  </script>
+  // ================= 片尾 =================
+  sfx('end');
+  flash();
+  $('multi').className = 'out';
+  [1, 2, 3].forEach((k) => { $('p' + k).className = 'petframe hide'; });
+  tint('#f4f1e9');
+  $('end').classList.add('on');
+  await sleep(120);
+  for (const el of $('lineup2').children) { el.classList.add('on'); sfx('pop'); await sleep(140); }
+  await sleep(480);
+  sfx('thump');
+  await sleep(1200);
+  sfx('yes');
+  await sleep(3600);
+  document.title = 'END';                      // 通知錄影程式：結束
+}
+window.addEventListener('load', () => setTimeout(run, 900));
+</script>
 </body>
 </html>

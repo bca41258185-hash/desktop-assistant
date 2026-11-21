@@ -233,5 +233,5 @@ MIT
 - **安裝檔**：`npm run dist:win` 會在 `dist/` 產生安裝版 `DesktopMaster-Setup-<版本>.exe` 與免安裝版 `DesktopMaster-<版本>-win.exe`（沒有數位簽章，第一次執行 Windows 會跳出 SmartScreen 提示）。
   - 設定固定放在 `%APPDATA%desktop-assistant`，開發版、安裝版、免安裝版共用同一份。
   - 「即時提醒」的鉤子腳本會複製到 `%APPDATA%desktop-assistantai-hooksclaude-hook.js`，Claude 的設定指向這個固定位置；使用者電腦仍需有 Node.js 才能執行鉤子。
-- **介紹影片**：`electron trailer/record.js site/trailer.mp4`。`trailer/stage.html` 是舞台（真的助手畫面放在 iframe 裡照腳本演出），`trailer/music.js` 用撥弦合成產生配樂，`record.js` 以離屏渲染每秒 30 格送給 ffmpeg（需安裝 ffmpeg）。想改內容就改 `stage.html` 裡的 `run()`。
+- **介紹影片**：`electron trailer/record.js site/trailer.mp4`。`trailer/stage.html` 是舞台（真的助手畫面放在 iframe 裡照腳本演出，每個動作用 `console.log('SFX:名稱')` 標記）；`record.js` 先以離屏渲染每秒 30 格錄下畫面並記錄這些時間點，再交給 `trailer/music.js` 合成對齊畫面的配樂與音效，最後合併（需安裝 ffmpeg）。想改內容就改 `stage.html` 裡的 `run()`。
 - **下載網頁**：`node tools/build-site.js` 產生單一檔案 `site/index.html`（角色造型內嵌），下載鈕指向 GitHub Releases 的 `v<版本>` 標籤。`site/` 可直接當成 GitHub Pages 的內容。
