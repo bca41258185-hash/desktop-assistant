@@ -5,9 +5,9 @@
 <title>stage</title>
 <style>
   /* 預告片舞台：1920×1080，模擬一個真實的桌面。
-     ・整個螢幕是使用者正在用的繪圖軟體（全螢幕），平面圖一筆一筆畫出來，十字游標跟著動。
-     ・Claude 不在畫面上，只在工作列上顯示它在背景做的事（而且是和畫圖無關的事）。
-     ・助手（真的 app 畫面，iframe 載入 pet-frame.html）站在繪圖軟體上面的右下角。
+     ・整個螢幕是使用者正在用的文書軟體（全螢幕），他在打報告。
+     ・Claude 不在畫面上，只在工作列上顯示它在背景做的事（而且是大家都會遇到的雜事）。
+     ・助手（真的 app 畫面，iframe 載入 pet-frame.html）站在文件右邊的空白處。
      ・每個動作用 console.log('SFX:名稱') 通知錄影程式配音效。 */
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 1920px; height: 1080px; overflow: hidden; background: #111; }
@@ -15,71 +15,42 @@
   #world { position: absolute; inset: 0; overflow: hidden; transform-origin: 70% 70%; transition: transform 0.45s cubic-bezier(.2,.9,.2,1); }
   #world.punch { transform: scale(1.025); transition-duration: 0.09s; }
 
-  /* ==================== 繪圖軟體（全螢幕） ==================== */
-  #app { position: absolute; left: 0; top: 0; width: 1920px; height: 994px; background: #2b2f36; color: #d7dbe0; font-size: 15px; }
-  .titlebar { position: relative; height: 34px; display: flex; align-items: center; gap: 10px; padding-left: 12px; background: #1f2329; font-size: 15px; color: #c9ced6; }
-  .titlebar .logo { width: 20px; height: 20px; border-radius: 4px; background: #c0392b; color: #fff; font-weight: 800; font-size: 13px; display: grid; place-items: center; }
-  .titlebar .qa { display: flex; gap: 12px; margin-left: 8px; color: #8e96a3; font-size: 14px; }
+  /* ==================== 文書軟體（全螢幕） ==================== */
+  #app { position: absolute; left: 0; top: 0; width: 1920px; height: 994px; background: #e7e7e8; color: #2b2b2b; font-size: 15px; }
+  .titlebar { position: relative; height: 36px; display: flex; align-items: center; gap: 10px; padding-left: 14px; background: #2b579a; color: #fff; font-size: 15px; }
+  .titlebar .logo { width: 22px; height: 22px; border-radius: 4px; background: #fff; color: #2b579a; font-weight: 900; font-size: 14px; display: grid; place-items: center; }
+  .titlebar .qa { display: flex; gap: 12px; margin-left: 8px; opacity: 0.85; font-size: 14px; }
   .titlebar .name { position: absolute; left: 0; right: 0; text-align: center; pointer-events: none; }
   .titlebar .win { margin-left: auto; display: flex; height: 100%; }
-  .titlebar .win span { width: 50px; display: grid; place-items: center; color: #aab1bc; }
-  .tabs { height: 30px; display: flex; align-items: flex-end; gap: 2px; padding-left: 10px; background: #1f2329; }
-  .tabs span { padding: 5px 16px; font-size: 14px; color: #aab1bc; border-radius: 4px 4px 0 0; }
-  .tabs span.on { background: #343941; color: #fff; }
-  .ribbon { height: 92px; display: flex; background: #343941; border-bottom: 1px solid #22262c; padding: 6px 8px 0; gap: 4px; }
-  .grp { display: flex; flex-direction: column; padding: 0 10px; border-right: 1px solid #454b54; }
-  .grp .tools { display: flex; gap: 4px; flex: 1; align-items: flex-start; }
-  .grp .lbl { text-align: center; font-size: 12px; color: #8e96a3; padding: 2px 0 4px; }
-  .tool { width: 50px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11.5px; color: #c9ced6; padding: 3px 0; border-radius: 4px; }
-  .tool.on { background: #4a6a8c; }
-  .tool svg { width: 30px; height: 30px; }
-  .tool svg * { fill: none; stroke: #d7dbe0; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .tool svg .c { stroke: #6fc3ff; }
-  .layerbox { width: 210px; height: 30px; border: 1px solid #56606c; border-radius: 3px; background: #2b2f36; display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 14px; }
-  .sw { width: 13px; height: 13px; border: 1px solid #000; display: inline-block; }
-  .filetabs { height: 28px; display: flex; align-items: flex-end; gap: 2px; padding-left: 8px; background: #23272d; }
-  .filetabs span { padding: 4px 16px; font-size: 13.5px; color: #9aa2ad; }
-  .filetabs span.on { background: #1b2027; color: #fff; border-top: 2px solid #4fa3ff; }
-  #main { position: absolute; left: 0; top: 184px; width: 1920px; height: 708px; display: flex; }
-  .palette { width: 262px; background: #30353c; border-right: 1px solid #22262c; padding: 10px 12px; font-size: 13.5px; }
-  .palette h4 { font-size: 13px; color: #9aa2ad; font-weight: 600; margin: 6px 0 8px; letter-spacing: 0.04em; }
-  .layer { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 3px; color: #d7dbe0; }
-  .layer.cur { background: #3f5f80; }
-  .layer .eye { margin-left: auto; color: #8e96a3; font-size: 12px; }
-  .prop { display: flex; justify-content: space-between; padding: 4px 6px; color: #c9ced6; border-bottom: 1px solid #3a3f47; }
-  .prop b { font-weight: 400; color: #9aa2ad; }
-  #model { position: relative; flex: 1; background: #1c232c; overflow: hidden; }
-  #model svg.grid { position: absolute; inset: 0; }
-  #plan { position: absolute; left: 0; top: 0; width: 1658px; height: 708px; }
-  #plan .w { stroke: #f2f2f2; stroke-width: 6; fill: none; stroke-linecap: square; }
-  #plan .wn { stroke: #5ad1ff; stroke-width: 2; fill: none; }
-  #plan .dr { stroke: #5ad1ff; stroke-width: 2.2; fill: none; }
-  #plan .fu { stroke: #f2c94c; stroke-width: 2; fill: none; }
-  #plan .dm { stroke: #6fdc8c; stroke-width: 1.6; fill: none; }
-  #plan text { fill: #f2f2f2; font-size: 22px; font-family: "Microsoft JhengHei", sans-serif; }
-  #plan text.dmt { fill: #6fdc8c; font-size: 18px; }
-  #plan .grow { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 0.32s linear; }
-  #plan .grow.done { stroke-dashoffset: 0; }
-  #plan text.grow { opacity: 0; transition: opacity 0.25s; }
-  #plan text.grow.done { opacity: 1; }
-  #plan .hot { stroke: #ffffff; filter: drop-shadow(0 0 3px #4fa3ff); }
-  .ucs { position: absolute; left: 22px; bottom: 30px; }
-  .vcube { position: absolute; right: 26px; top: 20px; width: 86px; height: 86px; border: 2px solid #6b7480; border-radius: 50%; display: grid; place-items: center; }
-  .vcube div { width: 42px; height: 42px; background: #3a414b; border: 1px solid #8e96a3; display: grid; place-items: center; font-size: 12px; color: #d7dbe0; }
-  .mtabs { position: absolute; left: 0; bottom: 0; display: flex; gap: 2px; padding-left: 8px; }
-  .mtabs span { padding: 3px 14px; font-size: 13px; background: #2b2f36; color: #9aa2ad; }
-  .mtabs span.on { background: #1c232c; color: #fff; border-top: 2px solid #4fa3ff; }
-  #cmd { position: absolute; left: 0; top: 892px; width: 1920px; height: 72px; background: #262a30; border-top: 1px solid #1b1e22; padding: 6px 14px; font-family: "Consolas", "Microsoft JhengHei", monospace; font-size: 16px; color: #9aa2ad; }
-  #cmd .hist { line-height: 1.45; white-space: nowrap; overflow: hidden; height: 23px; }
-  #cmd .now { margin-top: 6px; display: flex; align-items: center; gap: 8px; height: 30px; background: #1b1f24; border: 1px solid #3a3f47; border-radius: 3px; padding: 0 10px; color: #e7eaee; }
-  #cmd .now .ic { color: #4fa3ff; }
-  #cmdText::after { content: "▏"; animation: blink 1s steps(2) infinite; color: #fff; }
+  .titlebar .win span { width: 50px; display: grid; place-items: center; }
+  .tabs { height: 32px; display: flex; align-items: flex-end; gap: 4px; padding-left: 10px; background: #2b579a; }
+  .tabs span { padding: 5px 16px; font-size: 14.5px; color: #e4ecf7; border-radius: 4px 4px 0 0; }
+  .tabs span.on { background: #f3f3f3; color: #2b579a; font-weight: 700; }
+  .ribbon { height: 96px; display: flex; background: #f3f3f3; border-bottom: 1px solid #d4d4d4; padding: 8px 10px 0; gap: 6px; }
+  .grp { display: flex; flex-direction: column; padding: 0 14px; border-right: 1px solid #d9d9d9; }
+  .grp .tools { display: flex; gap: 8px; flex: 1; align-items: flex-start; }
+  .grp .lbl { text-align: center; font-size: 12px; color: #707070; padding: 2px 0 4px; }
+  .bigbtn { width: 58px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12.5px; color: #333; }
+  .bigbtn .ic { font-size: 30px; line-height: 1; }
+  .fbox { height: 28px; border: 1px solid #c8c8c8; background: #fff; display: flex; align-items: center; padding: 0 8px; font-size: 14px; color: #333; }
+  .row { display: flex; gap: 4px; margin-top: 6px; }
+  .btn { width: 30px; height: 28px; display: grid; place-items: center; border-radius: 3px; font-size: 16px; color: #333; }
+  .btn.on { background: #c5d9f1; }
+  .style { width: 104px; height: 58px; border: 1px solid #d0d0d0; background: #fff; display: flex; flex-direction: column; justify-content: center; padding: 0 10px; font-size: 12px; color: #555; }
+  .style.on { border: 2px solid #2b579a; }
+  .style b { font-size: 18px; color: #222; }
+  #canvas { position: absolute; left: 0; top: 164px; width: 1920px; height: 800px; overflow: hidden; }
+  #page { position: absolute; left: 150px; top: 26px; width: 940px; min-height: 1100px; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.18); padding: 84px 96px; font-family: "Microsoft JhengHei", "PingFang TC", serif; color: #222; }
+  #page h1 { font-size: 40px; font-weight: 800; margin-bottom: 8px; color: #1f3864; }
+  #page .meta { font-size: 17px; color: #777; margin-bottom: 26px; }
+  #page h2 { font-size: 26px; font-weight: 800; margin: 22px 0 8px; color: #2b579a; }
+  #page p { font-size: 22px; line-height: 1.75; margin-bottom: 10px; text-align: justify; }
+  #page li { font-size: 22px; line-height: 1.7; margin-left: 30px; }
+  #caret { display: inline-block; width: 2px; height: 1.1em; background: #222; vertical-align: -0.15em; margin-left: 1px; animation: blink 1s steps(2) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
-  #status { position: absolute; left: 0; top: 964px; width: 1920px; height: 30px; background: #30353c; display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 14px; color: #aab1bc; }
-  #status .coord { font-family: "Consolas", monospace; color: #d7dbe0; min-width: 260px; }
-  #status .tg { color: #4fa3ff; }
-  #status .tg.off { color: #7a828d; }
-  #status .right { margin-left: auto; display: flex; gap: 16px; }
+  .ruler { position: absolute; left: 150px; top: 6px; width: 940px; height: 16px; background: repeating-linear-gradient(90deg, #bbb 0 1px, transparent 1px 47px) bottom/100% 6px no-repeat, #fafafa; border: 1px solid #d0d0d0; }
+  #status { position: absolute; left: 0; top: 964px; width: 1920px; height: 30px; background: #2b579a; color: #e4ecf7; display: flex; align-items: center; gap: 26px; padding: 0 16px; font-size: 14px; }
+  #status .right { margin-left: auto; display: flex; gap: 18px; }
 
   /* ==================== 工作列 ==================== */
   #taskbar { position: absolute; left: 0; right: 0; top: 994px; height: 86px; z-index: 25; background: #1d1e22; border-top: 1px solid #000; display: flex; align-items: center; gap: 10px; padding: 0 20px; }
@@ -89,7 +60,7 @@
   .tb.active { background: #34363c; color: #fff; }
   .tb.active::after { content: ""; position: absolute; left: 30%; right: 30%; bottom: 3px; height: 4px; border-radius: 2px; background: #6aa7ff; }
   .tb .ico { width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center; font-size: 22px; font-weight: 800; }
-  .tb .ico.cad { background: #c0392b; color: #fff; }
+  .tb .ico.doc { background: #2b579a; color: #fff; }
   .tb .ico.cl { background: #d97757; color: #fff; }
   .tb .st { width: 16px; height: 16px; border-radius: 50%; background: #6b6a62; }
   .tb.working .st { background: #6aa7ff; animation: pulse 0.9s ease-in-out infinite; }
@@ -101,6 +72,8 @@
   .tb.waiting small { color: #ffd98a; }
   @keyframes tbBlink { 50% { background: #7a5a22; } }
   @keyframes pulse { 50% { opacity: 0.2; } }
+  /* 工作列上同時有三個 Claude 時，把搜尋框收起來，免得把時間擠掉 */
+  #taskbar:has(#tb3:not(.gone)) .search { display: none; }
   .tray { margin-left: auto; text-align: right; font-size: 22px; color: #cfd3d8; line-height: 1.25; }
   #toast { position: absolute; left: 640px; top: 914px; z-index: 26; background: #23252a; border: 1px solid #3a3d44; color: #9ad0a4; font-size: 28px; padding: 10px 22px; border-radius: 12px; opacity: 0; transform: translateY(14px); transition: opacity 0.25s, transform 0.25s; white-space: nowrap; box-shadow: 0 10px 24px rgba(0,0,0,0.4); }
   #toast.on { opacity: 1; transform: none; }
@@ -116,37 +89,35 @@
   #bgring.on { opacity: 1; animation: ring 1.1s ease-out infinite; }
   @keyframes ring { 0% { box-shadow: 0 0 0 0 var(--cc, #2f6fd0); } 100% { box-shadow: 0 0 0 26px rgba(0,0,0,0); } }
 
-  /* ==================== 游標：在繪圖區是十字，其他地方是箭頭 ==================== */
-  #cursor { position: absolute; left: 1100px; top: 520px; z-index: 55; pointer-events: none; transition: left 0.3s cubic-bezier(.3,.8,.2,1), top 0.3s cubic-bezier(.3,.8,.2,1); }
-  #cursor .ch { position: absolute; background: #fff; }
-  #cursor .ch.h { left: -70px; top: -1px; width: 140px; height: 2px; }
-  #cursor .ch.v { left: -1px; top: -70px; width: 2px; height: 140px; }
-  #cursor .pick { position: absolute; left: -8px; top: -8px; width: 16px; height: 16px; border: 2px solid #fff; }
-  #cursor svg { position: absolute; left: -4px; top: -3px; width: 58px; height: 58px; display: none; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.45)); }
-  #cursor.arrow .ch, #cursor.arrow .pick { display: none; }
-  #cursor.arrow svg { display: block; }
-  #cursor.click svg { animation: click 0.2s ease; }
+  /* ==================== 游標：在文件上是 I 字形，其他地方是箭頭 ==================== */
+  #cursor { position: absolute; left: 700px; top: 520px; z-index: 55; pointer-events: none; transition: left 0.3s cubic-bezier(.3,.8,.2,1), top 0.3s cubic-bezier(.3,.8,.2,1); }
+  #cursor svg { position: absolute; filter: drop-shadow(0 3px 5px rgba(0,0,0,0.35)); }
+  #cursor .beam { left: -9px; top: -18px; width: 18px; height: 36px; }
+  #cursor .arr { left: -4px; top: -3px; width: 58px; height: 58px; display: none; }
+  #cursor.arrow .beam { display: none; }
+  #cursor.arrow .arr { display: block; }
+  #cursor.click .arr { animation: click 0.2s ease; }
   @keyframes click { 50% { transform: scale(0.7); } }
 
   /* ==================== 字幕卡（疊在繪圖軟體上） ==================== */
-  #cap { position: absolute; left: 300px; top: 214px; z-index: 30; max-width: 1000px; padding: 26px 40px 30px; background: rgba(250, 248, 241, 0.96); border-radius: 18px; border-left: 14px solid var(--accent, #d9532b); box-shadow: 0 24px 60px rgba(0,0,0,0.45); opacity: 0; transform: translateX(-60px); }
+  #cap { position: absolute; left: 1130px; top: 196px; z-index: 30; width: 760px; padding: 22px 32px 24px; background: rgba(250, 248, 241, 0.96); border-radius: 18px; border-left: 14px solid var(--accent, #d9532b); box-shadow: 0 16px 40px rgba(0,0,0,0.22); opacity: 0; transform: translateX(-60px); }
   #cap.in { animation: capIn 0.42s cubic-bezier(.2,1.3,.3,1) forwards; }
   #cap.out { opacity: 0 !important; transition: opacity 0.18s; animation: none; }
-  #cap .no { display: inline-block; font-size: 30px; font-weight: 900; color: #fff; background: var(--accent, #d9532b); border-radius: 999px; padding: 2px 20px; margin-bottom: 10px; letter-spacing: 0.06em; }
-  #cap .big { font-size: 74px; font-weight: 900; line-height: 1.2; color: #2b2b28; }
+  #cap .no { display: inline-block; font-size: 26px; font-weight: 900; color: #fff; background: var(--accent, #d9532b); border-radius: 999px; padding: 2px 20px; margin-bottom: 10px; letter-spacing: 0.06em; }
+  #cap .big { font-size: 60px; font-weight: 900; line-height: 1.2; color: #2b2b28; }
   #cap .big em { font-style: normal; color: var(--accent, #d9532b); }
-  #cap .sub { margin-top: 10px; font-size: 34px; font-weight: 600; color: #5c5b54; }
+  #cap .sub { margin-top: 8px; font-size: 28px; font-weight: 600; color: #5c5b54; }
   @keyframes capIn { from { opacity: 0; transform: translateX(-60px); } to { opacity: 1; transform: none; } }
 
-  /* ==================== 助手（站在繪圖軟體上面的右下角） ==================== */
-  .petframe { position: absolute; width: 520px; height: 640px; border: 0; background: transparent; z-index: 20; transform-origin: 50% 100%; left: 0; top: 0; opacity: 0; transition: translate 0.6s cubic-bezier(.2,1.25,.3,1), scale 0.6s cubic-bezier(.2,1.25,.3,1), opacity 0.25s; }
+  /* ==================== 助手（站在文件右邊的空白處） ==================== */
+  .petframe { position: absolute; width: 520px; height: 640px; border: 0; background: transparent; z-index: 32; transform-origin: 50% 100%; left: 0; top: 0; opacity: 0; transition: translate 0.6s cubic-bezier(.2,1.25,.3,1), scale 0.6s cubic-bezier(.2,1.25,.3,1), opacity 0.25s; }
   .petframe.on { opacity: 1; }
   /* translate 是 iframe 左上角；腳底對齊工作列上緣（994） */
-  .petframe.hide { translate: 1270px 1300px; scale: 1.3; }
-  .petframe.hero { translate: 1270px 362px; scale: 1.5; }
-  .petframe.a { translate: 300px 362px; scale: 1.42; }
-  .petframe.b { translate: 800px 362px; scale: 1.42; }
-  .petframe.c { translate: 1300px 362px; scale: 1.42; }
+  .petframe.hide { translate: 1250px 1300px; scale: 1.1; }
+  .petframe.hero { translate: 1250px 362px; scale: 1.12; }
+  .petframe.a { translate: 960px 362px; scale: 0.98; }
+  .petframe.b { translate: 1225px 362px; scale: 0.98; }
+  .petframe.c { translate: 1490px 362px; scale: 0.98; }
 
   /* ==================== 特效 ==================== */
   #flash { position: absolute; inset: 0; z-index: 70; background: #fff; opacity: 0; pointer-events: none; }
@@ -241,51 +212,31 @@
 <body>
 <div id="world">
 
-  <!-- ==================== 繪圖軟體（全螢幕） ==================== -->
+  <!-- ==================== 文書軟體（全螢幕） ==================== -->
   <div id="app">
     <div class="titlebar">
-      <span class="logo">D</span>
-      <span class="qa"><span>💾</span><span>↶</span><span>↷</span><span>🖨</span></span>
-      <span class="name">繪圖軟體 2026　—　三樓平面圖.dwg</span>
+      <span class="logo">W</span>
+      <span class="qa"><span>💾</span><span>↶</span><span>↷</span></span>
+      <span class="name">第三季工作報告.docx　—　文件編輯器</span>
       <span class="win"><span>—</span><span>☐</span><span>✕</span></span>
     </div>
-    <div class="tabs"><span class="on">常用</span><span>插入</span><span>註解</span><span>參數式</span><span>檢視</span><span>管理</span><span>輸出</span></div>
-    <div class="ribbon" id="ribbon"></div>
-    <div class="filetabs"><span>開始</span><span class="on">三樓平面圖.dwg　✕</span><span>二樓平面圖.dwg</span><span>＋</span></div>
-    <div id="main">
-      <div class="palette">
-        <h4>圖層</h4>
-        <div class="layer"><span class="sw" style="background:#fff"></span>0<span class="eye">👁</span></div>
-        <div class="layer cur" id="lyWall"><span class="sw" style="background:#f2f2f2"></span>A-牆<span class="eye">👁</span></div>
-        <div class="layer" id="lyDoor"><span class="sw" style="background:#5ad1ff"></span>A-門窗<span class="eye">👁</span></div>
-        <div class="layer" id="lyFurn"><span class="sw" style="background:#f2c94c"></span>A-家具<span class="eye">👁</span></div>
-        <div class="layer" id="lyDim"><span class="sw" style="background:#6fdc8c"></span>A-標註<span class="eye">👁</span></div>
-        <div class="layer" id="lyText"><span class="sw" style="background:#f2f2f2"></span>A-文字<span class="eye">👁</span></div>
-        <h4 style="margin-top:22px">性質</h4>
-        <div class="prop"><b>顏色</b>依圖層</div>
-        <div class="prop"><b>線型</b>依圖層</div>
-        <div class="prop"><b>線寬</b>0.50 mm</div>
-        <div class="prop"><b>比例</b>1:100</div>
-        <div class="prop"><b>單位</b>公釐</div>
-      </div>
-      <div id="model">
-        <svg class="grid" width="1658" height="708"><defs><pattern id="g1" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0 H0 V40" fill="none" stroke="#263240" stroke-width="1"/></pattern><pattern id="g2" width="200" height="200" patternUnits="userSpaceOnUse"><rect width="200" height="200" fill="url(#g1)"/><path d="M200 0 H0 V200" fill="none" stroke="#2f3e50" stroke-width="1.4"/></pattern></defs><rect width="1658" height="708" fill="url(#g2)"/></svg>
-        <svg id="plan" viewBox="0 0 1658 708"><g id="planG" transform="translate(140,-20)"></g></svg>
-        <svg class="ucs" width="70" height="70"><path d="M8 62 H60" stroke="#e05a5a" stroke-width="3" fill="none"/><path d="M8 62 V10" stroke="#6fdc8c" stroke-width="3"/><text x="58" y="56" fill="#e05a5a" font-size="14">X</text><text x="14" y="14" fill="#6fdc8c" font-size="14">Y</text></svg>
-        <div class="vcube"><div>上</div></div>
-        <div class="mtabs"><span class="on">模型</span><span>配置1</span><span>配置2</span></div>
+    <div class="tabs"><span>檔案</span><span class="on">常用</span><span>插入</span><span>版面配置</span><span>參考資料</span><span>校閱</span><span>檢視</span></div>
+    <div class="ribbon">
+      <div class="grp"><div class="tools"><div class="bigbtn"><span class="ic">📋</span>貼上</div><div style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:#444;padding-top:4px"><span>✂ 剪下</span><span>⧉ 複製</span></div></div><div class="lbl">剪貼簿</div></div>
+      <div class="grp"><div class="tools" style="flex-direction:column;gap:0"><div style="display:flex;gap:4px"><div class="fbox" style="width:190px">微軟正黑體</div><div class="fbox" style="width:56px">12</div></div><div class="row"><span class="btn" style="font-weight:900">B</span><span class="btn" style="font-style:italic">I</span><span class="btn" style="text-decoration:underline">U</span><span class="btn">ab</span><span class="btn" style="color:#c00;font-weight:800">A</span><span class="btn" style="background:#ff0">ab</span></div></div><div class="lbl">字型</div></div>
+      <div class="grp"><div class="tools" style="flex-direction:column;gap:0"><div class="row" style="margin-top:0"><span class="btn">☰</span><span class="btn">⋮☰</span><span class="btn">⇤</span><span class="btn">⇥</span></div><div class="row"><span class="btn on">≡</span><span class="btn">☰</span><span class="btn">≣</span><span class="btn">↕</span></div></div><div class="lbl">段落</div></div>
+      <div class="grp"><div class="tools"><div class="style on"><b>內文</b>AaBbCc</div><div class="style"><b style="color:#2b579a">標題 1</b>AaBb</div><div class="style"><b style="color:#2b579a;font-size:16px">標題 2</b>AaBb</div><div class="style"><b style="font-size:22px">標題</b>Aa</div></div><div class="lbl">樣式</div></div>
+      <div class="grp" style="border:0"><div class="tools" style="flex-direction:column;gap:6px;font-size:14px;color:#444;padding-top:4px"><span>🔍 尋找</span><span>⇄ 取代</span></div><div class="lbl">編輯</div></div>
+    </div>
+    <div id="canvas">
+      <div class="ruler"></div>
+      <div id="page">
+        <h1>第三季工作報告</h1>
+        <div class="meta">報告人：林小明　｜　2026 年 11 月</div>
+        <div id="docBody"><h2>一、本季重點</h2><p id="t1"></p></div>
       </div>
     </div>
-    <div id="cmd">
-      <div class="hist" id="cmdHist">指令: OFFSET　指定偏移距離或 [通過(T)]: 150　　指令: TRIM　選取物件: 找到 2 個</div>
-      <div class="now"><span class="ic">▸</span><span id="cmdText">指令: LINE 指定第一點:</span></div>
-    </div>
-    <div id="status">
-      <span class="coord" id="coord">12450.00, 8320.00, 0.00</span>
-      <span>模型</span>
-      <span class="tg">格點</span><span class="tg">鎖點</span><span class="tg">正交</span><span class="tg off">極座標</span><span class="tg">物件鎖點</span>
-      <span class="right"><span>1:100</span><span>⚙</span></span>
-    </div>
+    <div id="status"><span>第 1 頁，共 2 頁</span><span id="words">412 個字</span><span>中文（台灣）</span><span class="right"><span>📖　▣　▭</span><span>100%</span></span></div>
   </div>
 
   <!-- 字幕卡 -->
@@ -297,7 +248,7 @@
     <div class="tb search">🔍　搜尋</div>
     <div class="tb icon">📁</div>
     <div class="tb icon">🌐</div>
-    <div class="tb active"><span class="ico cad">D</span>繪圖軟體</div>
+    <div class="tb active"><span class="ico doc">W</span>文件編輯器</div>
     <div class="tb" id="tb1"><span class="ico cl">C</span>Claude<span class="st"></span><small id="tb1t">在背景</small></div>
     <div class="tb gone" id="tb2"><span class="ico cl">C</span>Claude<span class="st"></span><small id="tb2t"></small></div>
     <div class="tb gone" id="tb3"><span class="ico cl">C</span>Claude<span class="st"></span><small id="tb3t"></small></div>
@@ -311,8 +262,9 @@
   <iframe id="p2" class="petframe hide" src="pet-frame.html?char=zhuangzi"></iframe>
   <iframe id="p3" class="petframe hide" src="pet-frame.html?char=hanfeizi"></iframe>
 
-  <div id="cursor"><div class="ch h"></div><div class="ch v"></div><div class="pick"></div>
-    <svg viewBox="0 0 24 24"><path d="M4 2 L4 19 L8.6 15 L11.6 22 L14.4 20.8 L11.4 14 L18 14 Z" fill="#fff" stroke="#1d1d1d" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+  <div id="cursor">
+    <svg class="beam" viewBox="0 0 18 36"><path d="M4 2 H14 M9 2 V34 M4 34 H14" stroke="#111" stroke-width="2.6" fill="none" stroke-linecap="round"/><path d="M4 2 H14 M9 2 V34 M4 34 H14" stroke="#fff" stroke-width="1" fill="none" stroke-linecap="round"/></svg>
+    <svg class="arr" viewBox="0 0 24 24"><path d="M4 2 L4 19 L8.6 15 L11.6 22 L14.4 20.8 L11.4 14 L18 14 Z" fill="#fff" stroke="#1d1d1d" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
 
   <div id="title" class="full off">
     <h1><span>桌</span><span>面</span><span>大</span><span>師</span></h1>
@@ -332,7 +284,7 @@
 
   <div id="intro">
     <div id="i1"></div>
-    <div id="iwin"><div class="bar"><span class="dot"></span>Claude</div><div class="body"><span class="spin"></span>正在整理營建法規考古題…</div></div>
+    <div id="iwin"><div class="bar"><span class="dot"></span>Claude</div><div class="body"><span class="spin"></span>正在整理下載資料夾…</div></div>
     <div id="icount">你切回 Claude 看了 <b id="icn">0</b> 次</div>
     <div id="stamp">別看了</div>
   </div>
@@ -346,133 +298,64 @@ const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const sfx = (name) => console.log('SFX:' + name);       // 錄影程式會記下時間，之後照時間配音效
 
-// ---------------- 工具列圖示（自己畫的通用圖示） ----------------
-const ICON = {
-  line: '<path d="M5 25 L25 5"/><circle class="c" cx="5" cy="25" r="2"/><circle class="c" cx="25" cy="5" r="2"/>',
-  pline: '<path d="M4 24 L10 8 L18 20 L26 6"/>',
-  circle: '<circle cx="15" cy="15" r="10"/><circle class="c" cx="15" cy="15" r="1.5"/>',
-  arc: '<path d="M5 24 A12 12 0 0 1 25 24"/>',
-  rect: '<rect x="5" y="8" width="20" height="14"/>',
-  hatch: '<rect x="5" y="6" width="20" height="18"/><path d="M5 14 L13 6 M5 22 L21 6 M11 24 L25 10 M19 24 L25 18"/>',
-  move: '<path d="M15 3 V27 M3 15 H27 M15 3 L11 7 M15 3 L19 7 M15 27 L11 23 M15 27 L19 23"/>',
-  copy: '<rect x="4" y="9" width="14" height="14"/><rect x="11" y="4" width="14" height="14"/>',
-  rotate: '<path d="M24 15 A9 9 0 1 1 15 6"/><path d="M15 2 L19 6 L15 10"/>',
-  mirror: '<path d="M15 3 V27" stroke-dasharray="3 3"/><path d="M12 8 L4 22 H12 Z M18 8 L26 22 H18 Z"/>',
-  trim: '<path d="M4 15 H26"/><path d="M9 4 V26 M21 4 V26"/><path class="c" d="M11 13 L19 17"/>',
-  offset: '<path d="M4 22 L14 8 L26 8"/><path class="c" d="M8 26 L17 13 L26 13"/>',
-  text: '<path d="M6 7 H24 M15 7 V25"/>',
-  dim: '<path d="M4 20 H26 M4 14 V24 M26 14 V24 M4 20 L8 18 M4 20 L8 22 M26 20 L22 18 M26 20 L22 22"/>',
-  leader: '<path d="M6 24 L16 10 H26"/><path d="M6 24 L7 18 L11 21 Z"/>',
-  table: '<rect x="4" y="6" width="22" height="18"/><path d="M4 12 H26 M4 18 H26 M13 6 V24"/>'
-};
-const GROUPS = [
-  ['繪製', [['line', '線'], ['pline', '聚合線'], ['circle', '圓'], ['arc', '弧'], ['rect', '矩形'], ['hatch', '填充']]],
-  ['修改', [['move', '移動'], ['copy', '複製'], ['rotate', '旋轉'], ['mirror', '鏡射'], ['trim', '修剪'], ['offset', '偏移']]],
-  ['註解', [['text', '文字'], ['dim', '標註'], ['leader', '引線'], ['table', '表格']]]
+// ---------------- 使用者在寫報告：文件一個字一個字打出來 ----------------
+const DOC = [
+  ['p', '本季整體業績較上季成長百分之十二，主要來自新客戶的增加，以及舊客戶回購率提高。'],
+  ['p', '在團隊方面，本季新進兩位同仁，已順利完成訓練並開始獨立負責專案。'],
+  ['h2', '二、遇到的問題'],
+  ['p', '部分專案時程過於緊湊，導致加班時數增加；另外，跨部門溝通仍有落差，需要更清楚的分工。'],
+  ['h2', '三、下季計畫'],
+  ['li', '每週固定一次跨部門會議，確認進度與分工。'],
+  ['li', '導入共用的工作看板，讓大家隨時知道彼此在做什麼。'],
+  ['li', '下季業績目標：再成長百分之十。']
 ];
-$('ribbon').innerHTML = GROUPS.map(([name, tools]) =>
-  '<div class="grp"><div class="tools">' + tools.map(([k, label]) =>
-    '<div class="tool" data-k="' + k + '"><svg viewBox="0 0 30 30">' + ICON[k] + '</svg>' + label + '</div>').join('') +
-  '</div><div class="lbl">' + name + '</div></div>').join('') +
-  '<div class="grp"><div class="tools" style="flex-direction:column;gap:6px;padding-top:4px"><div class="layerbox" id="layerBox"><span class="sw" style="background:#f2f2f2"></span>A-牆</div><div class="layerbox"><span class="sw" style="background:#fff"></span>依圖層　────</div></div><div class="lbl">圖層</div></div>';
-
-// ---------------- 平面圖（一筆一筆畫） ----------------
-// 座標是繪圖區的像素；整張圖再平移 (140, -20)。cls：w 牆、wn 窗、dr 門、fu 家具、dm 標註、tx 文字
-const OX = 140, OY = -20;
-const MODEL_X = 262, MODEL_Y = 184;          // 繪圖區在螢幕上的左上角
-const PRE = [                                  // 開場時已經畫好的部分（使用者已經畫了一陣子）
-  ['w', 'M420 90 H1300'], ['w', 'M1300 90 V620'], ['w', 'M1300 620 H420'], ['w', 'M420 620 V90'],
-  ['wn', 'M480 84 H660 M480 96 H660'], ['wn', 'M1294 150 V300 M1306 150 V300']
-];
-const STEPS = [
-  ['w', 'M760 90 V290', 'LINE', [760, 290]], ['w', 'M760 350 V620', 'LINE', [760, 620]],
-  ['w', 'M420 400 H640', 'LINE', [640, 400]], ['w', 'M700 400 H760', 'LINE', [760, 400]],
-  ['w', 'M1040 360 H1300', 'LINE', [1300, 360]], ['w', 'M1040 360 V390', 'LINE', [1040, 390]], ['w', 'M1040 450 V620', 'LINE', [1040, 620]],
-  ['dr', 'M760 350 L820 350 A60 60 0 0 0 760 290', 'ARC', [760, 290]],
-  ['dr', 'M700 400 L700 340 A60 60 0 0 0 640 400', 'ARC', [640, 400]],
-  ['dr', 'M1040 450 L1100 450 A60 60 0 0 0 1040 390', 'ARC', [1040, 390]],
-  ['wn', 'M860 84 H1020 M860 96 H1020', 'LINE', [1020, 96]],
-  ['fu', 'M450 130 H600 V320 H450 Z M450 170 H600', 'RECTANG', [600, 320]],
-  ['fu', 'M630 130 H720 V200 H630 Z', 'RECTANG', [720, 200]],
-  ['fu', 'M820 120 H1020 V190 H820 Z M840 140 H1000', 'RECTANG', [1020, 190]],
-  ['fu', 'M875 230 a45 45 0 1 0 90 0 a45 45 0 1 0 -90 0', 'CIRCLE', [965, 230]],
-  ['fu', 'M1060 590 H1280 V520', 'PLINE', [1280, 520]],
-  ['fu', 'M444 560 a26 18 0 1 0 52 0 a26 18 0 1 0 -52 0 M600 440 H730 V500 H600 Z', 'ELLIPSE', [730, 500]],
-  ['dm', 'M420 50 H1300 M420 40 V60 M1300 40 V60 M760 42 V58', 'DIMLINEAR', [1300, 50]],
-  ['dm', 'M380 90 V620 M370 90 H390 M370 620 H390 M370 400 H390', 'DIMLINEAR', [380, 620]],
-  ['tx', '臥室', 'TEXT', [560, 250]], ['tx', '客廳', 'TEXT', [1150, 230]], ['tx', '浴室', 'TEXT', [520, 515]],
-  ['tx', '餐廳', 'TEXT', [880, 500]], ['tx', '廚房', 'TEXT', [1150, 470]],
-  ['dmt', '8800', 'TEXT', [850, 40]], ['dmt', '5300', 'TEXT', [330, 360]]
-];
-const LAYER = { w: 'lyWall', wn: 'lyDoor', dr: 'lyDoor', fu: 'lyFurn', dm: 'lyDim', tx: 'lyText', dmt: 'lyDim' };
-const LAYERNAME = { w: 'A-牆', wn: 'A-門窗', dr: 'A-門窗', fu: 'A-家具', dm: 'A-標註', tx: 'A-文字', dmt: 'A-標註' };
-const LAYERCOLOR = { w: '#f2f2f2', wn: '#5ad1ff', dr: '#5ad1ff', fu: '#f2c94c', dm: '#6fdc8c', tx: '#f2f2f2', dmt: '#6fdc8c' };
-const TOOLOF = { LINE: 'line', ARC: 'arc', RECTANG: 'rect', CIRCLE: 'circle', PLINE: 'pline', ELLIPSE: 'circle', DIMLINEAR: 'dim', TEXT: 'text' };
-const PROMPT = {
-  LINE: '指令: LINE 指定下一點或 [復原(U)]:', ARC: '指令: ARC 指定弧的終點:', RECTANG: '指令: RECTANG 指定另一個角點:',
-  CIRCLE: '指令: CIRCLE 指定圓的半徑或 [直徑(D)]:', PLINE: '指令: PLINE 指定下一點或 [弧(A)/寬度(W)]:', ELLIPSE: '指令: ELLIPSE 指定另一軸的距離:',
-  DIMLINEAR: '指令: DIMLINEAR 指定尺寸線位置:', TEXT: '指令: TEXT 輸入文字:'
-};
-const NS = 'http://www.w3.org/2000/svg';
-function addPath(cls, d, grow) {
-  const p = document.createElementNS(NS, 'path');
-  p.setAttribute('d', d);
-  p.setAttribute('pathLength', '1');
-  p.setAttribute('class', cls + (grow ? ' grow' : ''));
-  $('planG').appendChild(p);
-  return p;
-}
-PRE.forEach(([cls, d]) => addPath(cls, d, false));
-
-const toScreen = (x, y) => ({ x: MODEL_X + OX + x, y: MODEL_Y + OY + y });
-let drawing = true;          // 使用者正在畫圖；要去按泡泡時暫停
-let stepNo = 0;
-let lastHist = '';
+let typing = true;           // 使用者正在打字；要去按泡泡時暫停
+let words = 412;
 function setCursorMode(arrow) { $('cursor').classList.toggle('arrow', !!arrow); }
 function moveCursor(x, y, ms) {
   $('cursor').style.transitionDuration = (ms || 300) + 'ms';
   $('cursor').style.left = x + 'px';
   $('cursor').style.top = y + 'px';
 }
-function setCoord(x, y) {
-  $('coord').textContent = ((x + OX) * 12.5).toFixed(2) + ', ' + ((708 - y - OY) * 12.5).toFixed(2) + ', 0.00';
+function caretSpot() {
+  const r = $('caret').getBoundingClientRect();
+  return { x: r.left + 26, y: r.top + r.height / 2 + 4 };
 }
-async function drawLoop() {
+async function typeLoop() {
+  const caret = document.createElement('span');
+  caret.id = 'caret';
+  let target = $('t1');
+  target.appendChild(caret);
+  let para = 0;
+  let text = DOC[0][1];
+  let i = 0;
   while (true) {
-    if (!drawing || stepNo >= STEPS.length) {
-      // 畫完了：游標在圖上輕輕晃，像在檢查
-      if (drawing && stepNo >= STEPS.length) { const p = toScreen(700 + Math.random() * 500, 150 + Math.random() * 380); moveCursor(p.x, p.y, 900); setCoord(p.x - MODEL_X - OX, p.y - MODEL_Y - OY); await sleep(1000); }
-      else await sleep(120);
+    if (!typing) { await sleep(120); continue; }
+    if (para >= DOC.length) { await sleep(400); continue; }
+    if (i >= text.length) {
+      // 換下一段
+      para += 1;
+      if (para >= DOC.length) continue;
+      const [tag, t] = DOC[para];
+      const el = document.createElement(tag);
+      if (tag === 'li') {
+        let ul = $('docBody').lastElementChild;
+        if (!ul || ul.tagName !== 'UL') { ul = document.createElement('ul'); $('docBody').appendChild(ul); }
+        ul.appendChild(el);
+      } else $('docBody').appendChild(el);
+      el.appendChild(caret);
+      target = el;
+      text = t;
+      i = 0;
+      await sleep(380);
       continue;
     }
-    const [cls, d, cmd, end] = STEPS[stepNo++];
-    // 換圖層、換工具、指令列
-    document.querySelectorAll('.layer').forEach((l) => l.classList.toggle('cur', l.id === LAYER[cls]));
-    $('layerBox').innerHTML = '<span class="sw" style="background:' + LAYERCOLOR[cls] + '"></span>' + LAYERNAME[cls];
-    document.querySelectorAll('.tool').forEach((t) => t.classList.toggle('on', t.dataset.k === TOOLOF[cmd]));
-    if (lastHist) $('cmdHist').textContent = lastHist;
-    $('cmdText').textContent = PROMPT[cmd];
-    lastHist = PROMPT[cmd].replace(/:$/, '') + (cmd === 'TEXT' ? ' ' + d : '');
-    const p = toScreen(end[0], end[1]);
-    setCursorMode(false);
-    moveCursor(p.x, p.y, 320);
-    setCoord(end[0], end[1]);
-    if (cls === 'tx' || cls === 'dmt') {
-      const t = document.createElementNS(NS, 'text');
-      t.setAttribute('x', end[0]); t.setAttribute('y', end[1]);
-      t.setAttribute('class', (cls === 'dmt' ? 'dmt ' : '') + 'grow');
-      t.textContent = d;
-      $('planG').appendChild(t);
-      await sleep(60);
-      t.classList.add('done');
-    } else {
-      const el = addPath(cls, d, true);
-      el.classList.add('hot');
-      await sleep(40);
-      el.classList.add('done');
-      setTimeout(() => el.classList.remove('hot'), 420);
-    }
-    await sleep(560 + Math.random() * 160);
+    target.insertBefore(document.createTextNode(text[i]), caret);
+    i += 1;
+    words += 1;
+    $('words').textContent = words + ' 個字';
+    if (i % 3 === 0) { const p = caretSpot(); setCursorMode(false); moveCursor(p.x, p.y, 160); }
+    await sleep('，。、；'.includes(text[i - 1]) ? 260 : 62 + Math.random() * 50);
   }
 }
 
@@ -556,7 +439,7 @@ function pow(text, x, y, color) {
   setTimeout(() => p.remove(), 950);
 }
 
-// 游標移到助手畫面裡的某個元素上：先停下畫圖、換成箭頭；按完再回去畫
+// 游標移到助手畫面裡的某個元素上：先停下打字、換成箭頭；按完再回去打字
 function spot(n, el, fx, fy) {
   const fr = $('p' + n).getBoundingClientRect();
   const k = fr.width / 520;
@@ -564,7 +447,7 @@ function spot(n, el, fx, fy) {
   return { x: fr.left + (r.left + r.width * (fx === undefined ? 0.5 : fx)) * k, y: fr.top + (r.top + r.height * (fy === undefined ? 0.55 : fy)) * k };
 }
 async function pointAt(n, sel, fx) {
-  drawing = false;
+  typing = false;
   const el = typeof sel === 'string' ? pdoc(n).querySelector(sel) : sel;
   const p = spot(n, el, fx);
   setCursorMode(true);
@@ -582,7 +465,7 @@ async function clickAt(n, sel) {
   setTimeout(() => $('cursor').classList.remove('click'), 200);
   return p;
 }
-function backToWork() { setTimeout(() => { drawing = true; }, 420); }
+function backToWork() { setTimeout(() => { typing = true; }, 420); }
 
 async function typeInto(el, text, gap) {
   for (const ch of text) { el.textContent += ch; sfx('type'); await sleep(gap || 70); }
@@ -623,7 +506,7 @@ async function run() {
 
   // ================= 痛點開場 =================
   await sleep(350);
-  await typeInto($('i1'), '你叫 Claude 整理法規筆記，自己回去畫圖。', 55);
+  await typeInto($('i1'), '你叫 Claude 整理下載資料夾，自己回去寫報告。', 55);
   await sleep(250);
   $('iwin').classList.add('on');
   sfx('pop');
@@ -666,21 +549,21 @@ async function run() {
   flash();
   $('title').classList.add('off');
   $('cast').classList.remove('on', 'play');
-  drawLoop();                                   // 使用者開始畫圖（全螢幕的繪圖軟體）
+  typeLoop();                                   // 使用者開始寫報告（全螢幕的文書軟體）
 
-  // ================= 01 你在畫圖，Claude 在背景整理法規 =================
+  // ================= 01 你在寫報告，Claude 在背景整理下載資料夾 =================
   await sleep(500);
-  caption('01', '你在畫你的圖，<br><em>他幫你盯著 Claude</em>', 'Claude 在背景整理法規筆記，你不用切過去看', '#d9532b');
+  caption('01', '你寫你的報告，<br><em>他幫你盯著 Claude</em>', 'Claude 在背景整理下載資料夾', '#d9532b');
   await sleep(700);
   place(1, 'hero');
   sfx('boing');
   await sleep(500);
-  claude(1, 'working', '整理法規筆記中…');
+  claude(1, 'working', '整理下載資料夾中…');
   await sleep(60);
-  callout(1, '👇 Claude 在這裡，背景執行中', '你繼續畫圖，不用切過去', '#2f6fd0');
+  callout(1, '👇 Claude 在這裡，背景執行中', '你繼續寫報告，不用切過去', '#2f6fd0');
   pet(1).status({ text: '進行中', cls: 'working' });
   pet(1).pose('think');
-  pet(1).speak({ text: 'Claude 開始處理了', attribution: '你說：幫我把營建法規考古題整理成筆記', ai: true, duration: 2600 });
+  pet(1).speak({ text: 'Claude 開始處理了', attribution: '你說：幫我把下載資料夾整理好', ai: true, duration: 2600 });
   sfx('ding');
   await sleep(2800);
   pet(1).pose('idle');
@@ -690,25 +573,24 @@ async function run() {
   calloutOff();
 
   // ================= 02 它要你同意？不用切視窗 =================
-  caption('02', '它要你同意？<br><em>不用切視窗</em>', '在泡泡上按一下，繼續畫你的圖', '#c9781a');
+  caption('02', '它要你同意？<br><em>不用切視窗</em>', '在泡泡上按一下，繼續寫你的報告', '#c9781a');
   await sleep(500);
   claude(1, 'waiting', '等你同意');
   await sleep(60);
   callout(1, '👇 背景的 Claude 在等你', '大師幫你把問題帶過來了', '#d9822b');
   pet(1).status({ text: '等你回答', cls: 'waiting' });
   pet(1).speak({
-    text: 'Claude 想建立檔案「法規筆記.docx」，要讓它做嗎？', ai: true, sticky: true, action: 'choice', requestId: 'r1',
-    choices: [{ id: 'allow', label: '允許' }, { id: 'deny', label: '拒絕' }],
-    inputLabel: '不同意？打字告訴 Claude 要怎麼改：', inputPlaceholder: '打字告訴 Claude…', inputButton: '拒絕並送出'
+    text: 'Claude 想把 128 個檔案搬進分類資料夾，要讓它做嗎？', ai: true, sticky: true, action: 'choice', requestId: 'r1',
+    choices: [{ id: 'allow', label: '允許' }, { id: 'deny', label: '拒絕' }]
   });
   sfx('alert');
   await sleep(1500);
   const hit1 = await clickAt(1, '.bubble-choice.allow');
-  flash(); confetti(hit1.x, hit1.y); pow('允許！', hit1.x - 120, hit1.y - 60, '#3f8f55');
+  flash(); confetti(hit1.x, hit1.y); pow('允許！', hit1.x, hit1.y - 70, '#3f8f55');
   sfx('yes');
   calloutOff();
-  toast('✓ 已允許，Claude 繼續整理法規筆記');
-  claude(1, 'working', '整理法規筆記中…');
+  toast('✓ 已允許，Claude 繼續整理下載資料夾');
+  claude(1, 'working', '整理下載資料夾中…');
   pet(1).status({ text: '進行中', cls: 'working' });
   pet(1).pose('happy');
   backToWork();
@@ -721,29 +603,29 @@ async function run() {
   claude(1, 'waiting', '有問題問你');
   pet(1).status({ text: '等你回答', cls: 'waiting' });
   pet(1).speak({
-    text: '法規筆記要整理成哪一種？', ai: true, sticky: true, action: 'choice', requestId: 'r2',
-    choices: [{ id: 'opt0', label: '依條號排列' }, { id: 'opt1', label: '依考試重點' }, { id: 'opt2', label: '做成表格' }]
+    text: '照片要怎麼分資料夾？', ai: true, sticky: true, action: 'choice', requestId: 'r2',
+    choices: [{ id: 'opt0', label: '依日期' }, { id: 'opt1', label: '依旅行地點' }, { id: 'opt2', label: '依人物' }]
   });
   sfx('alert');
   await sleep(1400);
   const hit2 = await clickAt(1, pdoc(1).querySelectorAll('.bubble-choice')[1]);
-  flash(); pow('考試重點！', hit2.x - 200, hit2.y - 60, '#2f6fd0');
+  flash(); pow('依地點！', hit2.x - 180, hit2.y - 60, '#2f6fd0');
   sfx('yes');
-  toast('✓ 已回答：依考試重點');
-  claude(1, 'working', '整理法規筆記中…');
+  toast('✓ 已回答：依旅行地點');
+  claude(1, 'working', '整理下載資料夾中…');
   pet(1).status({ text: '進行中', cls: 'working' });
   backToWork();
   await sleep(1800);
 
   // ================= 04 做完會叫你，還能直接回話 =================
-  caption('04', '做完會叫你，<br><em>還能直接回話</em>', '打字就是下一個指令，圖還是照畫', '#2f6fd0');
+  caption('04', '做完會叫你，<br><em>還能直接回話</em>', '打字就是下一個指令，報告照寫', '#2f6fd0');
   await sleep(450);
   claude(1, 'done', '做完了');
   await sleep(60);
   callout(1, '👇 背景的 Claude 做完了', '你不用切過去看', '#2f8a4f');
   pet(1).status({ text: '完成', cls: 'done' });
   pet(1).pose('happy');
-  pet(1).speak({ text: '法規筆記整理好了，已經存成 PDF。', ai: true, sticky: true, action: 'confirm', composeTo: 's1', inputPlaceholder: '回覆 Claude…' });
+  pet(1).speak({ text: '下載資料夾整理好了，分成 6 個資料夾。', ai: true, sticky: true, action: 'confirm', composeTo: 's1', inputPlaceholder: '回覆 Claude…' });
   sfx('fanfare');
   const fr = $('p1').getBoundingClientRect();
   confetti(fr.left + fr.width / 2, fr.top + fr.height * 0.45, 46);
@@ -752,17 +634,17 @@ async function run() {
   calloutOff();
   const { el: input } = await pointAt(1, '#bubbleTextInput', 0.2);
   input.focus();
-  for (const ch of '再幫我出十題模擬考') { input.value += ch; sfx('type'); await sleep(100); }
+  for (const ch of '再幫我挑出重複的照片') { input.value += ch; sfx('type'); await sleep(100); }
   await sleep(250);
   const hit3 = await pointAt(1, '#bubbleSend');
   $('cursor').classList.add('click'); sfx('click'); punch();
   await sleep(120);
   $('cursor').classList.remove('click');
   pdoc(1).getElementById('bubble').click();
-  pow('送出！', hit3.p.x - 260, hit3.p.y - 90, '#d9532b');
+  pow('送出！', hit3.p.x - 120, hit3.p.y - 90, '#d9532b');
   sfx('send');
-  toast('已送給 Claude：再幫我出十題模擬考');
-  claude(1, 'working', '出模擬考題中…');
+  toast('已送給 Claude：再幫我挑出重複的照片');
+  claude(1, 'working', '找重複照片中…');
   pet(1).status({ text: '進行中', cls: 'working' });
   pet(1).pose('idle');
   backToWork();
@@ -778,11 +660,11 @@ async function run() {
   await sleep(260);
   place(3, 'c'); sfx('boing');
   await sleep(550);
-  pet(2).status({ text: '完成', cls: 'done' }); claude(1, 'done', '法規筆記：做完了'); sfx('pop');
+  pet(2).status({ text: '完成', cls: 'done' }); claude(1, 'done', '整理檔案：做完了'); sfx('pop');
   await sleep(230);
-  pet(1).status({ text: '進行中', cls: 'working' }); claude(2, 'working', '結構計算：跑數字中'); sfx('pop');
+  pet(1).status({ text: '進行中', cls: 'working' }); claude(2, 'working', '旅行行程'); sfx('pop');
   await sleep(230);
-  pet(3).status({ text: '等你回答', cls: 'waiting' }); claude(3, 'waiting', '簡報大綱：等你回答'); sfx('pop');
+  pet(3).status({ text: '等你回答', cls: 'waiting' }); claude(3, 'waiting', '會議紀錄：等你'); sfx('pop');
   await sleep(1700);
 
   // ---- 沒事的時候，他們會鬥嘴 ----
@@ -801,7 +683,7 @@ async function run() {
     sfx(k === 1 ? 'talkA' : 'talkB');
     await sleep(hold);
   }
-  pet(3).speak({ text: '……他在畫圖，安靜。', chat: true, duration: 2600 });
+  pet(3).speak({ text: '……他在寫報告，安靜。', chat: true, duration: 2600 });
   sfx('sting');
   punch();
   await sleep(450);
