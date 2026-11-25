@@ -363,11 +363,16 @@
     if (!text || !owner || ui.busy) return;
     const h = hintFor(text);
     ui.busy = true;
+    // 查股票要連線，可能要等幾秒：先告訴使用者正在查，並鎖住輸入框避免重複送出
+    const slow = h && h.parsed === 'stock' && ui.forceType !== 'task';
+    if (slow) showMsg('查詢股票中…（連線較慢時要等幾秒）', 'info');
+    input.disabled = true;
     const payload = { text, owner };
     if (ui.forceType) payload.forceType = ui.forceType;
     let res;
     try { res = await api.addItem(payload); } catch (e) { res = { ok: false, message: '沒有送出去，請再試一次' }; }
     ui.busy = false;
+    input.disabled = false; input.focus();
     if (res && res.ok) {
       input.value = ''; ui.forceType = null;
       const kind = KIND_NAME[res.type] || '';

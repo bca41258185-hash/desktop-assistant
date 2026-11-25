@@ -28,24 +28,57 @@
     a.destroy(); S.actors.delete(qid);
     S.reportRects();
   }
+  // 育兒袋期的小袋鼠不是獨立的 Actor（是媽媽的附件，之後另外畫）
+  const isPouch = (q) => q && (q.stage === 'pouch' || (q.traits && q.traits.stage === 'pouch'));
   function setList(list) {
     if (!Array.isArray(list)) return;
     const seen = new Set();
+    list = list.filter((q) => !isPouch(q));
     list.slice(0, 500).forEach((q, i) => { if (!q || !isId(q.id)) return; seen.add(q.id); if (S.actors.has(q.id)) S.actors.get(q.id).applyData(q); else add(q, i, list.length); });
     for (const id of [...S.actors.keys()]) if (!seen.has(id)) remove(id);
     S.reportRects(); S.kick();
   }
   api.onQuokkas(setList);
   api.onInit((p) => setList(p && p.actors));
-  api.onAdd((p) => { add(p && p.q ? p.q : p); S.reportRects(); S.kick(); });
-  api.onUpdate((p) => { const q = p && p.q ? p.q : p; const a = q && actorOf(q.id); if (a) a.applyData(q); });
+  api.onAdd((p) => { const q = p && p.q ? p.q : p; if (!isPouch(q)) add(q); S.reportRects(); S.kick(); });
+  api.onUpdate((p) => {
+    const q = p && p.q ? p.q : p; if (!q) return;
+    const a = actorOf(q.id);
+    if (isPouch(q)) { if (a) remove(q.id); return; }
+    if (!a) { add(q); S.kick(); return; }
+    // 階段變了（例如跟隨期 → 亞成體）大小也會變
+    if (q.stage && q.stage !== a.attach.stage) { const old = a.k; a.applyData(q); if (a.k !== old) { S.purgeFrames(a.id); a.showRest(); a.place(); } }
+    else a.applyData(q);
+  });
   api.onRemove((p) => remove(p && typeof p === 'object' ? p.qid : p));
   api.onSettings((p) => {
-    if (p && ['carry', 'nudge', 'alternate'].includes(p.fetchReturn)) S.settings.fetchReturn = p.fetchReturn;
+    if (!p) return;
+    if (['carry', 'nudge', 'alternate'].includes(p.fetchReturn)) S.settings.fetchReturn = p.fetchReturn;
+    if (['home', 'screen', 'off'].includes(p.walk)) S.settings.walk = p.walk;
+    if (['system', 'on', 'off'].includes(p.reducedMotion)) S.settings.reducedMotion = p.reducedMotion;
+    S.reduceMotion = S.settings.reducedMotion === 'on' ? true : S.settings.reducedMotion === 'off' ? false : S.systemReduce;
+    document.body.classList.toggle('reduce', S.reduceMotion);
+    // 改成不散步：正在走的原地停下
+    if (S.settings.walk === 'off' || S.reduceMotion) for (const a of S.actors.values()) if (a.job && a.job.name === 'walk') { const j = a.job; a.job = null; j.interrupt(); a.setLayer(8); a.showRest(); }
   });
 
+  // ---- 社交（簡化版） -------------------------------------------------------------
+  api.onSocialStart((p) => {
+    if (!p || !isId(p.pairId)) return;
+    const A = actorOf(p.a), B = actorOf(p.b);
+    if (!A || !B || A === B) { api.socialAbort(p.pairId, p.a, 'user'); return; }
+    if (Math.abs(A.y - B.y) > 40) { api.socialAbort(p.pairId, p.a, 'user'); return; }       // 不在同一地面
+    const soc = { pairId: p.pairId, a: p.a, b: p.b, type: S.str(p.type, 30), initiator: p.initiator === p.b ? p.b : p.a };
+    const I = soc.initiator === p.a ? A : B, O = I === A ? B : A;
+    const ji = I.socialJob(soc, true, O), jo = O.socialJob(soc, false, I);
+    if (!I.requestActivity(5, ji)) { api.socialAbort(soc.pairId, I.id, I.layer <= 1 ? 'alert' : 'work'); return; }
+    if (!O.requestActivity(5, jo)) { ji.quiet = true; I.finish(ji, { rest: false }); api.socialAbort(soc.pairId, O.id, O.layer <= 1 ? 'alert' : 'work'); return; }
+    S.kick();
+  });
+  api.onSocialAbort((p) => { if (!p || !isId(p.pairId)) return; for (const a of S.actors.values()) a.endSocial(p.pairId); });
+
   // ---- 工作事件 ------------------------------------------------------------------
-  const KINDS = new Set(['task-added', 'task-done', 'stock', 'folder', 'missed', 'note']);
+  const KINDS = new Set(['task-added', 'task-done', 'stock', 'folder', 'missed', 'note', 'birth']);
   api.onEvent((p) => {
     const a = p && actorOf(p.qid);
     if (!a || !KINDS.has(p.kind)) return;
@@ -73,7 +106,10 @@
         else if (d.text) push(d.qid, { kind: 'note', list: [{ text: S.str(d.text) }], prio: 2 });
       }
     } else if (digest && typeof digest === 'object') {
-      for (const [qid, v] of Object.entries(digest)) for (const t of [].concat(v).slice(0, 20)) push(qid, { kind: 'note', list: [{ text: S.str(t) }], prio: 2 });
+      for (const [qid, v] of Object.entries(digest)) for (const t of [].concat(v).slice(0, 20)) {
+        if (t && typeof t === 'object') { if (KINDS.has(t.kind)) push(qid, { kind: t.kind, list: [t.payload || {}], prio: 2 }); else if (t.text) push(qid, { kind: 'note', list: [{ text: S.str(t.text) }], prio: 2 }); }
+        else if (t) push(qid, { kind: 'note', list: [{ text: S.str(t) }], prio: 2 });
+      }
     }
     return out;
   }

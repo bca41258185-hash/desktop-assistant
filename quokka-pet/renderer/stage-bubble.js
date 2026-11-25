@@ -71,7 +71,8 @@
       clearTimeout(this.timer);
       const wasAlert = this.kind === 'alert';
       this.kind = null; this.alertId = null;
-      this.el.classList.remove('show');
+      this.el.classList.remove('show', 'alert');
+      this.btns.textContent = '';
       if (wasAlert) S.reportRects();
     }
     measure() { this.bw = this.el.offsetWidth; this.bh = this.el.offsetHeight; }
@@ -102,14 +103,14 @@
     box.className = 'burst ' + kind;
     box.style.transform = `translate3d(${x.toFixed(0)}px, ${y.toFixed(0)}px, 0)`;
     const waves = kind === 'fireworks' ? [[0, -60, -150], [350, 70, -120], [700, -10, -190]] : [[0, 0, 0]];
-    const colors = ['#ffcf3f', '#ff7a6b', '#7fd0ff', '#b98cff', '#7be08f'];
+    const colors = kind === 'hearts' ? ['#ef6f7c', '#f59ab0', '#e8576a'] : ['#ffcf3f', '#ff7a6b', '#7fd0ff', '#b98cff', '#7be08f'];
     let n = 0;
     for (const [delay, ox, oy] of waves) {
       const count = kind === 'fireworks' ? 14 : kind === 'big' ? 14 : 8;
       for (let i = 0; i < count; i++) {
         const s = document.createElement('span');
         const ang = (i / count) * Math.PI * 2 + Math.random() * .3, dist = (kind === 'fireworks' ? 55 : kind === 'big' ? 90 : 60) * (0.7 + Math.random() * .5);
-        s.textContent = kind === 'fireworks' ? '' : '★';
+        s.textContent = kind === 'fireworks' ? '' : kind === 'hearts' ? '♥' : '★';
         s.style.cssText = `--ox:${ox}px;--oy:${oy}px;--dx:${(Math.cos(ang) * dist).toFixed(0)}px;--dy:${(Math.sin(ang) * dist - (kind === 'fireworks' ? 0 : 30)).toFixed(0)}px;--c:${colors[(i + n) % colors.length]};animation-delay:${delay}ms`;
         box.appendChild(s);
       }

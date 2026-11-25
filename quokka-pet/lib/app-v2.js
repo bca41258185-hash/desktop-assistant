@@ -91,17 +91,20 @@ function start() {
           notify(qById(ev.mom), `🎉 生了！幫「${ev.name}」取個名字吧`, ev.child);
           break;
         }
-        case 'crowded': if (panel && !panel.isDestroyed()) panel.webContents.send('panel:hint', { kind: 'crowded', count: ev.count }); break;
+        case 'crowded': toPanel('panel:hint', { kind: 'crowded', count: ev.count }); break;
         default: quokkasChanged = true;          // joey-out、independent、resize、grown、adult、single、joey-to-dad、follower-gone
       }
     }
     changed({ quokkas: quokkasChanged });
   }
   // 遊戲時鐘：只在程式開著、使用者在、舞台沒藏起來時前進（懷孕 27 分鐘、育兒 1 小時）
-  let lastTick = Date.now();
+  let lastTick = Date.now(), idleTicks = 0;
   setInterval(() => {
     const t = Date.now(), dt = away || !stageVisible ? 0 : Math.min(t - lastTick, 120000);
     lastTick = t;
+    // 沒有懷孕、育兒、成長中的庫卡時，每 10 分鐘更新一次年齡就夠了
+    const active = data.quokkas.some((q) => q.pregnancy || q.joey || q.growth || (q.stage && q.stage !== 'adult'));
+    if (!active && (idleTicks = (idleTicks + 1) % 20) !== 0) return;
     try { onRomanceEvents(romance.tickClock(dt)); } catch (e) { console.error('遊戲時鐘失敗:', e.message); }
   }, 30000);
   setInterval(() => { try { romance.dailyDecay(); } catch (e) {} }, 3600000);
@@ -113,8 +116,11 @@ function start() {
       webPreferences: { preload: path.join(ROOT, 'panel-preload.js'), contextIsolation: true, nodeIntegration: false }
     });
     panel.loadFile(path.join(ROOT, 'renderer', 'panel.html'));
-    panel.on('close', (e) => { if (!app.isQuitting) { e.preventDefault(); panel.hide(); } });
+    panel.on('closed', () => { panel = null; });            // 關掉就整個釋放；下次打開重新載入（約 1 秒）
   }
+  // 只有面板開著、看得到時才傳資料給它
+  const panelLive = () => panel && !panel.isDestroyed() && panel.isVisible();
+  const toPanel = (ch, payload) => { if (panelLive()) panel.webContents.send(ch, payload); };
   function showPanel(qid) {
     if (!panel || panel.isDestroyed()) createPanel();
     const go = () => { panel.show(); panel.focus(); if (qid) panel.webContents.send('panel:select', { qid }); };
@@ -127,7 +133,7 @@ function start() {
   }
   function changed({ quokkas = false } = {}) {
     store.save();
-    if (panel && !panel.isDestroyed()) panel.webContents.send('store:changed', snapshot());
+    toPanel('store:changed', snapshot());
     if (quokkas) toStage('stage:quokkas', data.quokkas.map(stageQ));
   }
   const event = (qid, kind, payload) => { if (qById(qid)) toStage('q:event', { qid, kind, payload, prio: 2 }); };
@@ -163,7 +169,7 @@ function start() {
     fetch: (url, opt) => net.fetch(url, opt),                 // Electron 的 net 會走系統代理（公司網路）
     onUpdate: (u) => {
       quotes[u.symbol] = { price: u.price, pct: u.pct, stale: !!u.stale, recovered: !!u.recovered, name: u.name, time: u.time, market: u.market };
-      if (panel && !panel.isDestroyed()) panel.webContents.send('stock:tick', { symbol: u.symbol, market: u.market, ...quotes[u.symbol] });
+      toPanel('stock:tick', { symbol: u.symbol, market: u.market, ...quotes[u.symbol] });
       if (u.stale || !isFinite(u.pct)) return;
       if (u.recovered) steps._state.delete(u.symbol);          // 斷線恢復：重新當基準
       const r = steps.update(u.symbol, { pct: u.pct, day: u.day, market: u.market });
@@ -193,7 +199,7 @@ function start() {
         const cur = data.folders.find((x) => x.id === f.id);
         if (cur) {
           event(cur.owner, 'folder', { name: path.basename(cur.path), count: st.count });
-          if (panel && !panel.isDestroyed()) panel.webContents.send('folder:changes', { id: cur.id, count: st.count, at: nowISO() });
+          toPanel('folder:changes', { id: cur.id, count: st.count, at: nowISO() });
         }
         st.count = 0; st.timer = null;
       }, 5000);
@@ -466,8 +472,7 @@ function start() {
   }
 
   // ---- 啟動 ------------------------------------------------------------------------
-  stage.start();
-  createPanel();
+  stage.start();                       // 面板等使用者第一次打開才建立
   data.folders.forEach(watchFolder);
   syncWatchlist(); stocks.start();
   clock.check();                       // 啟動時先處理錯過的提醒，再排下一個

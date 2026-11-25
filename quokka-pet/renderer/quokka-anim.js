@@ -370,6 +370,21 @@
       { t: 6.0, th: -10, pose: { eyes: 'happy' } }],
       props: (t) => (t > 1 && t < 5 ? [{ t: 'fx', kind: 'zzz', at: [112, 10 - (t % 1.4) * 6], s: 1.1 + (t % 1.4) * .2 }] : []),
       endLine: '睡飽了！' },
+    // 兩隻碰鼻（面向左邊的對方；舞台依對方位置鏡射）
+    greetNose: { dur: 2.0, keys: [
+      { t: 0, th: -60, pose: {} },
+      { t: .5, th: -75, pose: { lean: 14, head: { pitch: 4 }, eyes: 'closed', mouth: 'smile', blush: 1.4 } },
+      { t: 1.3, th: -75, pose: { lean: 16, head: { pitch: 2, roll: -6 }, eyes: 'closed', mouth: 'smile', blush: 1.5 } },
+      { t: 2.0, th: -60, pose: { eyes: 'happy', blush: 1.3 } }],
+      props: (t) => (t > .5 && t < 1.9 ? [{ t: 'fx', kind: 'heart', at: [10, 20 - (t - .5) * 12], s: 1.2 }] : []) },
+    // 兩隻互相揮手
+    greetWave: { dur: 2.0, keys: [
+      { t: 0, th: -60, pose: {} },
+      { t: .35, th: -55, pose: { eyes: 'happy', mouth: 'open', arms: { L: { hand: [-30, 70, 14] } } } },
+      { t: .7, th: -55, pose: { eyes: 'happy', mouth: 'open', head: { roll: -5 }, arms: { L: { hand: [-38, 80, 2] } } } },
+      { t: 1.05, th: -55, pose: { eyes: 'happy', mouth: 'open', head: { roll: 5 }, arms: { L: { hand: [-30, 70, 14] } } } },
+      { t: 1.4, th: -55, pose: { eyes: 'happy', mouth: 'smile', arms: { L: { hand: [-38, 80, 2] } } } },
+      { t: 2.0, th: -60, pose: { eyes: 'happy' } }] },
     // 醒來伸懶腰
     stretch: { dur: 1.6, keys: [
       { t: 0, th: -10, pose: { sq: .92, head: { pitch: 10 }, eyes: 'closed' } },

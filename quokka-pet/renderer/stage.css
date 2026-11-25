@@ -7,6 +7,7 @@ body.hidden #stage, body.hidden #fx { display: none; }
 .actor img, .actor .live { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; transform-origin: 50% 80%; }
 .actor .live svg { width: 100%; height: 100%; overflow: visible; }
 .actor.live-on img { visibility: hidden; }
+.actor img.wide { left: -27.78%; width: 155.56%; }   /* 寬畫框（x −60…220，平常是 −10…170） */
 .actor.idle.near img, .actor.near:not(.live-on):not(.asleep):not(.ringing):not(.dragging) img { animation: breathe 3.6s ease-in-out infinite; }   /* 只有游標靠近時才呼吸 */
 .actor.dragging { cursor: grabbing; }
 @keyframes breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.012, .988); } }
@@ -39,11 +40,11 @@ body.hidden #stage, body.hidden #fx { display: none; }
 .bubble.big { font-size: 20px; }
 .bubble .tone-up { color: #d7322f; }        /* 台股：漲紅 */
 .bubble .tone-down { color: #16894a; }      /* 台股：跌綠 */
-.bubble.alert { pointer-events: auto; cursor: pointer; font-size: 20px; max-width: 300px; background: #fff6e0; border-color: #f0b54a; box-shadow: 0 8px 24px rgba(200, 120, 20, .28), 0 1px 3px rgba(70, 50, 30, .15); animation: pulse 2.4s ease-in-out infinite; }
+.bubble.alert { pointer-events: auto; cursor: pointer; font-size: 20px; min-width: 200px; max-width: 300px; background: #fff6e0; border-color: #f0b54a; box-shadow: 0 8px 24px rgba(200, 120, 20, .28), 0 1px 3px rgba(70, 50, 30, .15); animation: pulse 2.4s ease-in-out infinite; }
 .bubble.alert::after { border-color: #f0b54a; }
 .bubble-btns { display: flex; gap: 8px; margin-top: 8px; }
 .bubble-btns:empty { display: none; }
-.bubble-btns button { flex: 1; font: 700 16px/1 "Noto Sans TC", "Microsoft JhengHei", sans-serif; padding: 9px 12px; border-radius: 12px; border: 0; cursor: pointer; }
+.bubble-btns button { flex: 1; font: 700 16px/1 "Noto Sans TC", "Microsoft JhengHei", sans-serif; padding: 9px 12px; border-radius: 12px; border: 0; cursor: pointer; white-space: nowrap; }
 .bubble-btns button[data-act="ack"] { background: #f08a3c; color: #fff; }
 .bubble-btns button[data-act="snooze"] { background: #f3e6cf; color: #6b5640; }
 .bubble-btns button:hover { filter: brightness(1.06); }
@@ -66,3 +67,5 @@ body.hidden #stage, body.hidden #fx { display: none; }
   .actor img, .actor.ringing img, .bubble.alert { animation: none !important; }
   .actor.asleep .zz { animation: none; opacity: .7; }
 }
+body.reduce .actor img, body.reduce .actor.ringing img, body.reduce .bubble.alert { animation: none !important; }
+body.reduce .actor.asleep .zz { animation: none; opacity: .7; }

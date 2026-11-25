@@ -16,7 +16,7 @@
   const S = window.Stage, ANIM = S.ANIM, POSE = S.POSE, EASE = ANIM.EASE;
   const lerp = (a, b, t) => a + (b - a) * t;
   let uidSeq = 0;
-  S.settings = { fetchReturn: 'alternate' };          // 撿球回程：carry（抱回）／nudge（用鼻子推）／alternate（輪流）
+  const passSeen = new Set();
 
   // ---- 工作反應的台詞與動作 ------------------------------------------------------
   const short = (t, n = 18) => { t = S.str(t); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
@@ -57,6 +57,7 @@
         const items = L.flatMap((x) => Array.isArray(x.items) ? x.items : x.text ? [x.text] : []).map((t) => short(t, 16));
         return { anim: 'talk', text: '剛剛錯過：' + (items.slice(0, 4).join('、') || '一則提醒') + (items.length > 4 ? ` 等 ${items.length} 則` : '') };
       }
+      case 'birth': return { anim: 'hopJoy', text: '生了！' + (p.name ? `是「${short(p.name, 12)}」` : '') + '♥', burst: 'hearts', big: true };
       case 'back': return { anim: 'wave', text: (beh && beh.back) || '你回來啦！歡迎回來～' };
       default: return { anim: 'talk', text: short(p.text || '', 120) || '……' };
     }
@@ -98,13 +99,16 @@
       if (q.traits) this.traits = q.traits;
       if (!this.traits) this.traits = {};
       const sh = (S.TR.shape(this.traits)) || { sizeK: 1 };
-      this.k = S.SCALE * sh.sizeK;
+      // 跟隨期的小袋鼠：先當一般 actor，但縮小
+      const grow = q.stage === 'follow' || this.traits.stage === 'follow' ? (Number(this.traits.growScale) || 0.55) : 1;
+      if (q.stage) this.attach.stage = q.stage;
+      if (q.mom) this.attach.mom = q.mom;
+      this.k = S.SCALE * sh.sizeK * grow;
       this.w = S.VB.w * this.k; this.h = S.VB.h * this.k;
       this.el.style.width = this.w + 'px'; this.el.style.height = this.h + 'px';
       this.el.style.setProperty('--band', this.traits.band || '#e5533d');
       this.beh = S.TR.behavior(this.traits) || null;
       this.act = this.traits.personality ? this.traits.personality.activity : .5;
-      if (this.traits.stage) this.attach.stage = this.traits.stage;
       this.img.alt = this.name; this.tag.textContent = this.name;
       this.el.setAttribute('aria-label', this.name);
       if (traitsChanged) { S.purgeFrames(this.id); this.lookBucket = null; if (!this.job) this.showRest(); this.place(); }
@@ -124,9 +128,10 @@
     }
     // SVG 座標 → 舞台座標（腳底 (80,183) 對到 (x, y)）
     toStage(sx, sy) { return { x: this.x + (sx - S.FOOT.x) * this.k, y: this.y + (sy - S.FOOT.y) * this.k }; }
-    setFrame(key, th, pose) {
+    setFrame(key, th, pose, wide = false) {
       if (this.liveOn) this.hideLive();
-      const u = S.frameURL(this, key, th, pose);
+      const u = S.frameURL(this, key, th, pose, wide);
+      if (wide !== !!this.wideImg) { this.wideImg = wide; this.img.classList.toggle('wide', wide); }
       if (this.img.src !== u) this.img.src = u;
     }
     // 依時間取第幾格（快取用），回傳 [格號, 取樣點]
@@ -171,6 +176,7 @@
       if (layer < cur || (layer === cur && layer <= 3 && layer !== 2)) {
         const old = this.job;
         this.job = null;
+        if (old && old.name === 'social') this.lastSocial = old;
         if (old && old.interrupt) old.interrupt(reason || job.name);
         this.job = job;
         job.t0 = performance.now();
@@ -217,7 +223,7 @@
       if (now >= this.nextAt) {
         if (this.queue.length || this.alerts.length) { this.nextAt = now + 3000; return false; }
         const nearCursor = Math.abs(S.cursor.x - this.x) < 200 && Math.abs(S.cursor.y - (this.y - this.h / 2)) < 260;
-        if (nearCursor || S.reduceMotion || S.fetchWaiting() || this.bubble.kind) { this.nextAt = now + 3000; return false; }
+        if (nearCursor || S.reduceMotion || S.settings.walk === 'off' || S.fetchWaiting() || this.bubble.kind) { this.nextAt = now + 3000; return false; }
         if (!this.requestActivity(7, this.walkJob())) this.nextAt = now + 3000;
         return !!(this.job && this.job.ticks);
       }
@@ -354,7 +360,7 @@
 
     // L7 散步：家附近 ±400、避開別隻與游標、不出螢幕
     walkJob() {
-      const a = this, W = innerWidth, margin = 60, range = 400;
+      const a = this, W = innerWidth, margin = 60, range = S.settings.walk === 'screen' ? W : 400;
       const backHome = Math.abs(a.x - a.home) > 250 && Math.random() < .6;
       let dir = backHome ? Math.sign(a.home - a.x) : (Math.random() < .5 ? -1 : 1);
       const hops = 3 + Math.floor(Math.random() * 6 * (0.5 + a.act));
@@ -377,6 +383,7 @@
           if (u < .05 && a.blocked(job.x0 + dir * step, dir)) return false;
           a.x = job.x0 + dir * step * EASE.io(u); a.place();
           if (u >= 1) {
+            a.checkPass();
             if (Math.sign(target - a.x) !== dir || Math.abs(target - a.x) < step / 2) return false;
             job.p0 = now; job.x0 = a.x;
           }
@@ -386,6 +393,17 @@
         end() { a.afterWalk(); }
       };
       return job;
+    }
+    // 散步經過別隻（腳底水平 < 120 px、高度差 < 40 px）：同一對每天只報一次
+    checkPass() {
+      const day = new Date().toDateString();
+      for (const o of S.actors.values()) {
+        if (o === this || Math.abs(o.x - this.x) >= 120 || Math.abs(o.y - this.y) >= 40) continue;
+        const key = [this.id, o.id].sort().join('|') + '|' + day;
+        if (passSeen.has(key)) continue;
+        passSeen.add(key);
+        S.api.pass(this.id, o.id);
+      }
     }
     afterWalk() {
       this.th = this.th > 0 ? 30 : -30;
@@ -469,7 +487,7 @@
       const a = this, F = ANIM.FETCH2, kind = ball.kind, k = a.k;
       const dir = Math.sign(ball.x - a.x) || -1;                         // 球在哪一邊
       const m = (fr) => (dir > 0 ? ANIM.mirrorFrame(fr) : fr);           // 關鍵影格以「球在左邊」為準
-      const mh = (fr) => (dir > 0 ? fr : ANIM.mirrorFrame(fr));           // 回程面向家（和球相反）
+      const mh = m;                                                      // 回程：關鍵影格本身就是面向家（球的反方向）
       const walk = 30 + a.act * 15, hopMs = 430 - a.act * 110;
       const setting = S.settings.fetchReturn;
       const mode = setting === 'carry' || setting === 'nudge' ? setting : (a.fetchCount++ % 2 ? 'nudge' : 'carry');
@@ -486,7 +504,7 @@
       const frame = (ph, u, mirrorFn) => {
         const [f, v] = Actor.q(u, P[ph][1]);
         const fr = mirrorFn(F[ph](v, kind));
-        a.setFrame(`F${ph}${kind}${dir}_${f}`, fr.th, fr.pose);
+        a.setFrame(`F${ph}${kind}${dir}_${f}`, fr.th, fr.pose, true);
       };
       job.start = (now) => {
         go('discover', now);
@@ -562,6 +580,67 @@
       job.interrupt = () => { ball.nudging = false; ball.fade(); a.el.classList.remove('bang-on'); };
       job.end = () => { a.th = -15; a.home = a.x; };
       return job;
+    }
+
+    // ---- L5 社交（簡化版）：發起的走到對方前方 → 兩隻轉向對方 → 碰鼻＋愛心或揮手 2 秒 → social:done ----
+    // 被更高層打斷：送 social:abort{by, reason}，另一隻原地收尾
+    socialJob(soc, isInit, other) {
+      const a = this, COUPLE = ['cuddle', 'groom', 'leanNap', 'walkTogether'];
+      const gap = (COUPLE.includes(soc.type) ? 60 : 110) * Math.max(a.k, other.k) / S.SCALE;
+      const job = { name: 'social', ticks: true, soc, isInit, other, phase: 'approach' };
+      const loving = COUPLE.includes(soc.type) || soc.type === 'nose';
+      job.start = (now) => { job.p0 = now; job.x0 = a.x; a.lookBucket = null; };
+      job.tick = (now) => {
+        if (job.phase === 'approach') {
+          if (!isInit) {                                                 // 對方：轉向走過來的那隻，等著
+            const th = other.x < a.x ? -60 : 60;
+            a.setFrame('t' + th, th, {});
+            if (other.job && other.job.soc && other.job.soc.pairId === soc.pairId && other.job.phase === 'greet') { job.phase = 'greet'; job.p0 = now; }
+            return true;
+          }
+          const side = Math.sign(a.x - other.x) || 1, tx = other.x + side * gap, dir = Math.sign(tx - a.x);
+          const step = 30 + a.act * 15, hopMs = 430 - a.act * 110;
+          if (Math.abs(tx - a.x) < 4) { job.phase = 'greet'; job.p0 = now; return true; }
+          if (!job.hop) job.hop = { t0: now, x0: a.x, st: Math.min(step, Math.abs(tx - a.x)) * dir, dir };
+          const H = job.hop, u = Math.min(1, (now - H.t0) / hopMs), [f, v] = Actor.q(u, 8);
+          a.th = H.dir > 0 ? 90 : -90;
+          a.setFrame(`hop${H.dir}_${f}`, a.th, ANIM.FETCH.hop(v));
+          a.x = H.x0 + H.st * EASE.io(u); a.place();
+          if (u >= 1) job.hop = null;
+          if (now - job.p0 > 20000) { job.endOpts = { rest: true }; a.abortSocial('work'); return false; }
+          return true;
+        }
+        // 碰鼻＋愛心（情侶、碰鼻）或揮手：兩隻面對面，各自即時繪製 2 秒
+        const t = (now - job.p0) / 1000, face = other.x < a.x ? -1 : 1, an = loving ? ANIM.REACT.greetNose : ANIM.REACT.greetWave;
+        if (now - (job.last || 0) >= S.LIVE_MS) { job.last = now; const s = ANIM.sample(an, Math.min(t, an.dur)); s.pose.props = an.props ? an.props(t) : []; a.drawLive(-face * s.th, face > 0 ? ANIM.mirrorFrame({ th: 0, pose: s.pose }).pose : s.pose); }
+        if (t >= 2) {
+          if (isInit && !job.sent) { job.sent = true; S.api.socialDone(soc.pairId, true, soc.type); }
+          job.endOpts = { rest: true };
+          return false;
+        }
+        return true;
+      };
+      job.interrupt = (reason) => {
+        if (job.quiet) return;
+        const why = reason === 'drag' ? 'drag' : reason === 'ring' ? 'alert' : /^react|^ring/.test(reason) ? 'work' : 'user';
+        a.abortSocial(why);
+      };
+      job.end = () => { a.th = -15; };
+      return job;
+    }
+    // 自己被打斷：通知主行程，夥伴原地收尾
+    abortSocial(reason) {
+      const j = this.job && this.job.name === 'social' ? this.job : this.lastSocial;
+      const soc = j && j.soc;
+      if (!soc || soc.aborted) return;
+      soc.aborted = true;
+      S.api.socialAbort(soc.pairId, this.id, reason);
+      const o = j.other;
+      if (o && o.job && o.job.name === 'social' && o.job.soc.pairId === soc.pairId) { o.job.quiet = true; o.finish(o.job); }
+    }
+    // 主行程叫停（另一隻被打斷、或排程取消）
+    endSocial(pairId) {
+      if (this.job && this.job.name === 'social' && this.job.soc.pairId === pairId) { this.job.quiet = true; this.finish(this.job); }
     }
 
     // ---- 滑鼠：單擊摸頭、雙擊開面板、右鍵選單、長摸、拖曳（L0） ----------------------
@@ -647,7 +726,7 @@
         tick(now) {
           if (job.fling) {                                               // 滑行減速（每格 0.86）
             const f = job.fling; f.vx *= .86; f.vy *= .86;
-            a.x = S.clamp(a.x + f.vx, 20, innerWidth - 20); a.y = S.clamp(a.y + f.vy, a.h * .8, innerHeight - 4); a.place();
+            a.x = S.clamp(a.x + f.vx, a.w * .3, innerWidth - a.w * .3); a.y = S.clamp(a.y + f.vy, a.h * .8, innerHeight - 4); a.place();
             if (Math.hypot(f.vx, f.vy) < 1.2) { job.fling = null; job.after = { anim: ANIM.REACT.dizzy, t0: now, line: '頭好暈……下次輕一點啦。' }; }
             return true;
           }

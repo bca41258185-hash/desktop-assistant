@@ -12,6 +12,9 @@
   S.fxEl = document.getElementById('fx');
   S.VB = { x: -10, y: -30, w: 180, h: 230 };          // 每隻的畫框（SVG 單位）；腳底在 (80,183)
   S.VB_STR = `${S.VB.x} ${S.VB.y} ${S.VB.w} ${S.VB.h}`;
+  // 寬畫框：四腳著地、往前撲這類比較長的姿勢（撿球）用，免得口鼻或尾巴被切掉；圖片往左右各多 50 單位
+  S.VBW = { x: -60, y: -30, w: 280, h: 230 };
+  S.VBW_STR = `${S.VBW.x} ${S.VBW.y} ${S.VBW.w} ${S.VBW.h}`;
   S.FOOT = { x: 80, y: 183 };                         // 腳底在 SVG 座標
   S.SCALE = 0.95;                                     // 1 個 SVG 單位約 0.95 px（之後乘上個體大小）
   S.MAX_MOVING = 3;                                   // 同時最多 3 隻在動（只限 L4–L7）
@@ -23,7 +26,9 @@
   S.cursor = { x: -9999, y: -9999 };
   S.paused = false;
   S.mode = 'awake';                                   // 全域模式：awake / asleep / hidden
-  S.reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  S.systemReduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  S.reduceMotion = S.systemReduce;                    // ⚙「減少動態效果」：system（跟系統）／on／off
+  S.settings = { fetchReturn: 'alternate', walk: 'home', reducedMotion: 'system' };
   S.clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   S.str = (v, n = 200) => (typeof v === 'string' ? v : v == null ? '' : String(v)).slice(0, n);
 
@@ -31,17 +36,17 @@
   const cache = new Map();          // key → { url, bytes }
   let cacheBytes = 0;
   const CACHE_LIMIT = 200 * 1024 * 1024;
-  S.frameURL = function (a, key, th, pose) {
-    const k = a.id + '|' + key;
+  S.frameURL = function (a, key, th, pose, wide) {
+    const k = a.id + '|' + key + (wide ? '|w' : '');
     const hit = cache.get(k);
     if (hit) { cache.delete(k); cache.set(k, hit); return hit.url; }   // 最近使用的移到最後
     S.ART.configure(a.traits);
-    let svg = S.POSE.svg(th, 'f' + a.uid, pose, S.VB_STR);
+    let svg = S.POSE.svg(th, 'f' + a.uid, pose, wide ? S.VBW_STR : S.VB_STR);
     S.ART.configure(null);
     // 圖片是獨立文件，讀不到 CSS 變數 → 把頭帶等顏色直接寫進去
     const dpr = window.devicePixelRatio || 1;
     svg = svg.replace(/var\(--band,\s*#[0-9a-fA-F]{6}\)/g, a.traits.band || '#e5533d')
-      .replace('<svg ', `<svg width="${Math.round(a.w * dpr)}" height="${Math.round(a.h * dpr)}" `);
+      .replace('<svg ', `<svg width="${Math.round(a.w * (wide ? S.VBW.w / S.VB.w : 1) * dpr)}" height="${Math.round(a.h * dpr)}" `);
     const blob = new Blob([svg], { type: 'image/svg+xml' });
     const entry = { url: URL.createObjectURL(blob), bytes: blob.size, key: k };
     cache.set(k, entry);
@@ -86,7 +91,8 @@
   }
 
   // ---- 名額：同時在動（L4–L7）的隻數 ----------------------------------------------
-  S.movingCount = () => { let n = 0; for (const a of S.actors.values()) if (a.layer >= 4 && a.layer <= 7) n++; return n; };
+  // 一起互動的一對（L5）只算 1 個名額：只算發起的那隻
+  S.movingCount = () => { let n = 0; for (const a of S.actors.values()) if (a.layer >= 4 && a.layer <= 7 && !(a.job && a.job.name === 'social' && !a.job.isInit)) n++; return n; };
   // 有球停下來在等主人撿：散步先讓位（L4 優先拿名額）
   S.fetchWaiting = () => { for (const b of S.balls) if (b.stopped && !b.picked && b.owner.layer > 4) return true; return false; };
 
@@ -128,6 +134,19 @@
       if (a.dragging) drag = true;
     }
     S.api.reportRects(rects, drag);
+    S.reportPos();
   };
   S.reportRectsThrottled = function () { if (performance.now() - lastReport > 120) S.reportRects(); };
+
+  // ---- 回報腳底位置（q:pos，給社交排程判斷距離與地面）：有變才送，最多每秒一次 ----------------
+  let lastPos = 0, posTimer = 0, lastPosSig = '';
+  S.reportPos = function () {
+    const now = performance.now();
+    if (now - lastPos < 1000) { if (!posTimer) posTimer = setTimeout(() => { posTimer = 0; S.reportPos(); }, 1000 - (now - lastPos)); return; }
+    const list = [...S.actors.values()].map((a) => ({ qid: a.id, x: Math.round(a.x), y: Math.round(a.y) }));
+    const sig = list.map((p) => p.qid + p.x + ',' + p.y).join('|');
+    if (sig === lastPosSig) return;
+    lastPos = now; lastPosSig = sig;
+    S.api.pos(list);
+  };
 })();

@@ -10,7 +10,7 @@ contextBridge.exposeInMainWorld('stageApi', {
   onAdd: on('stage:add'),                   // {q}
   onUpdate: on('stage:update'),             // {q}
   onRemove: on('stage:remove'),             // {qid, reason}
-  onSettings: on('stage:settings'),         // {fetchReturn: 'carry'|'nudge'|'alternate'}
+  onSettings: on('stage:settings'),         // {fetchReturn, walk: 'home'|'screen'|'off', reducedMotion: 'system'|'on'|'off'}
   onEvent: on('q:event'),                   // {qid, kind, payload, prio}
   onAlert: on('q:alert'),                   // {qid, reminderId, text}
   onAlertClear: on('q:alert-clear'),        // {qid, reminderId}
@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('stageApi', {
   onPause: on('stage:pause'),
   onResume: on('stage:resume'),
   onHide: on('stage:hide'),                 // {until}
+  onSocialStart: on('social:start'),        // {pairId, a, b, type, initiator}
+  onSocialAbort: on('social:abort'),        // {pairId, by, reason}
   // 舞台 → 主行程
   ready: () => ipcRenderer.send('stage:ready'),
   reportRects: (rects, dragging) => ipcRenderer.send('stage:rects', { rects, dragging: !!dragging }),
@@ -30,5 +32,9 @@ contextBridge.exposeInMainWorld('stageApi', {
   dblclick: (qid) => ipcRenderer.send('q:dblclick', { qid: str(qid) }),
   context: (qid) => ipcRenderer.send('q:context', { qid: str(qid) }),
   ack: (reminderId) => ipcRenderer.send('alert:ack', { reminderId: str(reminderId) }),
+  pos: (list) => ipcRenderer.send('q:pos', (Array.isArray(list) ? list : []).slice(0, 500).map((p) => ({ qid: str(p.qid), x: num(p.x), y: num(p.y), display: 'primary' }))),
+  pass: (a, b) => ipcRenderer.send('q:pass', { a: str(a), b: str(b) }),
+  socialDone: (pairId, ok, type) => ipcRenderer.send('social:done', { pairId: str(pairId), ok: !!ok, type: str(type, 30) }),
+  socialAbort: (pairId, by, reason) => ipcRenderer.send('social:abort', { pairId: str(pairId), by: str(by), reason: str(reason, 20) }),
   snooze: (reminderId) => ipcRenderer.send('alert:snooze', { reminderId: str(reminderId) })
 });
