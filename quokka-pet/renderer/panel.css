@@ -1,0 +1,249 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --paper: #f4f1e9;          /* 描圖紙底 */
+  --surface: #faf8f1;        /* 卡片表面 */
+  --line: #d9d3c4;           /* 製圖細線 */
+  --ink: #2d2c28;            /* 墨色文字 */
+  --muted: #8c8676;          /* 次要文字 */
+  --graphite: #3b3f3b;       /* 石墨強調色 */
+  --graphite-hi: #2a2d2a;    /* 石墨 hover */
+  --graphite-soft: #eceadf;  /* 淺石墨底 */
+}
+
+body {
+  font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+  color: var(--ink);
+  /* 描圖紙底 + 極淡製圖格線 */
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(rgba(120, 128, 110, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 128, 110, 0.06) 1px, transparent 1px);
+  background-size: 22px 22px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+}
+
+h2 { font-size: 15px; margin-bottom: 8px; letter-spacing: 0.5px; font-weight: 700; }
+.mt { margin-top: 18px; }
+
+/* --- 分頁 --- */
+.tabs {
+  display: flex;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+.tab {
+  flex: 1;
+  padding: 12px 0;
+  border: none;
+  background: none;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  letter-spacing: 1px;
+}
+.tab:hover { background: var(--graphite-soft); }
+.tab.active { color: var(--graphite); border-bottom-color: var(--graphite); font-weight: bold; }
+
+/* --- 分頁內容：填滿視窗高度的直向欄 --- */
+.panel-view {
+  display: none;
+  flex: 1 1 auto;
+  min-height: 0;             /* 允許內部 flex 子元素正確收縮/捲動 */
+  padding: 16px;
+  overflow-y: auto;
+}
+.panel-view.active {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+.hint { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.hint code {
+  background: var(--graphite-soft); padding: 1px 5px; border-radius: 4px; font-size: 11px;
+  color: var(--ink);
+}
+
+/* --- 按鈕 --- */
+button {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 13px;
+  color: var(--ink);
+}
+button:hover { background: var(--graphite-soft); }
+button.primary, button#chatSend {
+  background: var(--graphite); color: #fff; border-color: var(--graphite);
+}
+button.primary:hover, button#chatSend:hover { background: var(--graphite-hi); }
+
+/* --- 聊天：聊天記錄填滿、輸入列固定在底 --- */
+#view-chat { padding-bottom: 12px; }
+.chat-log {
+  flex: 1 1 auto;
+  min-height: 0;             /* 關鍵：讓捲動容器能正確縮放 */
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px;
+  margin-bottom: 8px;
+}
+.msg {
+  max-width: 85%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.msg.user { align-self: flex-end; background: var(--graphite); color: #fff; border-bottom-right-radius: 3px; }
+.msg.bot  { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 3px; }
+.msg.err  { align-self: flex-start; background: #f6e7e2; border: 1px solid #e0c3bb; color: #9a3b2c; }
+
+.ctx-row {
+  display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted);
+  margin-bottom: 8px; flex-shrink: 0;
+}
+.chat-input { display: flex; gap: 8px; flex-shrink: 0; }
+.chat-input textarea {
+  flex: 1; resize: none; border: 1px solid var(--line); border-radius: 6px;
+  padding: 8px; font-family: inherit; font-size: 13px; background: var(--surface); color: var(--ink);
+}
+
+/* --- 清單 --- */
+.folder-list, .change-list, .task-list { list-style: none; }
+.folder-list li, .change-list li {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  padding: 8px 10px; margin-top: 6px; display: flex; align-items: center;
+  justify-content: space-between; gap: 8px; font-size: 13px;
+}
+.folder-list .path { word-break: break-all; }
+.folder-list button { padding: 3px 9px; font-size: 12px; }
+.change-list .type { font-weight: bold; margin-right: 6px; }
+.change-list .time { color: var(--muted); font-size: 11px; }
+.empty { color: var(--muted); font-size: 13px; padding: 10px 2px; }
+
+/* --- 任務：標題與新增列固定，清單填滿並捲動 --- */
+.progress-badge {
+  background: var(--graphite); color: #fff; font-size: 12px; padding: 2px 8px;
+  border-radius: 10px; margin-left: 6px;
+}
+.task-add { display: flex; gap: 8px; margin-bottom: 10px; flex-shrink: 0; }
+.task-add input {
+  flex: 1; border: 1px solid var(--line); border-radius: 6px; padding: 8px; font-size: 13px;
+  background: var(--surface); color: var(--ink);
+}
+.task-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.task-list li {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  padding: 9px 10px; margin-top: 6px; display: flex; align-items: center; gap: 10px;
+}
+.task-list .task-text { flex: 1; word-break: break-word; }
+/* 勾選完成：清楚的刪除線＋灰字 */
+.task-list li.done .task-text {
+  text-decoration: line-through;
+  text-decoration-color: #9aa095;
+  text-decoration-thickness: 2px;
+  color: #9aa095;
+}
+.task-list .del { padding: 3px 8px; font-size: 12px; color: #9a3b2c; border-color: #e0c3bb; }
+
+/* --- 設定 --- */
+#view-settings { padding-bottom: 32px; }   /* 確保最後一段提示不被視窗底緣裁切 */
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
+.field input, .field select {
+  border: 1px solid var(--line); border-radius: 6px; padding: 8px; font-size: 13px;
+  font-family: inherit; background: var(--surface); color: var(--ink);
+}
+.save-status { margin-left: 10px; color: #3d7a4f; font-size: 13px; }
+
+/* --- 造型選擇器 --- */
+.char-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 4px 0 4px;
+  flex-shrink: 0;
+}
+.char-card {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 6px 4px 7px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+.char-card:hover { border-color: #b9b1a0; transform: translateY(-1px); }
+.char-card.selected {
+  border-color: var(--graphite);
+  box-shadow: 0 0 0 1.5px var(--graphite) inset;
+}
+.char-thumb {
+  width: 100%;
+  height: 72px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+}
+.char-thumb svg { width: 72px; height: 80px; }
+.char-name-zh { font-size: 12px; font-weight: 700; color: var(--ink); margin-top: 2px; }
+.char-name-en { font-size: 10px; color: var(--muted); letter-spacing: 0.3px; }
+
+/* --- 運動按鈕（僅會運動的角色顯示） --- */
+.sport-row { margin: 8px 0 2px; flex-shrink: 0; }
+.sport-row[hidden] { display: none; }
+.sport-label { font-size: 13px; color: var(--ink); margin-right: 4px; }
+.sport-row button { font-size: 12px; padding: 4px 12px; margin-right: 6px; }
+.sport-row .hint { margin-top: 6px; }
+
+/* --- 名言列表 --- */
+.quote-list { list-style: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.quote-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px 12px;
+  margin-top: 10px;
+}
+.quote-zh { font-size: 14px; line-height: 1.65; color: var(--ink); }
+.quote-orig {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #6b6a62;
+  font-style: italic;
+}
+.quote-src {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+  word-break: break-all;
+}
+.quote-src a { color: var(--graphite); text-decoration: none; }
+.quote-src a:hover { text-decoration: underline; }
+.quote-actions { margin-top: 8px; }
+.quote-actions button { font-size: 12px; padding: 4px 10px; }

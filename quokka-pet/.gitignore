@@ -1,0 +1,29 @@
+# 相依套件
+node_modules/
+
+# 打包輸出
+dist/
+out/
+build/
+
+# 環境變數與金鑰（絕不提交）
+.env
+.env.*
+*.key
+
+# 本機設定（可能含 API Key，存在 userData，不應出現在 repo，但保險起見）
+config.json
+local-config.json
+
+# 作業系統雜項
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 編輯器
+.vscode/
+.idea/
+
+# 記錄檔
+*.log
+npm-debug.log*

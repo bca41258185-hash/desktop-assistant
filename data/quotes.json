@@ -1,5 +1,5 @@
 {
-  "description": "Verified quotations by six Pritzker laureates for the desktop pet. Original greetings in characters.js are separate and are not quotations. Entries with id \"quokka\" are original lines / general animal facts written for the quokka pet, not quotations.",
+  "description": "Verified quotations by six Pritzker laureates for the desktop pet. Original greetings in characters.js are separate and are not quotations.",
   "quotes": [
     {
       "id": "ando",
@@ -300,86 +300,6 @@
       "url": "https://fashionpost.jp/portraits/176591",
       "year": 2023,
       "lang": "ja"
-    },
-    {
-      "id": "quokka",
-      "zh": "球還沒落地，就還有機會。先動起來再說！",
-      "source": "Original line",
-      "sourceZh": "球場語錄（原創）",
-      "kind": "original",
-      "lang": "zh"
-    },
-    {
-      "id": "quokka",
-      "zh": "一次只接一球。把眼前這一件做好，下一球自然會來。",
-      "source": "Original line",
-      "sourceZh": "球場語錄（原創）",
-      "kind": "original",
-      "lang": "zh"
-    },
-    {
-      "id": "quokka",
-      "zh": "失誤沒關係，撿起球、笑一下，再發一次。",
-      "source": "Original line",
-      "sourceZh": "球場語錄（原創）",
-      "kind": "original",
-      "lang": "zh"
-    },
-    {
-      "id": "quokka",
-      "zh": "暖身不能省：開工前先伸個懶腰、喝口水。",
-      "source": "Original line",
-      "sourceZh": "球場語錄（原創）",
-      "kind": "original",
-      "lang": "zh"
-    },
-    {
-      "id": "quokka",
-      "zh": "坐太久囉！起來走一走，肩膀轉一轉，再回來繼續。",
-      "source": "Original line",
-      "sourceZh": "球場語錄（原創）",
-      "kind": "original",
-      "lang": "zh"
-    },
-    {
-      "id": "quokka",
-      "zh": "今天的你已經很努力了，這一分算你的！",
-      "source": "Original line",
-      "sourceZh": "球場語錄（原創）",
-      "kind": "original",
-      "lang": "zh"
-    },
-    {
-      "id": "quokka",
-      "zh": "短尾矮袋鼠（quokka，學名 Setonix brachyurus）是有袋類動物，和袋鼠、沙袋鼠同屬袋鼠科。",
-      "source": "General fact",
-      "sourceZh": "生態小知識",
-      "kind": "fact",
-      "lang": "zh"
-    },
-    {
-      "id": "quokka",
-      "zh": "我的同伴大多住在西澳洲外海的羅特尼斯島（Rottnest Island）。",
-      "source": "General fact",
-      "sourceZh": "生態小知識",
-      "kind": "fact",
-      "lang": "zh"
-    },
-    {
-      "id": "quokka",
-      "zh": "我們是草食動物，而且多半在傍晚到夜間才比較活躍。",
-      "source": "General fact",
-      "sourceZh": "生態小知識",
-      "kind": "fact",
-      "lang": "zh"
-    },
-    {
-      "id": "quokka",
-      "zh": "短尾矮袋鼠在 IUCN 紅色名錄被列為「易危」物種。遇到我們時，請只用眼睛看，不要觸摸或餵食喔。",
-      "source": "General fact",
-      "sourceZh": "生態小知識",
-      "kind": "fact",
-      "lang": "zh"
     }
   ]
 }

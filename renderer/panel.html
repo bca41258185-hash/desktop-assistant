@@ -58,23 +58,18 @@
   <!-- 名言：目前大師的查證引言（與問候語分開） -->
   <section class="panel-view" id="view-quotes">
     <div class="section-head">
-      <h2><span id="quoteTitle">大師名言</span> <span id="quoteMaster" class="progress-badge"></span></h2>
+      <h2>大師名言 <span id="quoteMaster" class="progress-badge"></span></h2>
       <button id="quoteRandom">隨機說一句</button>
     </div>
-    <p class="hint" id="quoteHint">以下為查證過的真實引言（訪談、著作或得獎致詞），與桌寵啟動時的原創問候語不同。</p>
+    <p class="hint">以下為查證過的真實引言（訪談、著作或得獎致詞），與桌寵啟動時的原創問候語不同。</p>
     <ul class="quote-list" id="quoteList"></ul>
   </section>
 
   <!-- 設定 -->
   <section class="panel-view" id="view-settings">
-    <h2>選擇你的桌寵</h2>
-    <p class="hint">短尾矮袋鼠「庫卡」或六位 Q 版建築大師，點選即可即時換角色。</p>
+    <h2>選擇你的大師</h2>
+    <p class="hint">私人用的 Q 版致敬造型，點選即可即時換角色。</p>
     <div class="char-picker" id="charPicker"></div>
-    <div class="sport-row" id="sportRow" hidden>
-      <span class="sport-label">讓牠打球：</span>
-      <span id="sportButtons"></span>
-      <p class="hint">待機時也會每隔 20–40 秒自己輪流打一項。</p>
-    </div>
 
     <h2 class="mt">AI 供應商設定</h2>
     <label class="field">
@@ -107,7 +102,7 @@
       名言氣泡間隔（分鐘，0 = 關閉；預設 20）
       <input type="number" id="setQuoteInterval" min="0" step="1" />
     </label>
-    <p class="hint">也可在桌寵上按右鍵，或到「名言」分頁點選，立即讓桌寵說一句。</p>
+    <p class="hint">也可在桌寵上按右鍵，或到「名言」分頁點選，立即讓大師說一句。</p>
 
     <button id="saveSettings" class="primary">儲存設定</button>
     <span id="saveStatus" class="save-status"></span>

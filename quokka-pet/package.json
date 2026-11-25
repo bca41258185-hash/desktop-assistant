@@ -1,0 +1,17 @@
+{
+  "name": "quokka-pet",
+  "version": "0.1.0",
+  "description": "短尾矮袋鼠桌寵「庫卡」— 會打羽球、排球、籃球的 Electron 桌面小幫手（資料夾監看、AI 聊天、工作進度）",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chokidar": "^3.6.0"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7"
+  }
+}
