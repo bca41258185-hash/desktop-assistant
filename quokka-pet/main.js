@@ -709,7 +709,38 @@ function registerIpc() {
 // ---------------------------------------------------------------------------
 // 生命週期
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// v2 舞台模式（開發中，QUOKKA_STAGE=1 才啟用）：所有庫卡在一個透明舞台圖層裡散步
+// 資料存在 config-v2.json（第一次從 config.json 遷移），完成前不影響舊版
+// ---------------------------------------------------------------------------
+function startStageMode() {
+  const { createStore } = require('./lib/store');
+  const { createStageManager } = require('./lib/stage-main');
+  const file = path.join(app.getPath('userData'), 'config-v2.json');
+  const store = createStore(file);
+  if (!fs.existsSync(file) && fs.existsSync(configPath())) { try { fs.copyFileSync(configPath(), file); } catch (e) {} }
+  const data = store.load();
+  // 至少一隻；開發測試可用 QUOKKA_DEMO=n 補到 n 隻
+  const names = ['庫卡', '工地鼠', '股票鼠', '小助理', '資料夾鼠', '阿跳', '小麥', '團團'];
+  const want = Math.max(1, Number(process.env.QUOKKA_DEMO) || 1);
+  while (data.quokkas.length < want) {
+    const i = data.quokkas.length;
+    data.quokkas.push({ id: 'q' + (i + 1) + Date.now().toString(36), name: names[i % names.length] + (i >= names.length ? i : ''), traits: QuokkaTraits.generate(), pos: null, createdAt: new Date().toISOString() });
+  }
+  data.quokkas.forEach((q) => { if (!q.traits) q.traits = QuokkaTraits.generate(); QuokkaTraits.ensurePersonality(q.traits); });
+  store.saveNow();
+  const stage = createStageManager({ BrowserWindow, screen, ipcMain, path, dir: __dirname });
+  ipcMain.on('stage:ready', (e) => e.sender.send('stage:quokkas', data.quokkas));
+  ipcMain.on('stage:save-pos', (e, { id, pos }) => {
+    const q = data.quokkas.find((x) => x.id === id);
+    if (q && pos && isFinite(pos.x) && isFinite(pos.y)) { q.pos = { x: Math.round(pos.x), y: Math.round(pos.y) }; store.save(); }
+  });
+  stage.start();
+  return { store, stage };
+}
+
 app.whenReady().then(() => {
+  if (process.env.QUOKKA_STAGE === '1') { Menu.setApplicationMenu(null); global.v2 = startStageMode(); return; }
   config = loadConfig();
   // 移除整個應用程式的原生選單（避免出現英文 File/Edit/View... 選單列）
   Menu.setApplicationMenu(null);

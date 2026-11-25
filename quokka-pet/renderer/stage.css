@@ -1,0 +1,12 @@
+/* 舞台圖層：全螢幕透明；每隻庫卡是一個絕對定位的元素，移動只改 transform（交給顯示卡） */
+html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; user-select: none; }
+#stage { position: absolute; inset: 0; }
+.actor { position: absolute; left: 0; top: 0; will-change: transform; cursor: grab; }
+.actor img { display: block; width: 100%; height: 100%; pointer-events: none; transform-origin: 50% 92%; }
+.actor.idle.near img { animation: breathe 3.6s ease-in-out infinite; }   /* 只有游標靠近時才呼吸 */
+.actor.dragging { cursor: grabbing; }
+@keyframes breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.012, .988); } }
+.actor .name { position: absolute; left: 50%; bottom: -2px; transform: translateX(-50%); font: 600 11px/1.6 "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
+  color: #6b5640; background: rgba(255, 250, 242, .78); border-radius: 8px; padding: 0 7px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .2s; }
+.actor:hover .name, .actor.dragging .name { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .actor.idle img { animation: none; } }
