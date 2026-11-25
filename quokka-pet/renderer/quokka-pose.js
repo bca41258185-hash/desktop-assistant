@@ -86,6 +86,11 @@
     <radialGradient id="vb${id}" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset=".7" stop-color="#eceae3"/><stop offset="1" stop-color="#bdb9ae"/></radialGradient>
     <radialGradient id="bb${id}" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#f6a35a"/><stop offset=".65" stop-color="#e27a2c"/><stop offset="1" stop-color="#a94e16"/></radialGradient>
     <linearGradient id="lf${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8cc06b"/><stop offset="1" stop-color="#4d8a3a"/></linearGradient>
+    <linearGradient id="lg${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cdd6c2"/><stop offset=".45" stop-color="#a9b79d"/><stop offset="1" stop-color="#7f9076"/></linearGradient>
+    <radialGradient id="fg${id}" cx="40%" cy="30%" r="80%"><stop offset="0" stop-color="#f0c9e6"/><stop offset=".55" stop-color="#cf93c3"/><stop offset="1" stop-color="#9c5c92"/></radialGradient>
+    <linearGradient id="sg${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a08a6c"/><stop offset="1" stop-color="#6e5a44"/></linearGradient>
+    <filter id="lz${id}" x="-20%" y="-60%" width="140%" height="220%"><feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="2" seed="7"/><feDisplacementMap in="SourceGraphic" scale="1.1" xChannelSelector="R" yChannelSelector="G"/></filter>
+    <filter id="lb${id}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation=".7"/></filter>
     <radialGradient id="fl${id}"><stop offset="0" stop-color="#fff" stop-opacity="1"/><stop offset=".5" stop-color="#fff6c8" stop-opacity=".7"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>`;
   function racket(id, hx, hy, ang, len = 1, hit = false, swoosh = false) {
     // ang：拍子方向（0＝朝上，順時針為正）；握把從手掌往外
@@ -114,15 +119,21 @@
   // 特徵：葉片細長（約 1.5–6 cm × 2–5 mm）、邊緣反捲、兩面密生白色星狀毛 → 銀灰綠；花為下垂的粉紫色鐘形小花（7–11 月）
   // 畫法：一小段枝條，上面幾片細長銀灰葉（淺色中線表現反捲的邊），枝頭一朵下垂小花
   const leaf = (id, x, y, rot = 0, s = 1, flower = true) => {
+    // 畫風與庫卡一致：漸層上色、柔邊細毛質感（輕微擾動）、模糊的亮面與陰影，不用硬黑邊
+    const shape = (len) => `M0 0 C${len * .25} -1.6 ${len * .8} -1.4 ${len} 0 C${len * .8} 1.4 ${len * .25} 1.6 0 0 Z`;
     const L = (ax, ay, ang, len) => `<g transform="translate(${ax} ${ay}) rotate(${ang})">
-        <path d="M0 0 C${len * .25} -1.5 ${len * .8} -1.3 ${len} 0 C${len * .8} 1.3 ${len * .25} 1.5 0 0 Z" fill="#a3b198" stroke="#7d8c74" stroke-width=".4"/>
-        <path d="M.8 0 L${len - 1.4} 0" stroke="#eef2e8" stroke-width=".55" stroke-linecap="round" opacity=".9"/></g>`;
+        <path d="${shape(len)}" fill="#4a3a2e" opacity=".18" transform="translate(.5 .9)" filter="url(#lb${id})"/>
+        <path d="${shape(len)}" fill="url(#lg${id})" filter="url(#lz${id})"/>
+        <path d="M1 -.25 Q${len * .5} -.7 ${len - 1.6} -.2" fill="none" stroke="#f4f7ef" stroke-width=".9" stroke-linecap="round" opacity=".7" filter="url(#lb${id})"/></g>`;
     return `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
-      <path d="M0 0 C-8 -1 -16 -2 -27 -5" fill="none" stroke="#8a7a62" stroke-width="1.3" stroke-linecap="round"/>
+      <path d="M0 .6 C-8 -.4 -16 -1.4 -27 -4.4" fill="none" stroke="#4a3a2e" stroke-width="1.6" opacity=".16" stroke-linecap="round" filter="url(#lb${id})"/>
+      <path d="M0 0 C-8 -1 -16 -2 -27 -5" fill="none" stroke="url(#sg${id})" stroke-width="1.4" stroke-linecap="round" filter="url(#lz${id})"/>
       ${L(-5, -.6, -150, 13)}${L(-9, -1.2, 155, 15)}${L(-14, -1.9, -140, 14)}${L(-18, -2.6, 150, 15)}${L(-23, -3.8, -160, 12)}${L(-27, -5, 175, 10)}
-      ${flower ? `<g transform="translate(-21 -3.3) rotate(${f1(-rot)})"><path d="M0 0 Q.6 3 0 5" fill="none" stroke="#8a7a62" stroke-width=".6"/>
-        <path d="M-2.6 5 Q-3 9.4 0 10 Q3 9.4 2.6 5 Q0 3.6 -2.6 5 Z" fill="#c98bbd" stroke="#9d5f93" stroke-width=".5"/>
-        <path d="M-1.2 9.6 L-1.6 11 M1.2 9.6 L1.6 11 M0 10 V11.4" stroke="#7a4a72" stroke-width=".5"/></g>` : ''}
+      ${flower ? `<g transform="translate(-21 -3.3) rotate(${f1(-rot)})">
+        <path d="M0 0 Q.6 3 0 5" fill="none" stroke="#8a7a62" stroke-width=".7" opacity=".9"/>
+        <path d="M-2.8 5.2 Q-3.2 9.6 0 10.2 Q3.2 9.6 2.8 5.2 Q0 3.8 -2.8 5.2 Z" fill="#4a3a2e" opacity=".18" transform="translate(.5 .8)" filter="url(#lb${id})"/>
+        <path d="M-2.8 5.2 Q-3.2 9.6 0 10.2 Q3.2 9.6 2.8 5.2 Q0 3.8 -2.8 5.2 Z" fill="url(#fg${id})" filter="url(#lz${id})"/>
+        <ellipse cx="-1" cy="6.6" rx=".8" ry="1.6" fill="#fbe8f5" opacity=".6" filter="url(#lb${id})"/></g>` : ''}
     </g>`;
   };
   const hoop = (x, y, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) scale(${s})">
