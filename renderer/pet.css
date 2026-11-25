@@ -175,10 +175,10 @@ html, body {
   transition: opacity 0.2s ease, transform 0.2s ease;
   pointer-events: none;
   word-break: break-word;
-  white-space: pre-wrap;
 }
 .bubble.show { opacity: 1; transform: translateY(0) scale(1); }
-.bubble-text { display: block; }
+/* pre-wrap 只套在文字上；套在整個氣泡會把 HTML 縮排算成空行，讓帶出處的氣泡多出一大段空白 */
+.bubble-text { display: block; white-space: pre-wrap; }
 .bubble-attr {
   display: block;
   margin-top: 6px;
@@ -211,6 +211,150 @@ html, body {
   border-top-color: #faf8f1;
   border-bottom: 0;
   filter: drop-shadow(0 1px 0 #d8d2c2);
+}
+
+/* ==========================================================================
+   短尾矮袋鼠「庫卡」的運動姿勢：badminton / volleyball / basketball
+   - 道具（球拍、球、籃框、墊球手臂）預設隱藏，只在對應姿勢顯示。
+   - 球：外層 .bx 走 X（線性）、內層 .by 走 Y（加減速）→ 合成拋物線。
+   - 手臂以 viewBox 座標的肩膀為圓心旋轉（transform-box: view-box）。
+   - 每段運動總長 4.8s（與 pet.js 的 SPORT_MS 一致），結束後由 pet.js 切回 idle。
+   ========================================================================== */
+#petArt svg { overflow: visible; }
+.ball, .hoop, .racket, .arms-bump { display: none; }
+.ball .spin { transform-box: fill-box; transform-origin: center; }
+.arm-r { transform-box: view-box; transform-origin: 102px 132px; }
+
+#pet[data-pose="badminton"] .motif,
+#pet[data-pose="volleyball"] .motif,
+#pet[data-pose="basketball"] .motif { opacity: 0; }
+#pet[data-pose="badminton"] .mouth,
+#pet[data-pose="volleyball"] .mouth,
+#pet[data-pose="basketball"] .mouth { display: none; }
+#pet[data-pose="badminton"] .mouth-happy,
+#pet[data-pose="volleyball"] .mouth-happy,
+#pet[data-pose="basketball"] .mouth-happy { display: block; }
+#pet[data-pose="badminton"] .shadow,
+#pet[data-pose="volleyball"] .shadow,
+#pet[data-pose="basketball"] .shadow { animation: none; }
+
+/* --- 羽球：右手揮拍，羽球從右上飛來被擊回（1.2s × 4） --- */
+#pet[data-pose="badminton"] .racket,
+#pet[data-pose="badminton"] .shuttle { display: block; }
+#pet[data-pose="badminton"] .arm-r { animation: bdArm 1.2s ease-in-out 4 both; }
+#pet[data-pose="badminton"] .gesture-arm {
+  transform-box: view-box; transform-origin: 58px 132px;
+  animation: none; transform: rotate(28deg);
+}
+#pet[data-pose="badminton"] .pet-body { animation: bdBody 1.2s ease-in-out 4 both; }
+#pet[data-pose="badminton"] .shuttle .bx { animation: bdX 1.2s linear 4 both; }
+#pet[data-pose="badminton"] .shuttle .by { animation: bdY 1.2s linear 4 both; }
+#pet[data-pose="badminton"] .shuttle .spin {
+  transform-origin: 0 0; transform-box: view-box;
+  animation: bdFlip 1.2s step-end 4 both;
+}
+@keyframes bdArm {
+  0%   { transform: rotate(-112deg); }
+  30%  { transform: rotate(-120deg); }
+  45%  { transform: rotate(-95deg); }
+  58%  { transform: rotate(-35deg); }
+  100% { transform: rotate(-112deg); }
+}
+@keyframes bdBody {
+  0%, 30%, 62%, 100% { transform: translateY(0); }
+  46%                { transform: translateY(-9px); }
+}
+@keyframes bdX {
+  0%   { transform: translateX(196px); }
+  45%  { transform: translateX(150px); }
+  100% { transform: translateX(204px); }
+}
+@keyframes bdY {
+  0%   { transform: translateY(6px);  animation-timing-function: ease-in; }
+  45%  { transform: translateY(78px); animation-timing-function: ease-out; }
+  100% { transform: translateY(-4px); }
+}
+@keyframes bdFlip {
+  0%   { transform: rotate(0deg); }
+  45%  { transform: rotate(180deg); }
+  100% { transform: rotate(180deg); }
+}
+
+/* --- 排球：雙手在左前方低手墊球，球在頭側上下（1.2s × 4） --- */
+#pet[data-pose="volleyball"] .arms-bump,
+#pet[data-pose="volleyball"] .ball-vb { display: block; }
+#pet[data-pose="volleyball"] .arm-r,
+#pet[data-pose="volleyball"] .gesture-arm { display: none; }
+#pet[data-pose="volleyball"] .arms-bump { animation: vbArms 1.2s ease-out 4 both; }
+#pet[data-pose="volleyball"] .pet-body { animation: vbBody 1.2s ease-in-out 4 both; }
+#pet[data-pose="volleyball"] .head {
+  transform-box: fill-box; transform-origin: 50% 92%;
+  transform: rotate(-7deg); transition: transform 0.25s ease;
+}
+#pet[data-pose="volleyball"] .ball-vb .bx { transform: translateX(22px); }
+#pet[data-pose="volleyball"] .ball-vb .by { animation: vbY 1.2s linear 4 both; }
+#pet[data-pose="volleyball"] .ball-vb .spin { animation: ballSpin 2.4s linear infinite; }
+@keyframes vbArms {
+  0%, 100% { transform: translateY(2px); }
+  8%       { transform: translateY(-7px); }
+  35%, 85% { transform: translateY(0); }
+}
+@keyframes vbBody {
+  0%, 100% { transform: translateY(0) scale(1.02, 0.97); }
+  10%      { transform: translateY(-4px) scale(0.99, 1.02); }
+  40%, 85% { transform: translateY(0) scale(1, 1); }
+}
+@keyframes vbY {
+  0%   { transform: translateY(126px); animation-timing-function: ease-out; }
+  50%  { transform: translateY(2px);   animation-timing-function: ease-in; }
+  100% { transform: translateY(126px); }
+}
+@keyframes ballSpin { to { transform: rotate(360deg); } }
+
+/* --- 籃球：右手運球三下，起跳投進右側籃框（4.8s × 1） --- */
+#pet[data-pose="basketball"] .hoop,
+#pet[data-pose="basketball"] .ball-bb { display: block; }
+#pet[data-pose="basketball"] .hoop { animation: hoopIn 0.3s ease-out both; }
+#pet[data-pose="basketball"] .arm-r { animation: bbArm 4.8s linear 1 both; }
+#pet[data-pose="basketball"] .gesture-arm {
+  transform-box: view-box; transform-origin: 58px 132px;
+  animation: none; transform: rotate(20deg);
+}
+#pet[data-pose="basketball"] .pet-body { animation: bbBody 4.8s ease-in-out 1 both; }
+#pet[data-pose="basketball"] .ball-bb { animation: bbFade 4.8s linear 1 both; }
+#pet[data-pose="basketball"] .ball-bb .bx { animation: bbX 4.8s linear 1 both; }
+#pet[data-pose="basketball"] .ball-bb .by { animation: bbY 4.8s linear 1 both; }
+#pet[data-pose="basketball"] .ball-bb .spin { animation: ballSpin 1.2s linear infinite; }
+@keyframes hoopIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bbArm {
+  0%, 20%, 40%, 60% { transform: rotate(-80deg); animation-timing-function: ease-in; }
+  10%, 30%, 50%     { transform: rotate(-52deg); animation-timing-function: ease-out; }
+  64%               { transform: rotate(-118deg); }
+  68%, 90%          { transform: rotate(-138deg); animation-timing-function: ease-in-out; }
+  100%              { transform: rotate(-20deg); }
+}
+@keyframes bbBody {
+  0%, 20%, 40%, 60%, 76%, 100% { transform: translateY(0) scale(1, 1); }
+  10%, 30%, 50%                { transform: translateY(2px) scale(1.015, 0.98); }
+  67%                          { transform: translateY(-13px) scale(0.99, 1.02); }
+}
+@keyframes bbX {
+  0%, 60%   { transform: translateX(128px); }
+  64%       { transform: translateX(118px); }
+  86%, 100% { transform: translateX(172px); }
+}
+@keyframes bbY {
+  0%, 20%, 40% { transform: translateY(133px); animation-timing-function: ease-in; }
+  10%, 30%, 50% { transform: translateY(163px); animation-timing-function: ease-out; }
+  60%  { transform: translateY(133px); animation-timing-function: ease-in-out; }
+  64%  { transform: translateY(98px);  animation-timing-function: ease-out; }
+  76%  { transform: translateY(6px);   animation-timing-function: ease-in; }
+  86%  { transform: translateY(50px);  animation-timing-function: linear; }
+  100% { transform: translateY(118px); }
+}
+@keyframes bbFade {
+  0%, 93% { opacity: 1; }
+  100%    { opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

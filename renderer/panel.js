@@ -192,15 +192,20 @@ taskInput.addEventListener('keydown', (e) => {
 // ---------------------------------------------------------------------------
 const quoteList = document.getElementById('quoteList');
 const quoteMaster = document.getElementById('quoteMaster');
+const quoteTitle = document.getElementById('quoteTitle');
+const quoteHint = document.getElementById('quoteHint');
+const DEFAULT_QUOTE_HINT = quoteHint ? quoteHint.textContent : '';
 
 function renderQuotes(payload) {
   if (!quoteList) return;
   quoteList.innerHTML = '';
   const name = (payload && payload.nameZh) || '';
   if (quoteMaster) quoteMaster.textContent = name;
+  if (quoteTitle) quoteTitle.textContent = (payload && payload.title) || '大師名言';
+  if (quoteHint) quoteHint.textContent = (payload && payload.hint) || DEFAULT_QUOTE_HINT;
   const quotes = (payload && payload.quotes) || [];
   if (!quotes.length) {
-    quoteList.innerHTML = '<li class="empty">這位大師目前還沒有收錄名言。</li>';
+    quoteList.innerHTML = '<li class="empty">這個角色目前還沒有收錄語錄。</li>';
     return;
   }
   quotes.forEach((q, index) => {
@@ -231,7 +236,7 @@ function renderQuotes(payload) {
     const actions = document.createElement('div');
     actions.className = 'quote-actions';
     const speakBtn = document.createElement('button');
-    speakBtn.textContent = '讓大師說這句';
+    speakBtn.textContent = (payload && payload.speakLabel) || '讓大師說這句';
     speakBtn.addEventListener('click', () => window.api.speakQuote(index));
     actions.appendChild(speakBtn);
 
@@ -271,6 +276,24 @@ const charPicker = document.getElementById('charPicker');
 // 目前選用的大師（供儲存設定時一併帶上）
 let selectedCharId = (window.CHAR_DEFAULT || 'ando');
 
+// 運動按鈕：只有會運動的角色（目前為短尾矮袋鼠）才顯示
+const sportRow = document.getElementById('sportRow');
+const sportButtons = document.getElementById('sportButtons');
+function renderSportButtons() {
+  if (!sportRow || !sportButtons) return;
+  const c = (window.CHARACTERS || {})[selectedCharId];
+  const sports = (c && c.sports) || [];
+  sportRow.hidden = !sports.length;
+  sportButtons.innerHTML = '';
+  sports.forEach((sport) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = (c.sportNames && c.sportNames[sport]) || sport;
+    btn.addEventListener('click', () => window.api.playSport(sport));
+    sportButtons.appendChild(btn);
+  });
+}
+
 // 繪製大師選擇器（每張卡 = 縮圖 + 繁中名 + 英文名）
 function renderCharPicker() {
   const chars = window.CHARACTERS || {};
@@ -291,10 +314,12 @@ function renderCharPicker() {
       selectedCharId = id;
       charPicker.querySelectorAll('.char-card').forEach((el) =>
         el.classList.toggle('selected', el.dataset.id === id));
+      renderSportButtons();
       await window.api.setCharacter(id);   // 立即切換桌寵並持久化
     });
     charPicker.appendChild(card);
   });
+  renderSportButtons();
 }
 
 async function loadSettings() {

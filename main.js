@@ -47,7 +47,7 @@ const CONFIG_DEFAULTS = {
     model: '',
     reminderIntervalMinutes: 30,
     quoteIntervalMinutes: 20,      // 名言氣泡間隔（0＝關閉）
-    characterId: DEFAULT_ID        // 目前選用的大師（'ando' | 'gehry' | ...）
+    characterId: DEFAULT_ID        // 目前選用的角色（'quokka' | 'ando' | 'gehry' | ...）
   }
 };
 
@@ -184,7 +184,7 @@ function speak(text) {
   }
 }
 
-// 讓桌寵切換姿勢：'idle' | 'think' | 'happy'
+// 讓桌寵切換姿勢：'idle' | 'think' | 'happy'，或該角色會的運動（如 'badminton'）
 function setPetPose(pose) {
   if (petWindow && !petWindow.isDestroyed()) {
     petWindow.webContents.send('pet:pose', pose);
@@ -272,13 +272,13 @@ function setupReminder() {
 // 名言：目前大師的查證引言（與角色問候語分開）
 // ---------------------------------------------------------------------------
 function quotesFor(id) {
-  return QUOTES_BY_ID[id] || QUOTES_BY_ID[DEFAULT_ID] || [];
+  return QUOTES_BY_ID[id] || [];
 }
 
 function speakQuote(quote) {
   if (!quote || !quote.zh) return false;
   const master = CHARACTERS[quote.id] || CHARACTERS[currentCharacterId()];
-  const name = master ? master.nameZh : '';
+  const name = master ? (master.callName || master.nameZh) : '';
   const source = quote.sourceZh || quote.source || '';
   const attribution = [name, source].filter(Boolean).join(' ／ ');
   if (petWindow && !petWindow.isDestroyed()) {
@@ -412,6 +412,14 @@ function registerIpc() {
     return { ok: true, id };
   });
 
+  // 讓目前角色打一項球（僅限該角色 sports 清單內的項目）
+  ipcMain.handle('pet:play-sport', (e, sport) => {
+    const c = CHARACTERS[currentCharacterId()];
+    if (!c || !Array.isArray(c.sports) || !c.sports.includes(sport)) return { ok: false };
+    setPetPose(sport);
+    return { ok: true };
+  });
+
   // --- 名言 ---
   ipcMain.handle('quotes:list', (e, id) => {
     const cid = CHARACTERS[id] ? id : currentCharacterId();
@@ -420,6 +428,9 @@ function registerIpc() {
       id: cid,
       nameZh: c ? c.nameZh : '',
       nameEn: c ? c.nameEn : '',
+      title: (c && c.quoteTitle) || '大師名言',
+      hint: (c && c.quoteHint) || '',
+      speakLabel: (c && c.speakLabel) || '讓大師說這句',
       quotes: quotesFor(cid)
     };
   });
@@ -468,7 +479,8 @@ function registerIpc() {
       // 勾選「完成」時（非取消完成）讓大師開心一下
       if (t.done) {
         setPetPose('happy');
-        speak('完成一項了，好看。');
+        const c = CHARACTERS[currentCharacterId()];
+        speak((c && c.cheer) || '完成一項了，好看。');
       }
     }
     return config.tasks;
@@ -493,7 +505,7 @@ function registerIpc() {
 
     // 進入思考姿勢
     setPetPose('think');
-    const systemPrompt =
+    const systemPrompt = c.persona ||
       `你是「大師」，一位沉穩、有涵養的建築工作室導師。` +
       `此刻你以 ${c.nameZh}（${c.nameEn}）的風格與語氣與使用者對話。` +
       `請一律使用繁體中文，用字精煉、文化而不賣弄，不使用網路流行語或誇張口氣，` +
@@ -511,7 +523,7 @@ function registerIpc() {
       return { ok: true, reply };
     } catch (err) {
       setPetPose('idle');
-      speak('抱歉，此刻難以回應。');
+      speak(c.persona ? '啊，這球沒接到……等等再試一次。' : '抱歉，此刻難以回應。');
       return { ok: false, error: err.message };
     }
   });
