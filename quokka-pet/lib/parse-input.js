@@ -37,7 +37,7 @@
   }
   const DAY = '(今天|明天|後天|每天|每日|(?:每週|每周|每星期|每禮拜)[一二三四五六日天]+|(?:週|周|星期|禮拜)[一二三四五六日天])?';
   const RE_TIMED = new RegExp(`^${DAY}\\s*${TIME}\\s*(.+)$`);
-  const RE_REL = /^(\d+(?:\.\d+)?)\s*(分鐘|分|min|mins|m|小時|鐘頭|時|hr|hrs|h)後?\s+(.+)$/i;
+  const RE_REL = /^(\d+(?:\.\d+)?)\s*(分鐘|分|min|mins|m|小時|鐘頭|時|hr|hrs|h)後?\s*(?![鐘內以左前])(.+)$/i;
 
   function parseInput(raw, now = new Date()) {
     const s = normalize(raw);
@@ -60,7 +60,12 @@
     m = s.match(RE_TIMED);
     if (m) {
       const [, day, period, h, mm, half, m2, text] = m;
-      const time = toHM(period, h, mm, half, m2);
+      let time = toHM(period, h, mm, half, m2);
+      const nowHM = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      if (time && !period && !day && Number(h) >= 1 && Number(h) <= 7 && time <= nowHM) {
+        // 下午打「3點」多半是指下午 3 點；連下午也過了（例如 14:05 打「2點」）就是明天下午
+        time = `${pad(Number(time.slice(0, 2)) + 12)}:${time.slice(3)}`;
+      }
       const content = (text || '').trim();
       if (time && content) {
         if (day === '每天' || day === '每日') return { type: 'reminder', text: content, rule: { type: 'daily', time } };

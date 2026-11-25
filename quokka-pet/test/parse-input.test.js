@@ -22,7 +22,7 @@ test('提醒：今天某時', () => {
   assert.equal(p('15：30 開會').rule.time, '15:30');            // 全形冒號
   assert.equal(p('15:30開會').rule.time, '15:30');              // 沒空白
   assert.equal(p('下午3點半 開會').rule.time, '15:30');
-  assert.equal(p('3點15分 喝水').rule.time, '03:15');           // 沒寫上下午就照字面（已過 → 明天）
+  assert.equal(p('3點15分 喝水').rule.time, '15:15');           // 下午打、沒寫上下午、1–7 點 → 當成下午
   assert.equal(p('晚上9點 收信').rule.time, '21:00');
   assert.equal(p('中午12點 吃飯').rule.time, '12:00');
   assert.equal(p('中午1點 午休').rule.time, '13:00');
@@ -70,4 +70,17 @@ test('待辦與空白', () => {
   assert.equal(p('x'.repeat(300)).text.length, 200);
   assert.equal(D(p('回覆業主信件'), NOW), '→ 新增待辦');
   assert.equal(D(p('2330'), NOW), '→ 加入台股 2330');
+});
+test('下午打「3點 開會」當成今天 15:00（沒寫上下午、1–7 點、今天已過）', () => {
+  assert.deepEqual(p('3點 開會').rule, { type: 'once', date: '2026-11-25', time: '15:00' });
+  assert.deepEqual(p('2點 開會').rule, { type: 'once', date: '2026-11-26', time: '14:00' });   // 下午 2 點也過了 → 明天下午 2 點
+  assert.equal(p('上午3點 開會').rule.date, '2026-11-26');        // 有寫上午就照字面（已過 → 明天）
+  assert.equal(p('8點 晨會').rule.time, '08:00');                // 8 點以後不猜
+  assert.equal(p('明天 3點 出發').rule.time, '03:00');           // 有寫日期就照字面
+});
+test('「30分泡茶」沒空白也算提醒；「10分鐘內完成」不算', () => {
+  assert.equal(p('30分泡茶').type, 'reminder');
+  assert.equal(p('30分泡茶').rule.time, '14:35');
+  assert.equal(p('10分鐘內完成報告').type, 'task');
+  assert.equal(p('5分以上的會議').type, 'task');
 });
