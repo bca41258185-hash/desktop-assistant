@@ -454,7 +454,7 @@ const VIEW_MAP = {
   back: ['back', false], b34l: ['b34', true], sidel: ['side', true], f34l: ['f34', true]
 };
 const TURN_ORDER = ['front', 'f34r', 'sider', 'b34r', 'back', 'b34l', 'sidel', 'f34l'];
-const api = { views, frontLayered, VIEW_MAP, TURN_ORDER };
+const api = { views, frontLayered, VIEW_MAP, TURN_ORDER, __arm: arm, __DEFS: DEFS, __fur: fur, __eye: eye, __claw: CLAW };
 if (typeof window !== 'undefined') window.QuokkaArt = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();
