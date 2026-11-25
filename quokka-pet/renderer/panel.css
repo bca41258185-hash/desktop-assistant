@@ -356,3 +356,13 @@ body.dragging .chip[data-drop] { background: var(--surface-2); border-style: das
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-motion="off"]) *, :root:not([data-motion="off"]) *::before { transition: none !important; animation: none !important; }
 }
+
+/* 技術指標解說（負責的庫卡用牠的話講） */
+.stocks li[data-sym] { cursor: pointer; }
+.tip { font-size: 13px; color: var(--muted, #9a8670); margin: 6px 2px 0; }
+.report { margin-top: 8px; background: #fff; border: 1px solid #eadfcd; border-radius: 14px; padding: 10px 12px; font-size: 14px; line-height: 1.65; }
+.report-h { display: flex; justify-content: space-between; align-items: center; }
+.report-head { margin: 2px 0 4px; font-size: 15px; font-weight: 700; }
+.report-lines { margin: 0; padding-left: 18px; }
+.report-tags { margin: 6px 0 2px; display: flex; flex-wrap: wrap; gap: 4px; }
+.report-nums, .report-note { margin: 4px 0 0; font-size: 13px; color: var(--muted, #9a8670); font-variant-numeric: tabular-nums; }

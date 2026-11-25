@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('api', {
   regenerateQuokka: call('quokka:regenerate'),
   setAccessory: call('quokka:set-accessory'),
   deleteQuokka: call('quokka:delete'),
+  stockReport: (p) => ipcRenderer.invoke('stock:report', p),
   play: call('quokka:play'),
   nameBaby: call('baby:name'),
 

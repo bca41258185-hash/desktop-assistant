@@ -564,7 +564,30 @@
   }
   function stockCard(s) {
     const x = stockInner(s);
-    return `<li class="${x.cls}" ${rowAttrs('stock', s)} data-sym="${esc(s.symbol)}">${x.html}</li>`;
+    return `<li class="${x.cls}" ${rowAttrs('stock', s)} data-sym="${esc(s.symbol)}" tabindex="0" role="button" aria-label="${esc(s.name || s.symbol)}，按下看技術指標解說">${x.html}</li>`;
+  }
+  // 技術指標解說：負責的庫卡用牠的個性講這檔股票今天發生了什麼
+  function reportBox() {
+    const r = ui.report; if (!r) return '';
+    if (r.loading) return `<div class="report" role="status">${esc(r.name)}：我看一下線圖…</div>`;
+    if (!r.ok) return `<div class="report">${esc(r.message || '暫時算不出來')}</div>`;
+    const v = r.values || {}, n = (x, d = 0) => (x == null || !isFinite(x) ? '–' : Number(x).toFixed(d));
+    return `<div class="report" aria-live="polite">
+      <div class="report-h"><b>${esc(r.by || '庫卡')}說：</b><button type="button" class="icon-btn" data-act="closeReport" data-fk="report:close" aria-label="收起解說">✕</button></div>
+      <p class="report-head">${esc(r.report.headline)}</p>
+      <ul class="report-lines">${r.report.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
+      <p class="report-tags">${r.report.tags.map((t) => `<span class="pill">${esc(t)}</span>`).join('')}</p>
+      <p class="report-nums">RSI ${n(v.rsi)}｜K ${n(v.k)}／D ${n(v.d)}｜MACD 柱 ${n(v.hist, 2)}｜5 日線 ${n(v.ma5, 1)}｜月線 ${n(v.ma20, 1)}${v.volRatio ? `｜量比 ${n(v.volRatio, 1)}` : ''}</p>
+      <p class="report-note">${esc(r.report.disclaimer)}</p></div>`;
+  }
+  async function openReport(li) {
+    const id = li.dataset.id, sym = li.dataset.sym;
+    const st = (S.stocks || []).find((x) => x.id === id || x.symbol === sym);
+    ui.report = { loading: true, name: (st && st.name) || sym };
+    renderLists();
+    let res; try { res = await api.stockReport({ id, symbol: sym }); } catch (e) { res = { ok: false }; }
+    ui.report = res || { ok: false };
+    renderLists();
   }
   function folderRow(f) {
     const st = f.status === 'missing' ? ['找不到', 'bad'] : f.status === 'error' ? ['有問題', 'bad'] : ['正常', 'good'];
@@ -601,7 +624,7 @@
     }
     // 股票
     const stocks = itemsOf('stock', owner);
-    if (stocks.length) out.push(section('stock', '股票', stocks.length, `<ul class="stocks">${stocks.map(stockCard).join('')}</ul>`));
+    if (stocks.length) out.push(section('stock', '股票', stocks.length, `<ul class="stocks">${stocks.map(stockCard).join('')}</ul><p class="tip">點一檔股票，負責的庫卡會用技術指標說說今天發生了什麼</p>${reportBox()}`));
     // 資料夾
     const folders = itemsOf('folder', owner);
     const addFolder = `<button type="button" class="link-btn" data-act="pickFolder" data-fk="pickFolder" aria-label="加入要監看的資料夾">＋ 資料夾</button>`;
@@ -855,6 +878,7 @@
     const row = b.closest('[data-kind]');
     const kind = row && row.dataset.kind, id = row && row.dataset.id;
     switch (b.dataset.act) {
+      case 'closeReport': ui.report = null; renderLists(); break;
       case 'sel': select(b.dataset.q); break;
       case 'new': ui.adding ? (ui.adding = null, render()) : openNew(); break;
       case 'cancelNew': ui.adding = null; render(); $('roster').querySelector('[data-act="new"]').focus(); break;
@@ -906,6 +930,13 @@
       }
       default: break;
     }
+  });
+  document.addEventListener('click', (e) => {
+    const li = e.target.closest && e.target.closest('li[data-sym]');
+    if (li && !e.target.closest('button')) openReport(li);
+  });
+  document.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('li[data-sym]')) { e.preventDefault(); openReport(e.target); }
   });
   $('globalGear').addEventListener('click', () => { ui.globalOpen = !ui.globalOpen; ui.adding = null; render(); });
   $('switchType').addEventListener('click', () => {

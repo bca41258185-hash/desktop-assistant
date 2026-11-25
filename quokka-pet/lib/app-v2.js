@@ -14,6 +14,9 @@ const { createStepTracker } = require('./stock-step');
 const { createStageManager } = require('./stage-main');
 const { createRomance } = require('./romance');
 const { createSocialDirector } = require('./social');
+const { createHistory, withToday, INDEX } = require('./stock-history');
+const { analyze } = require('./indicators');
+const talk = require('./market-talk');
 const TR = require('../renderer/traits');
 
 const ROOT = path.join(__dirname, '..');
@@ -168,7 +171,8 @@ function start() {
   const stocks = createStockService({
     fetch: (url, opt) => net.fetch(url, opt),                 // Electron 的 net 會走系統代理（公司網路）
     onUpdate: (u) => {
-      quotes[u.symbol] = { price: u.price, pct: u.pct, stale: !!u.stale, recovered: !!u.recovered, name: u.name, time: u.time, market: u.market };
+      quotes[u.symbol] = { price: u.price, pct: u.pct, stale: !!u.stale, recovered: !!u.recovered, name: u.name, time: u.time, market: u.market,
+        prevClose: u.prevClose, open: u.open, high: u.high, low: u.low, volume: u.volume, day: u.day };
       toPanel('stock:tick', { symbol: u.symbol, market: u.market, ...quotes[u.symbol] });
       if (u.stale || !isFinite(u.pct)) return;
       if (u.recovered) steps._state.delete(u.symbol);          // 斷線恢復：重新當基準
@@ -178,6 +182,54 @@ function start() {
       for (const qid of owners) event(qid, 'stock', { symbol: u.symbol, name: u.name || u.symbol, pct: u.pct, dir: r.dir, limit: r.limit });
     }
   });
+  // ---- 技術指標解說：用負責那隻庫卡的個性，講今天這檔股票發生了什麼 ------------------
+  const history = createHistory({ fetch: (url, opt) => net.fetch(url, opt) });
+  const archetypeOf = (qid) => { const q = qById(qid); return (q && q.traits.personality && q.traits.personality.archetype) || 'easy'; };
+  async function stockReport(stock, qid) {
+    const h = await history.daily(stock.symbol, stock.market, stock.ex);
+    if (!h.ok) return { ok: false, message: h.reason };
+    const a = analyze(withToday(h.bars, quotes[stock.symbol]), { market: stock.market });
+    const r = talk.describe(a, { name: stock.name || stock.symbol, symbol: stock.symbol, archetype: archetypeOf(qid || stock.owner) });
+    return { ok: true, report: r, score: a.ok ? a.signals[0].score : 0, values: a.ok ? a.v : null };
+  }
+  async function marketReport(market, qid) {
+    const idx = INDEX[market] || INDEX.tw, h = await history.daily(idx.symbol, market);
+    if (!h.ok) return null;
+    return talk.marketLine(analyze(h.bars, { market: 'index' }), { indexName: idx.name, archetype: archetypeOf(qid) });
+  }
+  // 讓某一隻講牠盯的股票裡「今天最有事」的那一檔（沒有盯股票就講大盤）
+  async function tellMarket(qid, { brief = false } = {}) {
+    const mine = data.stocks.filter((x) => x.owner === qid);
+    if (!mine.length) { const line = await marketReport('tw', qid); event(qid, 'note', { text: line || '我今天拿不到大盤的資料。' }); return; }
+    const reps = (await Promise.all(mine.map((st) => stockReport(st, qid)))).filter((r) => r.ok).sort((x, y) => y.score - x.score);
+    if (!reps.length) { event(qid, 'note', { text: '我今天拿不到股價的歷史資料，晚點再試。' }); return; }
+    const r = reps[0].report;
+    event(qid, 'note', { text: r.headline, long: true });
+    for (const line of r.lines.slice(0, brief ? 1 : 3)) event(qid, 'note', { text: line, long: true });
+    if (!brief) event(qid, 'note', { text: r.disclaimer });
+  }
+  // 收盤後自動講一次（每個市場每天一次；使用者不在時留到回來再講）
+  const closeTold = {};
+  setInterval(() => {
+    for (const market of ['tw', 'us']) {
+      const any = Object.values(quotes).find((q) => q.market === market && q.day);
+      if (!any || closeTold[market] === any.day) continue;
+      const { isMarketOpen } = require('./stock-service');
+      const hm = new Intl.DateTimeFormat('en-GB', { timeZone: market === 'tw' ? 'Asia/Taipei' : 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).reduce((o, p) => (o[p.type] = p.value, o), {});
+      const today = `${hm.year}-${hm.month}-${hm.day}`, mins = Number(hm.hour) * 60 + Number(hm.minute), closeAt = market === 'tw' ? 13 * 60 + 30 : 16 * 60;
+      if (any.day !== today || isMarketOpen(market, new Date()) || mins < closeAt + 5 || mins > closeAt + 90 || away) continue;
+      closeTold[market] = any.day;
+      const owners = new Set(data.stocks.filter((x) => x.market === market).map((x) => x.owner));
+      let i = 0; for (const qid of owners) setTimeout(() => tellMarket(qid, { brief: true }).catch(() => {}), 1500 * i++);
+    }
+  }, 5 * 60000);
+  ipcMain.handle('stock:report', async (e, { id, symbol } = {}) => {
+    const st = data.stocks.find((x) => x.id === id) || data.stocks.find((x) => x.symbol === symbol);
+    if (!st) return { ok: false, message: '找不到這檔股票' };
+    try { const r = await stockReport(st); return r.ok ? { ok: true, report: r.report, by: (qById(st.owner) || {}).name, values: r.values } : r; }
+    catch (err) { return { ok: false, message: '暫時算不出來' }; }
+  });
+
   function syncWatchlist() {
     const by = {};
     for (const s of data.stocks) (by[s.owner] = by[s.owner] || []).push({ symbol: s.symbol, market: s.market, ex: s.ex });
@@ -457,6 +509,7 @@ function start() {
     const play = (a, label) => ({ label, click: () => toStage('q:play', { qid, action: a }) });
     Menu.buildFromTemplate([
       { label: `${q.name} 說一句話`, click: say },
+      { label: '今天股市怎麼了？', click: () => tellMarket(qid).catch(() => {}) },
       { label: '陪我玩', submenu: [play('badminton', '羽球'), play('volleyball', '排球'), play('basketball', '籃球'), play('eat', '吃葉子'), play('hop', '跳一跳'), play('nap', '打盹')] },
       { label: '打開面板', click: () => showPanel(qid) },
       { type: 'separator' },

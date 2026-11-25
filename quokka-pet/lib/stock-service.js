@@ -163,6 +163,7 @@ function parseTwQuote(msg) {
   return {
     symbol: String(msg.c).toUpperCase(), market: 'tw', ex: msg.ex || null, name: msg.n || null,
     price, prevClose, pct: pctOf(price, prevClose), source,
+    open: num(msg.o), high: num(msg.h), low: num(msg.l), volume: num(msg.v) != null ? num(msg.v) * 1000 : null,   // 今日開高低、成交量（張 → 股）
     time, day: d || (time ? zonedDay(time, MARKETS.tw.tz) : null),
   };
 }
@@ -177,6 +178,7 @@ function parseUsMeta(meta, symbol) {
     symbol: symbol || String(meta.symbol || '').replace(/-/g, '.'), market: 'us',
     name: meta.longName || meta.shortName || null, currency: meta.currency || null,
     price, prevClose, pct: pctOf(price, prevClose), source: price != null ? 'trade' : null,
+    open: num(meta.regularMarketOpen), high: num(meta.regularMarketDayHigh), low: num(meta.regularMarketDayLow), volume: num(meta.regularMarketVolume),
     time, day: time ? zonedDay(time, tz) : null,
   };
 }

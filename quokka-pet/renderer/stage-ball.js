@@ -82,6 +82,7 @@
     // 淡出（被拖走、太遠、時間到、排球到家拍一拍之後）
     fade() {
       if (this.gone) return;
+      if (this.held) { this.remove(); return; }                         // 抱在手上（畫在庫卡圖裡）：直接收掉
       this.gone = true; this.el.style.visibility = ''; this.el.classList.add('fade');
       S.balls.delete(this);
       if (this.owner.ball === this) this.owner.ball = null;
