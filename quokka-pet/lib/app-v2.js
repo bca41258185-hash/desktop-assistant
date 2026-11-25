@@ -185,17 +185,19 @@ function start() {
   // ---- 技術指標解說：用負責那隻庫卡的個性，講今天這檔股票發生了什麼 ------------------
   const history = createHistory({ fetch: (url, opt) => net.fetch(url, opt) });
   const archetypeOf = (qid) => { const q = qById(qid); return (q && q.traits.personality && q.traits.personality.archetype) || 'easy'; };
+  // 這一隻自己的說話方式：個性類型＋五項個性數值＋喜好＋嗜好＋年紀
+  const voiceOf = (qid) => { const q = qById(qid), P = q && q.traits.personality; return P ? { archetype: P.archetype, personality: P, likes: P.likes, hobbies: P.hobbies, stage: q.traits.stage } : { archetype: 'easy' }; };
   async function stockReport(stock, qid) {
     const h = await history.daily(stock.symbol, stock.market, stock.ex);
     if (!h.ok) return { ok: false, message: h.reason };
     const a = analyze(withToday(h.bars, quotes[stock.symbol]), { market: stock.market });
-    const r = talk.describe(a, { name: stock.name || stock.symbol, symbol: stock.symbol, archetype: archetypeOf(qid || stock.owner) });
+    const r = talk.describe(a, { name: stock.name || stock.symbol, symbol: stock.symbol, ...voiceOf(qid || stock.owner) });
     return { ok: true, report: r, score: a.ok ? a.signals[0].score : 0, values: a.ok ? a.v : null };
   }
   async function marketReport(market, qid) {
     const idx = INDEX[market] || INDEX.tw, h = await history.daily(idx.symbol, market);
     if (!h.ok) return null;
-    return talk.marketLine(analyze(h.bars, { market: 'index' }), { indexName: idx.name, archetype: archetypeOf(qid) });
+    return talk.marketLine(analyze(h.bars, { market: 'index' }), { indexName: idx.name, ...voiceOf(qid) });
   }
   // 讓某一隻講牠盯的股票裡「今天最有事」的那一檔（沒有盯股票就講大盤）
   async function tellMarket(qid, { brief = false } = {}) {

@@ -82,3 +82,26 @@ test('接上今天的即時報價；代號轉換', () => {
   assert.equal(withToday(bars, { price: 5, day: '2026-03-01' })[40].o, 5);    // 沒有開盤價時用現價
   assert.equal(yahooSymbol('2330', 'tw', 'tse'), '2330.TW'); assert.equal(yahooSymbol('6488', 'tw', 'otc'), '6488.TWO'); assert.equal(yahooSymbol('BRK.B', 'us'), 'BRK-B');
 });
+
+test('同一種個性類型，個體數值不同講的話也不同', () => {
+  const a = I.analyze(series(Array(50).fill(-0.3).concat(Array(10).fill(-1.5))));
+  const base = { name: '台積電', symbol: '2330', archetype: 'easy' };
+  const P = (o) => ({ activity: .5, sociability: .5, boldness: .5, curiosity: .5, affection: .5, ...o });
+  const timid = describe(a, { ...base, personality: P({ boldness: .1 }) });
+  const brave = describe(a, { ...base, personality: P({ boldness: .9 }) });
+  assert.match(timid.lines[0], /^(好像|看起來|可能)/); assert.match(brave.lines[0], /^我敢說，/);
+  const curious = describe(a, { ...base, personality: P({ curiosity: .9 }) }), bored = describe(a, { ...base, personality: P({ curiosity: .1 }) });
+  assert.ok(curious.tags.length > bored.tags.length);                        // 好奇的多講幾個訊號
+  assert.match(describe(a, { ...base, personality: P({ activity: .9 }) }).lines[0], /！$/);
+  assert.match(describe(a, { ...base, personality: P({ activity: .1 }) }).lines[0], /……$/);
+  assert.ok(describe(a, { ...base, personality: P({ affection: .9 }) }).lines.some((l) => /幫你盯著/.test(l)));
+  assert.ok(describe(a, { ...base, personality: P({ sociability: .9 }) }).lines.some((l) => /其他庫卡/.test(l)));
+  // 喜好：最愛籃球 → 球場比喻與籃球開場；嗜好：收尾說要去做什麼；年紀
+  const hoop = describe(a, { ...base, personality: P({}), likes: ['basketball', 'nap'], hobbies: ['曬太陽'] });
+  assert.match(hoop.headline, /被蓋掉了/); assert.ok(/對手|比分|落後|防守/.test(hoop.lines.join('')));
+  assert.equal(hoop.lines.at(-1), '講完了，我要去曬太陽了。');
+  assert.match(describe(a, { ...base, personality: P({}), stage: 'juvenile' }).headline, /哇！/);
+  assert.ok(describe(a, { ...base, personality: P({}), stage: 'senior' }).lines.some((l) => /以前也看過/.test(l)));
+  // 酷酷派就算愛打球也只講事實
+  assert.ok(!/對手|灌木/.test(describe(a, { ...base, archetype: 'cool', personality: P({}), likes: ['basketball'] }).lines.join('')));
+});
