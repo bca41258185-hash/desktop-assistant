@@ -24,9 +24,14 @@ const SIDE = cr([[92, 16], [104, 19], [111, 27], [114, 37], [118, 45], [123.5, 5
   [54, 126], [60, 100], [64, 76], [66, 52], [70, 32], [79, 20]]);
 
 const BACK = FRONT;
-const F34 = cr([[84, 15], [98, 16], [107, 20], [112, 28], [114, 38], [117, 45], [120, 50], [119.5, 56], [115.5, 61], [114.5, 70],
-  [116.5, 90], [119, 116], [119, 142], [115, 160], [104, 171], [88, 173.6], [70, 173.4], [56, 168], [49, 154], [46.5, 128],
-  [48.5, 100], [47.5, 82], [45, 64], [46, 46], [51, 29], [63, 18.5]]);
+// 45 度角輪廓：以頭（橢球）＋口鼻＋身體的簡單 3D 模型旋轉 45° 後投影得到
+const F34 = cr([[78, 15], [92, 15.5], [101, 19], [105.5, 26], [107.5, 35], [109.5, 42], [113, 46], [115.8, 50.5], [115.2, 56], [111.8, 60.2],
+  [109, 64], [108.6, 71], [109.2, 81], [111, 96], [113, 118], [112.6, 142], [109, 160], [101, 170], [88, 173.4], [70, 173.4],
+  [55, 169], [46, 158], [42, 136], [43, 110], [46, 92], [47.6, 80], [47.2, 66], [48, 52], [49.5, 38], [53, 26], [60, 18.5], [69, 15.5]]);
+// 後 45 度：口鼻轉到頭後面被擋住，右緣只剩臉頰的毛
+const B34 = cr([[78, 15], [92, 15.5], [101, 19], [105.5, 26], [107.5, 35], [109, 44], [110.5, 52], [110.2, 60], [108.8, 68],
+  [109.2, 81], [111, 96], [113, 118], [112.6, 142], [109, 160], [101, 170], [88, 173.4], [70, 173.4],
+  [55, 169], [46, 158], [42, 136], [43, 110], [46, 92], [47.6, 80], [47.2, 66], [48, 52], [49.5, 38], [53, 26], [60, 18.5], [69, 15.5]]);
 
 function fur(n, x0, x1, seed0) {
   let seed = seed0 || 11; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647); let o = '';
@@ -127,9 +132,9 @@ function eye(x, y, id, o = {}) {
 }
 const CLAW = (x, y, ang, len = 3.6) => `<path transform="translate(${x} ${y}) rotate(${ang})" d="M-1 0 Q-.35 ${len * .62} .35 ${len} Q.85 ${len * .55} 1 0 Z" fill="#f6eddf" stroke="#6e5844" stroke-width=".35"/>`;
 const SIDEARMS = (id) => arm(id, [[103, 102], [106, 112], [110, 119], [115.5, 124]], -18, { thumb: -1, side: 1, fadeTo: .3 });
-const F34ARMS = (id) => arm(id, [[74, 103], [73, 113], [77, 122], [84, 127.5]], 10, { thumb: 1, side: -1 }) + arm(id, [[103, 104], [103, 114], [100, 122], [94.5, 127]], -8, { thumb: -1, side: 1, w2: 6.4 });
+const F34ARMS = (id) => arm(id, [[77, 104], [78, 113], [84, 121.5], [91.5, 127.5]], 12, { thumb: 1, side: -1, w2: 6.2 }) + arm(id, [[100, 104], [102, 113], [102, 121], [100.5, 127.5]], -4, { thumb: -1, side: 1 });
 const SIDECLAWS = () => [[119.5, 167.6, -80], [121.5, 170.3, -84], [121.6, 173, -90]].map(([x, y, a]) => CLAW(x, y, a, 3.2)).join('');
-const F34CLAWS = () => [[111.5, 180.4, -30], [115.2, 179.6, -45], [118.3, 177.4, -62]].map(([x, y, a]) => CLAW(x, y, a, 3.2)).join('');
+const F34CLAWS = () => [[105.5, 181.6, -28], [109.4, 181, -40], [112.6, 179, -55], [76.5, 179.6, -25], [80.2, 178.6, -40]].map(([x, y, a]) => CLAW(x, y, a, 3.1)).join('');
 
 const SHADE = (id, cx) => `
     <ellipse cx="${cx}" cy="19" rx="26" ry="9" fill="#7c6244" opacity=".5" filter="url(#b3${id})"/>
@@ -206,59 +211,76 @@ function back(id) {
 
 function f34(id) {
   return `<svg viewBox="0 0 160 196" xmlns="http://www.w3.org/2000/svg">${DEFS(id)}<clipPath id="c${id}"><path d="${F34}"/></clipPath>
-  <path d="M56 160 C42 164 28 166 16 166.5 C13 166.6 12.6 168.6 15.5 169 C30 170 44 169.6 58 167 Z" fill="url(#tl${id})"/>
-  <g filter="url(#fz${id})"><ellipse cx="62" cy="21.5" rx="6.5" ry="7.8" fill="#9a7a55"/><ellipse cx="62.6" cy="22.6" rx="4" ry="5.2" fill="#e5bb87"/></g>
-  <g filter="url(#fz${id})"><path d="M56 167 C52 174 55 180 64 180.5 C71 181 74 177 73 169 Z" fill="${FOOT}"/></g>
+  <!-- 尾巴往左後方沿地面拖 -->
+  <path d="M58 161 C46 165 32 168 18 168.6 C15 168.8 14.6 170.8 17.5 171.2 C32 172.2 46 171.6 60 168.6 Z" fill="url(#tl${id})"/>
+  <!-- 遠側耳（左，大半被頭擋住）、近側耳（往中間移，約 x90） -->
+  <g filter="url(#fz${id})"><ellipse cx="56" cy="21.5" rx="6.4" ry="7.8" fill="#9a7a55"/><ellipse cx="56.8" cy="22.6" rx="3.8" ry="5" fill="#e5bb87"/></g>
+  <g filter="url(#fz${id})"><ellipse cx="90" cy="19.5" rx="7" ry="8.2" fill="#b38a5e"/><ellipse cx="90.6" cy="20.6" rx="4.5" ry="5.6" fill="#f2c38c"/><ellipse cx="91.2" cy="21.8" rx="2.5" ry="3.4" fill="#8a7460"/></g>
+  <!-- 遠側腳（大半在身體後面） -->
+  <g filter="url(#fz${id})"><path d="M60 167 C68 166 78 168 84 173 C86 177 82 180 76 179.6 C68 179 61 176 58 172 Z" fill="${FOOT}"/></g>
   <path d="${F34}" fill="url(#bg${id})" filter="url(#fz${id})"/>
-  <g clip-path="url(#c${id})">${SHADE(id, 84)}
-    <ellipse cx="97" cy="60" rx="24" ry="14" fill="#dfa65e" opacity=".8" filter="url(#b3${id})"/>
-    <ellipse cx="101" cy="67" rx="11" ry="5.5" fill="#f3e2c4" opacity=".85" filter="url(#b3${id})"/>
-    <ellipse cx="90" cy="150" rx="27" ry="25" fill="#f0dcb9" opacity=".85" filter="url(#b3${id})"/>
-    <ellipse cx="54" cy="148" rx="12" ry="22" fill="#8a7258" opacity=".55" filter="url(#b3${id})"/>
-    ${fur(1050, 44, 122, 51)}
+  <g clip-path="url(#c${id})">
+    <ellipse cx="78" cy="19" rx="26" ry="9" fill="#7c6244" opacity=".45" filter="url(#b3${id})"/>
+    <!-- 遠側（左）較暗，近側（右）受光 -->
+    <ellipse cx="45" cy="100" rx="9" ry="70" fill="#76604a" opacity=".5" filter="url(#b3${id})"/>
+    <ellipse cx="99" cy="61" rx="20" ry="13" fill="#dfa65e" opacity=".85" filter="url(#b3${id})"/>
+    <ellipse cx="104" cy="67.5" rx="9" ry="5" fill="#f3e2c4" opacity=".9" filter="url(#b3${id})"/>
+    <ellipse cx="78" cy="80" rx="30" ry="6" fill="#68533e" opacity=".3" filter="url(#b3${id})"/>
+    <ellipse cx="96" cy="108" rx="13" ry="12" fill="#f0dcb9" opacity=".5" filter="url(#b3${id})"/>
+    <ellipse cx="92" cy="150" rx="26" ry="26" fill="#f0dcb9" opacity=".88" filter="url(#b3${id})"/>
+    <ellipse cx="52" cy="148" rx="11" ry="22" fill="#8a7258" opacity=".5" filter="url(#b3${id})"/>
+    <path d="${F34}" fill="none" stroke="#fff6e6" stroke-width="3" opacity=".3" filter="url(#b1${id})"/>
+    ${fur(1050, 42, 116, 51)}
   </g>
-  <g filter="url(#fz${id})"><ellipse cx="102" cy="20.5" rx="7" ry="8.2" fill="#b38a5e"/><ellipse cx="102" cy="21.6" rx="4.5" ry="5.6" fill="#f2c38c"/><ellipse cx="102.2" cy="22.8" rx="2.5" ry="3.4" fill="#8a7460"/></g>
-  <ellipse cx="84" cy="56" rx="7" ry="4" fill="#f0907c" opacity=".3" filter="url(#b1${id})"/><ellipse cx="108" cy="56" rx="5" ry="4" fill="#f0907c" opacity=".3" filter="url(#b1${id})"/>
-  <path d="M51 35 Q84 23.5 114 34.5 L113.5 28.5 Q84 17.5 51.5 29 Z" fill="${BAND}"/>
-  ${eye(79, 42, id)}
-  <g transform="translate(100.5 41.6) scale(.8 1) translate(-100.5 -41.6)">${eye(100.5, 41.6, id)}</g>
-  <ellipse cx="105" cy="54" rx="9" ry="7.4" fill="#3b2f26" opacity=".45" filter="url(#b1${id})"/>
-  <path d="M97.4 50.6 C97.6 45.8 112 46.4 112.6 50.8 C113 55.6 109.4 58.6 106.4 59.2 L105.6 59.6 L104.6 59.2 C101.2 58.6 97.2 55.4 97.4 50.6 Z" fill="url(#ns${id})"/>
-  <ellipse cx="101.6" cy="49" rx="2.8" ry="1.3" fill="#c9d6e6" opacity=".45"/>
-  <path d="M100.6 55.2 Q101.8 54 103 55.4 M107.6 55.4 Q108.8 54.2 110 55.2" fill="none" stroke="#000" stroke-width=".8" opacity=".65"/>
-  <path d="M105.4 59.6 V62 M95.5 58.6 Q99 65 102.8 64.2 Q104.6 63.6 105.4 62 Q106.2 63.6 107.6 64 Q110.4 64.6 112.6 59.2" fill="none" stroke="#2a211b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 頭帶繞頭，結在左後方看不到 -->
+  <path d="M49 35.5 Q78 24.5 108.6 33 L108 27 Q78 18 49.5 29.5 Z" style="fill: var(--band, #e5533d)"/>
+  <ellipse cx="86.5" cy="56.5" rx="6" ry="3.8" fill="#f0907c" opacity=".3" filter="url(#b1${id})"/><ellipse cx="110.5" cy="56" rx="4" ry="3.6" fill="#f0907c" opacity=".3" filter="url(#b1${id})"/>
+  <!-- 遠側眼較窄、近側眼完整 -->
+  <g transform="translate(81 42.6) scale(.78 1) translate(-81 -42.6)">${eye(81, 42.6, id)}</g>
+  ${eye(99, 42.2, id)}
+  <!-- 鼻子：往右前方突出，右側輪廓較尖 -->
+  <ellipse cx="104.5" cy="54" rx="8.4" ry="6.8" fill="#3b2f26" opacity=".4" filter="url(#b1${id})"/>
+  <path d="M97.4 50.4 C97.6 45.8 110.6 45.8 113.6 50 C115.4 53 113 57.4 109.6 58.6 L106 59.4 L104.4 59 C100.6 58.2 97.2 55 97.4 50.4 Z" fill="url(#ns${id})"/>
+  <ellipse cx="102.6" cy="48.8" rx="2.6" ry="1.2" fill="#d4dfec" opacity=".5"/>
+  <path d="M102.2 55 Q103.4 53.8 104.6 55.2 M109.2 55 Q110.6 53.8 111.8 54.8" fill="none" stroke="#000" stroke-width=".8" opacity=".6"/>
+  <!-- 招牌微笑：遠側嘴角較長、近側嘴角繞到臉頰 -->
+  <path d="M105.4 59.4 V62 M93.5 58.6 Q97.4 65 101.8 64.2 Q104.4 63.6 105.4 62 Q106.4 63.6 108.2 63.6 Q110.6 63.4 112 59" fill="none" stroke="#2a211b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
   ${F34ARMS(id)}
-  <g filter="url(#fz${id})"><path d="M88 167 C96 166 110 168 118 174 C121 177 118 181.5 112 181 C100 180.4 90 178 86 174 Z" fill="${FOOT}"/></g>
+  <!-- 近側腳：腳趾朝右前方 -->
+  <g filter="url(#fz${id})"><path d="M86 166 C96 165 108 168 114 174 C117 178 113 182 107 181.5 C97 181 88 178 84 174 Z" fill="${FOOT}"/></g>
   ${F34CLAWS()}
-  <path class="sniff-lines" display="none" d="M124 44 Q128 42 130 45 M125 50 Q130 49 132 52 M124 56 Q128 57 130 60" fill="none" stroke="#9aa0a8" stroke-width="1.2" stroke-linecap="round"/>
-  <path d="M110 179.8 Q112.4 181.4 114.4 179.6 M114.8 179 Q117 180 118.4 177.6" fill="none" stroke="#2f2620" stroke-width=".7"/>
+  <path class="sniff-lines" display="none" d="M120 44 Q124 42 126 45 M121 50 Q126 49 128 52 M120 56 Q124 57 126 60" fill="none" stroke="#9aa0a8" stroke-width="1.2" stroke-linecap="round"/>
   </svg>`;
 }
-
 
 function b34(id) {
-  return `<svg viewBox="0 0 160 196" xmlns="http://www.w3.org/2000/svg">${DEFS(id)}<clipPath id="c${id}"><path d="${F34}"/></clipPath>
-  <path d="M119 50.5 C121.6 50.4 122.6 54.4 120.4 56 C119 56.8 117.6 55 118 52.5 Z" fill="#1a1a1d"/>
-  <g filter="url(#fz${id})"><ellipse cx="62" cy="21.5" rx="7" ry="8" fill="#93744f"/><ellipse cx="102" cy="20.5" rx="6.6" ry="7.8" fill="#8d6f4f"/></g>
-  <g filter="url(#fz${id})"><ellipse cx="98" cy="172" rx="12" ry="5" fill="#43372d"/></g>
-  <path d="${F34}" fill="url(#bk${id})" filter="url(#fz${id})"/>
+  return `<svg viewBox="0 0 160 196" xmlns="http://www.w3.org/2000/svg">${DEFS(id)}<clipPath id="c${id}"><path d="${B34}"/></clipPath>
+  <!-- 耳背：近側往中間（x90）、遠側在左 -->
+  <g filter="url(#fz${id})"><ellipse cx="56" cy="21.5" rx="7" ry="8" fill="#93744f"/><ellipse cx="90" cy="19.5" rx="6.6" ry="7.8" fill="#8d6f4f"/></g>
+  <!-- 腳：腳跟在身體下方，近側腳的腳趾從右下方露出來 -->
+  <g filter="url(#fz${id})"><path d="M80 168 C92 167 106 170 116 175 C118 178 114 180 108 179.6 C96 179 86 177 80 175 Z" fill="${FOOT}"/></g>
+  <path d="${B34}" fill="url(#bk${id})" filter="url(#fz${id})"/>
   <g clip-path="url(#c${id})">
-    <ellipse cx="74" cy="50" rx="28" ry="26" fill="#b07f52" opacity=".45" filter="url(#b3${id})"/>
-    <ellipse cx="72" cy="120" rx="6" ry="45" fill="#68533e" opacity=".35" filter="url(#b3${id})"/>
-    <ellipse cx="112" cy="70" rx="7" ry="16" fill="#c49a68" opacity=".55" filter="url(#b3${id})"/>
-    <ellipse cx="108" cy="140" rx="10" ry="30" fill="#d2bf9e" opacity=".6" filter="url(#b3${id})"/>
-    <ellipse cx="56" cy="148" rx="16" ry="22" fill="#ad9878" opacity=".6" filter="url(#b3${id})"/><ellipse cx="94" cy="150" rx="17" ry="22" fill="#ad9878" opacity=".55" filter="url(#b3${id})"/>
-    <ellipse cx="47" cy="120" rx="6" ry="40" fill="#78614a" opacity=".45" filter="url(#b3${id})"/>
-    ${fur(1050, 44, 122, 63)}
+    <ellipse cx="70" cy="50" rx="28" ry="26" fill="#b07f52" opacity=".45" filter="url(#b3${id})"/>
+    <!-- 背中線在左側（約 x60），右緣露出一點臉頰與腹部的淺色 -->
+    <ellipse cx="60" cy="118" rx="6" ry="46" fill="#68533e" opacity=".38" filter="url(#b3${id})"/>
+    <ellipse cx="111" cy="66" rx="6" ry="13" fill="#dfa65e" opacity=".55" filter="url(#b3${id})"/>
+    <ellipse cx="110" cy="140" rx="8" ry="28" fill="#d2bf9e" opacity=".6" filter="url(#b3${id})"/>
+    <ellipse cx="52" cy="148" rx="15" ry="22" fill="#ad9878" opacity=".55" filter="url(#b3${id})"/><ellipse cx="90" cy="150" rx="17" ry="22" fill="#ad9878" opacity=".5" filter="url(#b3${id})"/>
+    <ellipse cx="45" cy="120" rx="6" ry="40" fill="#78614a" opacity=".45" filter="url(#b3${id})"/>
+    ${fur(1050, 42, 114, 63)}
   </g>
-  <path d="M51 30 Q74 36 114 30 L113.5 24.5 Q74 30 51.5 24.5 Z" fill="${BAND}"/>
-  <path d="M66 33 Q63 42 59 48 L62 49 Q66 43 69 34 Z M72 33 Q75 42 79 48 L76 49 Q72 43 69 34 Z" fill="#c9432f"/>
-  <ellipse cx="69" cy="32.6" rx="3.4" ry="2.8" fill="#d24a35"/>
-  <g filter="url(#fz${id})"><ellipse cx="62" cy="173" rx="11" ry="5" fill="#43372d"/></g>
-  <path d="M68 150 C66 160 62 170 54 179 C51.6 181.6 54 184 57 182 C66 174 71 162 73 151 Z" fill="url(#tl${id})"/>
+  <!-- 頭帶背面：結在後腦正中（投影到約 x62） -->
+  <path d="M49.5 31 Q66 37 108.6 30 L108 24.5 Q66 31 50 25 Z" style="fill: var(--band, #e5533d)"/>
+  <path d="M59 34 Q56 43 52 49 L55 50 Q59 44 62 35 Z M65 34 Q68 43 72 49 L69 50 Q65 44 62 35 Z" fill="#c9432f"/>
+  <ellipse cx="62" cy="33.4" rx="3.4" ry="2.8" fill="#d24a35"/>
+  <!-- 腳跟 -->
+  <g filter="url(#fz${id})"><ellipse cx="57" cy="172.5" rx="10" ry="5" fill="#43372d"/><ellipse cx="82" cy="173" rx="10" ry="5" fill="#43372d"/></g>
+  ${[[112.2, 178.4, -62], [115.4, 176.6, -75]].map(([x, y, a]) => CLAW(x, y, a, 3)).join('')}
+  <!-- 尾巴：從臀部往左前方（朝觀者）沿地面拖出 -->
+  <path d="M62 152 C58 162 46 172 26 177.5 C23 178.4 23.4 181 26.6 180.6 C48 177 62 168 67 154 Z" fill="url(#tl${id})"/>
   </svg>`;
 }
-
 
 // ---------------------------------------------------------------------------
 // 正面（分層）：所有可切換的部件都在同一張 SVG，預設隱藏者帶 display="none"，
