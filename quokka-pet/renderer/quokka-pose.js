@@ -93,7 +93,7 @@
   }
 
   // ---- 輪廓：逐列取橢圓聯集、平滑；回傳路徑與幾撮沿輪廓往外下方翹的短毛 ----------------
-  function union(E) {
+  function union(E, noTuft) {
     let y0 = Infinity, y1 = -Infinity;
     E.forEach((e) => { y0 = Math.min(y0, e.cy - e.ry); y1 = Math.max(y1, e.cy + e.ry); });
     const rows = [];
@@ -116,7 +116,7 @@
     const n = pts.length;
     for (let i = 2; i < n - 2; i++) {
       const p = pts[i], hsh = Math.abs(Math.sin((Math.round(p[1] / 3) * 12.9898 + (p[0] > (Ls[0] + Rs[0]) / 2 ? 7.1 : 3.3)) * 43758.5453)) % 1;
-      if (hsh > .3 || p[1] > bot - 10) continue;
+      if (hsh > .3 || p[1] > bot - 10 || (noTuft && noTuft(p))) continue;
       const a = pts[i - 1], b = pts[i + 1];
       let tx = b[0] - a[0], ty = b[1] - a[1]; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
       const nx = ty, ny = -tx, len = 2 + hsh * 6;        // 點順時針排列 → 外側法向量
@@ -311,7 +311,10 @@
       return { cx: q.X, cy: q.Y, rx: Math.hypot(rx * T.k * c, rzE * s), ry: ryE };
     };
     const parts = I.q3();
-    const U = union(parts.map(ell)), bodyD = U.d;
+    const EL = parts.map(ell);
+    // 口鼻一帶毛短：輪廓上不長翹毛（側面的鼻尖、下巴才不會像長了刺）
+    const muzE = EL.filter((e, i) => ['snout', 'snoutTip', 'jaw'].includes(parts[i][0]));
+    const U = union(EL, (p) => muzE.some((e) => ((p[0] - e.cx) / (e.rx + 3)) ** 2 + ((p[1] - e.cy) / (e.ry + 3)) ** 2 < 1)), bodyD = U.d;
     const facingH = (n) => I.facing(rotY(n, T.yaw, [0, 0, 0]), th);
     const out = { back: [], feet: [], body: [], front: [] };
 
@@ -451,7 +454,7 @@
       const mf = 0.3 + 0.7 * aC;
       // 嘴：各點都在口鼻表面上；張嘴類的中心隨轉頭往回收，並裁在輪廓內
       const mc0 = PH([0, 63, 29 - 7 * aS]), mc = { X: mc0.X, Y: mc0.Y };
-      const mp = [[-9, 60, 22], [-4.4, 64, 30], [0, 62.2, 34.5], [4.4, 64, 30], [9, 60, 22]].map((p) => ({ q: PH(p), f: facingH([p[0] / 20, 0, 1]) })).filter((m) => m.f > 0.6);
+      const mp = [[-9, 60, 22], [-4.4, 64, 30], [0, 62.2, 34.5], [4.4, 64, 30], [9, 60, 22]].map((p) => ({ q: PH(p), f: facingH([p[0] / 20, 0, 1]), far: p[0] * sH > 0 })).filter((m) => m.f > (m.far ? 0.6 : -0.1));
       const smile = mp.length > 1 ? `<path d="M${f1(mp[0].q.X)} ${f1(mp[0].q.Y)} ${mp.slice(1).map((m, i) => { const a = mp[i].q, bq = m.q; return 'Q' + f1((a.X + bq.X) / 2) + ' ' + f1(Math.max(a.Y, bq.Y) + 1.2) + ' ' + f1(bq.X) + ' ' + f1(bq.Y); }).join(' ')}" fill="none" stroke="#2a211b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>` : '';
       // 人中：轉到側面就淡出（|sin|>0.8 不畫），不會變成往下滴的黑線
       const mTop = PH([0, 62.2, 34.5]), pOp = clamp(1 - aS / .8, 0, 1);

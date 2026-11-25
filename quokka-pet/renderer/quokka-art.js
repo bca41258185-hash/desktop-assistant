@@ -62,7 +62,7 @@ function paw(id, x, y, ang, s = 1, o = {}) {
   if (o.palm) {
     return `<g transform="translate(${x} ${y}) rotate(${ang}) scale(${s})">
     <ellipse cx="0" cy="2.2" rx="5" ry="4.8" fill="#4a3a2e" opacity=".22" transform="translate(.5 .9)" filter="url(#b1${id})"/>
-    ${[-3.1, 0, 3.1].map((fx, i) => `<ellipse cx="${fx}" cy="${i === 1 ? 6.3 : 5.4}" rx="1.55" ry="1.9" fill="#7a5c40"/>`).join('')}
+    ${[-3.1, 0, 3.1].map((fx, i) => `<ellipse cx="${fx}" cy="${i === 1 ? 6.3 : 5.4}" rx="1.55" ry="1.9" fill="#785b40"/>`).join('')}
     <ellipse cx="0" cy="2" rx="4.5" ry="4.3" fill="url(#pw${id})"/>
     <ellipse cx="0" cy="1.6" rx="2.5" ry="2.1" fill="#c9988a" opacity=".85"/>
     ${[-3, 0, 3].map((fx, i) => `<circle cx="${fx}" cy="${i === 1 ? 5.9 : 5.1}" r=".95" fill="#c9988a" opacity=".85"/>`).join('')}
@@ -76,14 +76,14 @@ function paw(id, x, y, ang, s = 1, o = {}) {
   }).join('');
   return `<g transform="translate(${x} ${y}) rotate(${ang}) scale(${s})">
     <ellipse cx="0" cy="3.4" rx="4.2" ry="4.4" fill="#4a3a2e" opacity=".2" transform="translate(.5 .9)" filter="url(#b1${id})"/>
-    ${o.thumb ? `<ellipse cx="${o.thumb * 3.5}" cy="3.4" rx="1.2" ry="1.7" fill="#5e4632"/>` : ``}
+    ${o.thumb ? `<ellipse cx="${o.thumb * 3.5}" cy="3.4" rx="1.2" ry="1.7" fill="#5c4531"/>` : ``}
     <ellipse cx="0" cy="3" rx="3.7" ry="3.9" fill="url(#pw${id})"/>
     ${fingers}
     <ellipse cx="-.9" cy="2" rx="1.6" ry="1.1" fill="#d8bd98" opacity=".3" filter="url(#b1${id})"/>
   </g>`;
 }
 function handDefs(id) {
-  return `<linearGradient id="pw${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#88633f"/><stop offset=".55" stop-color="#7a5c40"/><stop offset="1" stop-color="#5e4632"/></linearGradient>
+  return `<linearGradient id="pw${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#86623f"/><stop offset=".55" stop-color="#785b40"/><stop offset="1" stop-color="#5c4531"/></linearGradient>
   <linearGradient id="am${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#88633f"/><stop offset=".45" stop-color="#ad8455"/><stop offset="1" stop-color="#7a5838"/></linearGradient>`;
 }
 // 彎曲的手臂：沿三次貝茲曲線（肩→外推的手肘→往內收的手腕）取樣，寬度在手肘處略鼓，再接前爪

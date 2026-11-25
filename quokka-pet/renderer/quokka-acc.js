@@ -381,7 +381,7 @@
       out.push({ z: D.Z, svg: D.svg });
       // 鏡腳：從鏡框外緣沿頭側到耳朵前面
       if (H.face([k, 0, 0]) > .15) {
-        const tp = [[k * 21.6, 42.4, 24.6], [k * 27, 41.8, 17.5], [k * 30.6, 41.2, 9], [k * 31.6, 40.6, 2]];
+        const tp = [[k * 21.6, 42.4, 24.6], [k * 27, 41.8, 17.5], [k * 30.4, 41.2, 10]];
         const vis = tp.map((p) => !H.hid(add(p, mul(headN(p), 1.6))));
         runs(vis, false).forEach((r) => {
           const xy = r.idx.map((i) => H.xy(tp[i]));

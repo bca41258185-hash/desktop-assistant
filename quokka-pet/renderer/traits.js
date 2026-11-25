@@ -263,11 +263,13 @@
   function shape(t) {
     if (!t) return null;
     const R = RANGES[t.sex] || RANGES.male;
-    const widthK = clamp(1 + (t.condition - 1) * 0.85, 0.9, 1.13);
+    // 胖瘦與耳朵大小的個體差異要在桌面大小（約 170px 高）也看得出來，所以把係數放大
+    const widthK = clamp(1 + (t.condition - 1) * 1.3, 0.86, 1.18);
+    const earK = clamp(1 + ((t.earK || 1) - 1) * 1.9, 0.85, 1.15);
     // 畫面大小：最小的亞成體約 0.84、最大的公成體約 1.06
     const sizeK = clamp(lerp(0.88, 1.06, (t.lengthCm - 39) / 15), 0.82, 1.06);
     const tailK = clamp((t.tailCm / t.lengthCm) / 0.58, 0.86, 1.14);
-    return { widthK, sizeK, tailK, earK: t.earK || 1, cheekK: t.cheekK || 1, juvenile: t.stage === 'juvenile', R };
+    return { widthK, sizeK, tailK, earK, cheekK: t.cheekK || 1, juvenile: t.stage === 'juvenile', R };
   }
 
   // 毛色換算：只改「毛」的顏色（身體、背、尾、耳、手腳、陰影），眼睛、鼻子、頭帶、腮紅、道具都不動
@@ -276,6 +278,8 @@
     '#7a5838', '#a08066', '#d8bd98', '#5a4232', '#4a3a2e', '#5a4a3d', '#4a3b30'];
   const FUR_LIGHT = ['#f0dcb9', '#f3e2c4', '#8a7460'];
   const FUR_RUFOUS = ['#dfa65e', '#f2c38c'];
+  // 手掌與腳掌：跟著毛色變，但明度位移比身體大（深棕個體的手腳比身體更深、淺沙個體更淺），不會和身體糊成同一色
+  const FUR_EXT = ['#6b5847', '#86623f', '#785b40', '#5c4531'];
   function hex2hsl(h) {
     const n = parseInt(h.slice(1), 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
     const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
@@ -297,14 +301,17 @@
     const tf = (c, kind) => {
       let [h, s, l] = hex2hsl(c);
       if (kind === 'light') { h += F.dh * 0.5; s *= 1 + (F.sat - 1) * 0.5; l += F.dl * 0.4 + F.bellyLight; }
-      else if (kind === 'rufous') { h += F.dh * 0.6 - 4 * (F.rufous - 0.2); s *= (1 + (F.sat - 1) * 0.5) * (1 + 0.12 * (F.rufous - 0.2)); l += F.dl * 0.8; }
+      else if (kind === 'rufous') { h += F.dh * 0.6 - 4 * (F.rufous - 0.2); s *= (1 + (F.sat - 1) * 0.5) * (0.9 - 0.2 * Math.max(0, F.rufous - 0.3)); l += F.dl * 0.8; }
+      else if (kind === 'ext') { h += F.dh; s *= F.sat * 0.8; l += F.dl * 1.3 - (F.dl < -0.05 ? 0.03 : 0); }
       else { h += F.dh; s *= F.sat; l += F.dl * (1 - Math.abs(2 * l - 1) * 0.5); }
-      s *= 1 - grey; l += grey * 0.25 * (0.75 - l);
+      // 年長：身體只去掉一半彩度（整隻灰紫會像生病）；「先白」的口鼻與眼睛上方由 quokka-pose.js 另外畫
+      s *= 1 - grey * 0.5; l += grey * 0.25 * (0.75 - l);
       return hsl2hex(h, s, l);
     };
     FUR_BODY.forEach((c) => { map[c] = tf(c, 'body'); });
     FUR_LIGHT.forEach((c) => { map[c] = tf(c, 'light'); });
     FUR_RUFOUS.forEach((c) => { map[c] = tf(c, 'rufous'); });
+    FUR_EXT.forEach((c) => { map[c] = tf(c, 'ext'); });
     return map;
   }
   function recolor(svg, t) {
