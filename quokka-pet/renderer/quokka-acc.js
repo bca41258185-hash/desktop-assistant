@@ -181,6 +181,9 @@
   }
   // 頭部橢球表面法向量
   const headN = (p) => norm([p[0] / (31 * 31), (p[1] - 45) / (30 * 30), (p[2] + 2) / (25 * 25)]);
+  // 繞頭一圈的東西（頭帶、花冠）用「水平徑向」法向量判斷朝前那半圈：在頭部局部座標裡算、經頭的旋轉後看朝向，
+  // 永遠剛好是半圈，頭歪再大也不會變成整圈光環（畫出來的頭輪廓本身不會露出頭頂，所以不能多畫）
+  const radialN = (p) => norm([p[0] / (31 * 31), 0, (p[2] + 2) / (25 * 25)]);
 
   // ===================================================================================
   // 各飾品
@@ -189,8 +192,8 @@
   // 頭帶：沿頭部截面一圈，只畫朝前那半；背後有結
   function band(H, L, ctx, col) {
     const id = ctx.id, w = 6.4 * ctx.hs, pts = [], ns = [];
-    for (let i = 0; i < 72; i++) { const a = i / 72 * Math.PI * 2; const p = [27.6 * Math.sin(a), 30 - 2.4 * Math.cos(a), -2 + 22.4 * Math.cos(a)]; pts.push(p); ns.push(headN(p)); }
-    ringRuns(H, pts, ns, { off: 1.5 }).forEach((r) => {
+    for (let i = 0; i < 72; i++) { const a = i / 72 * Math.PI * 2; const p = [27.6 * Math.sin(a), 30 - 2.4 * Math.cos(a), -2 + 22.4 * Math.cos(a)]; pts.push(p); ns.push(radialN(p)); }
+    ringRuns(H, pts, ns, { faceOnly: true }).forEach((r) => {
       const d = pathOpen(r.xy);
       L.front.push(`<path d="${d}" fill="none" stroke="#4a3a2e" stroke-width="${f1(w + 1)}" opacity=".2" transform="translate(0 1.2)" filter="url(#b1${id})"/>
         <path d="${d}" fill="none" ${STROKE(col)} stroke-width="${f1(w)}" stroke-linejoin="round"/>
@@ -198,7 +201,7 @@
         <path d="${d}" fill="none" stroke="#2a1d14" stroke-width="${f1(w * .25)}" opacity=".14" transform="translate(0 2.2)" filter="url(#acB${id})"/>`);
     });
     const kc = [0, 31, -27.5];
-    if (!H.hid(add(kc, [0, 0, -1.5]))) {
+    if (H.face([0, 0, -1]) > 0) {
       const k = decal(H, kc, [0, 0, -1], (front) => `
         <path d="M-2.6 1 Q-6 10 -10.5 16 L-7 17 Q-3 11 0 2 Z M2.6 1 Q6 10 10.5 16 L7 17 Q3 11 0 2 Z" fill="#4a3a2e" opacity=".2" transform="translate(.6 1.2)" filter="url(#b1${id})"/>
         <path d="M-2.6 1 Q-6 10 -10.5 16 L-7 17 Q-3 11 0 2 Z M2.6 1 Q6 10 10.5 16 L7 17 Q3 11 0 2 Z" ${FILL(col)}/>
@@ -403,8 +406,11 @@
         ${[5, 13, 21].filter((y) => y < len - 2).map((y) => `<rect x="-4.3" y="${y}" width="8.9" height="3.6" fill="#fbf3e4" opacity=".75"/>`).join('')}
         <path d="M-4.2 0 L4.2 0 L4.6 ${len} L-3.8 ${len} Z" fill="url(#acD${id})" opacity=".8"/>
         <path d="${[-3, -1.5, 0, 1.5, 3, 4.2].map((x2) => `M${x2} ${len} l${f1(x2 * .06)} 3.2`).join(' ')}" ${STROKE(col)} stroke-width="1.1" stroke-linecap="round"/></g>`;
-    const D = decal(B, c, n, () => `${tail(2.2, -6, 26)}${tail(-1.6, 9, 21)}<ellipse cx="0" cy="0" rx="6" ry="4.6" ${FILL(col)} filter="url(#fz${id})"/><ellipse cx="0" cy="0" rx="6" ry="4.6" fill="url(#acV${id})"/>`, { minW: .5 });
-    const tailsHidden = B.hid(add(c, mul(norm(n), 3)));
+    const down = norm([0, 1, .38]);                     // 尾巴順著胸口的弧度往前垂
+    const D = decal(B, c, n, () => `${tail(2.2, -6, 26)}${tail(-1.6, 9, 21)}<ellipse cx="0" cy="0" rx="6" ry="4.6" ${FILL(col)} filter="url(#fz${id})"/><ellipse cx="0" cy="0" rx="6" ry="4.6" fill="url(#acV${id})"/>`, { minW: .5, down });
+    // 上端或中段任一被身體擋住 → 整條放後層，由身體輪廓遮住
+    // 尾巴貼著胸口：背對觀者時也放後層（只露出輪廓外的部分）
+    const tailsHidden = B.face(n) < .1 || B.hid(add(c, mul(norm(n), 3))) || B.hid(add(add(c, mul(down, 14)), mul(norm(n), 3)));
     if (tailsHidden) L.back.push(D.svg);
     L.front.push(ring + (tailsHidden ? '' : D.svg));
   }
@@ -425,7 +431,7 @@
       const D = decal(B, p, [0, .2, 1], () => '<circle r="1.25" fill="#fbf3e4" opacity=".9"/>', {});
       return D.svg;
     }).join('');
-    const vis = !B.hid(add(cen, [0, 0, 3]));
+    const vis = B.face([0, .2, 1]) > .1 && !B.hid(add(cen, [0, 0, 3]));
     const cloth = `<path d="${d}" fill="#2a1d14" opacity=".22" transform="translate(0 2)" filter="url(#b1${id})"/>
       <path d="${d}" ${FILL(col)} stroke-width="1.6" ${STROKE(col)} stroke-linejoin="round" filter="url(#acZ${id})"/>
       ${dots}<path d="${d}" fill="url(#acD${id})" opacity=".9"/>
@@ -455,23 +461,24 @@
   function wreath(H, L, ctx, col) {
     const id = ctx.id, N = 72, pts = [], ns = [];
     const at = (a) => { const y = 22.5 + 2.8 * Math.cos(a), k = Math.sqrt(Math.max(0, 1 - ((y - 45) / 30) ** 2)); return [31 * k * 1.05 * Math.sin(a), y, -2 + 25 * k * 1.05 * Math.cos(a)]; };
-    for (let i = 0; i < N; i++) { const a = i / N * Math.PI * 2, p = at(a); pts.push(p); ns.push(headN(p)); }
-    const twig = ringRuns(H, pts, ns, { off: 1 }).map((r) => `<path d="${pathOpen(r.xy)}" fill="none" stroke="#2a1d14" stroke-width="2.4" opacity=".16" transform="translate(0 1.2)" filter="url(#acB${id})"/><path d="${pathOpen(r.xy)}" fill="none" stroke="#8a7a5c" stroke-width="1.5"/>`).join('');
+    for (let i = 0; i < N; i++) { const a = i / N * Math.PI * 2, p = at(a); pts.push(p); ns.push(radialN(p)); }
+    const twig = ringRuns(H, pts, ns, { faceOnly: true }).map((r) => `<path d="${pathOpen(r.xy)}" fill="none" stroke="#2a1d14" stroke-width="2.4" opacity=".16" transform="translate(0 1.2)" filter="url(#acB${id})"/><path d="${pathOpen(r.xy)}" fill="none" stroke="#8a7a5c" stroke-width="1.5"/>`).join('');
     const items = [];
     const leafP = 'M0 0 C2.3 2.6 2.4 8 0 11.5 C-2.4 8 -2.3 2.6 0 0 Z';
     for (let i = 0; i < 18; i++) {
-      const a = (i / 18) * Math.PI * 2 + .08, p = at(a), n = headN(p), t = norm(sub(at(a + .05), at(a - .05)));
+      // 葉面朝外略往上（像花冠立在頭上），不完全貼平；頭往後仰時才不會變成一條線
+      const a = (i / 18) * Math.PI * 2 + .08, p = at(a), n = norm(add(radialN(p), mul(headN(p), .5))), t = norm(sub(at(a + .05), at(a - .05)));
       const tw = i % 2 ? .7 : -.7;
       const down = norm(add(t, mul(norm(cross(n, t)), tw)));
       const c2 = add(p, mul(n, 1));
-      const D = decal(H, c2, n, () => `<path d="${leafP}" fill="#4a3a2e" opacity=".2" transform="translate(.5 .9)" filter="url(#acB${id})"/><path d="${leafP}" fill="url(#acL${id})" filter="url(#acZ${id})"/><path d="M0 1 Q.3 5.5 0 10" fill="none" stroke="#eef3e6" stroke-width=".6" opacity=".75"/>`, { down, s: 1.05 });
-      items.push({ hid: H.hid(add(p, mul(n, 2))), z: D.Z, svg: D.svg });
+      const D = decal(H, c2, n, () => `<path d="${leafP}" fill="#4a3a2e" opacity=".2" transform="translate(.5 .9)" filter="url(#acB${id})"/><path d="${leafP}" fill="url(#acL${id})" filter="url(#acZ${id})"/><path d="M0 1 Q.3 5.5 0 10" fill="none" stroke="#eef3e6" stroke-width=".6" opacity=".75"/>`, { down, s: 1.05, minW: .35 });
+      items.push({ hid: H.face(radialN(p)) < 0, z: D.Z, svg: D.svg });
     }
     [-1.15, -.45, .25, .95, 2.6].forEach((a, i) => {
-      const p = add(at(a), mul(headN(at(a)), 1.8)), n = headN(at(a));
+      const p = add(at(a), mul(headN(at(a)), 1.8)), n = norm(add(radialN(at(a)), mul(headN(at(a)), .5)));
       const pet = [0, 72, 144, 216, 288].map((r) => `<ellipse cx="0" cy="-2.3" rx="1.7" ry="2.4" transform="rotate(${r})" ${FILL(col)}/>`).join('');
       const D = decal(H, p, n, () => `<circle r="4" fill="#4a3a2e" opacity=".2" transform="translate(.5 .8)" filter="url(#acB${id})"/>${pet}<circle r="3.8" fill="url(#acP${id})"/><circle r="1.2" fill="#f4d35e"/>`, { s: 1 + (i % 2) * .15 });
-      items.push({ hid: H.hid(add(p, mul(n, 1))), z: D.Z + 1, svg: D.svg });
+      items.push({ hid: H.face(radialN(p)) < 0, z: D.Z + 1, svg: D.svg });
     });
     items.sort((a, b) => a.z - b.z);
     L.back.push(items.filter((q) => q.hid).map((q) => q.svg).join(''));
@@ -512,7 +519,7 @@
 
   // 貝雷帽：扁圓、往右歪戴，頂上一根小短梗
   function beret(H, L, ctx, col) {
-    const id = ctx.id, C = child(H, place([3.5, 15.5, -3], -6, 13, 0)), rx = 24.5, ry = 6.8, rz = 22;
+    const id = ctx.id, C = child(H, place([3.5, 15, -3], -6, 13, 0)), rx = 25, ry = 8.2, rz = 22.5;
     const pts = [];
     for (let i = 0; i < 36; i++) for (let j = -6; j <= 6; j++) { const a = i / 36 * Math.PI * 2, e = j / 6 * Math.PI / 2; pts.push([rx * Math.cos(e) * Math.sin(a), -ry * Math.sin(e) - (j < 0 ? 0 : 0), rz * Math.cos(e) * Math.cos(a)]); }
     const d = blob(C, pts);
@@ -536,7 +543,7 @@
   // 沒有資料時預設頭帶（舊存檔）；'none'／false／[] 表示不戴
   function resolve(spec, traits) {
     if (spec === undefined || spec === null) spec = traits && traits.accessory;
-    if (spec === undefined || spec === null) return [{ type: 'band', color: traits && traits.band }];
+    if (spec === undefined || spec === null) return [{ type: 'band', color: (traits && traits.band) || undefined }];
     if (spec === false || spec === 'none') return [];
     const list = [];
     const push = (s) => {

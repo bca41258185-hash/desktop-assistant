@@ -333,6 +333,26 @@ function configure(traits) {
   TAILK = sh.tailK; EARK = sh.earK;
 }
 const paint = (svg) => (TRAITS && TR() ? TR().recolor(svg, TRAITS) : svg);
+// 飾品（quokka-acc.js）：靜態方位圖與分層正面也畫同一件飾品；模組沒載入時退回舊的頭帶
+const ACCM = () => (typeof window !== 'undefined' && window.QuokkaAcc) ? window.QuokkaAcc
+  : (typeof require === 'function' ? require('./quokka-acc.js') : null);
+const HEAD_PARTS = new Set(['head', 'cheekL', 'cheekR', 'snout', 'snoutTip']);
+function accLayers(th, id) {
+  const M = ACCM();
+  if (!M) return null;
+  const P = (p) => q3proj(p, th);
+  const L = M.draw(M.resolve(undefined, TRAITS), {
+    id, th, PH: P, PB: P, hs: 1,
+    head: Q3.filter((p) => HEAD_PARTS.has(p[0])).map((p) => p.slice(1)),
+    body: Q3.filter((p) => !HEAD_PARTS.has(p[0])).map((p) => p.slice(1))
+  });
+  // 靜態圖的耳朵畫在身體輪廓之前：比耳朵遠的耳邊飾品跟耳朵一起排序（會被頭擋住），比耳朵近的畫在身體之後
+  const earZ = Math.max(P([-22, 19, -12]).Z, P([22, 19, -12]).Z);
+  return {
+    defs: M.defs(id), back: L.back.join(''), front: L.front.join(''), top: L.top.join(''), earsOver: L.earsOver,
+    earBehind: L.ear.filter((e) => e.z < earZ), earFront: L.ear.filter((e) => e.z >= earZ).map((e) => e.svg).join('')
+  };
+}
 const rad = (a) => a * Math.PI / 180;
 function q3proj(p, th) {
   const c = Math.cos(rad(th)), s = Math.sin(rad(th));
@@ -372,11 +392,13 @@ function q3render(th, id, opts = {}) {
     tailFront = P([0, 165, -45]).Z > 0;
   }
   // 耳朵：圓而大、在頭頂偏後；朝前時露出淺色內耳
-  const ears = [-1, 1].map((k) => {
+  const earList = [-1, 1].map((k) => {
     const q = P([k * 22, 19, -12]), f = q3facing([k * .3, 0, 1], th), w = 9 * (0.5 + 0.5 * Math.abs(f));
     const inner = f > 0.15 ? `<ellipse cx="${f1(q.X)}" cy="20.6" rx="${f1(w * .62)}" ry="6.8" fill="#f2c38c"/><ellipse cx="${f1(q.X)}" cy="21.8" rx="${f1(w * .35)}" ry="4" fill="#8a7460"/>` : '';
-    return `<g class="ear" filter="url(#fz${id})" transform="translate(${f1(q.X)} 27) scale(${EARK}) translate(${f1(-q.X)} -27)"><ellipse cx="${f1(q.X)}" cy="19" rx="${f1(w)}" ry="10.5" fill="${f > 0 ? '#b38a5e' : '#93744f'}"/>${inner}</g>`;
-  }).join('');
+    return { z: q.Z, svg: `<g class="ear" filter="url(#fz${id})" transform="translate(${f1(q.X)} 27) scale(${EARK}) translate(${f1(-q.X)} -27)"><ellipse cx="${f1(q.X)}" cy="19" rx="${f1(w)}" ry="10.5" fill="${f > 0 ? '#b38a5e' : '#93744f'}"/>${inner}</g>` };
+  });
+  const acc = opts.front ? null : accLayers(th, id);
+  const ears = earList.concat(acc ? acc.earBehind : []).sort((a, b) => a.z - b.z).map((e) => e.svg).join('');
   // 腳：長腳掌，腳尖有小爪子
   const feet = [-1, 1].map((k) => {
     const heel = P([k * 18, 172, -10]), toe = P([k * 18, 173, 30]), fr = Math.abs(c);
@@ -430,10 +452,11 @@ function q3render(th, id, opts = {}) {
   const feetB = feet.filter((q) => q.z < 0).map((q) => q.svg).join(''), feetF = feet.filter((q) => q.z >= 0).map((q) => q.svg).join('');
   return `<svg viewBox="0 0 160 196" class="view-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${DEFS(id).replace(/<linearGradient id="bg[^>]*>/, `<linearGradient id="bg${id}" gradientUnits="userSpaceOnUse" x1="0" y1="14" x2="0" y2="176">`)}
   <clipPath id="c${id}"><path d="${outline}"/></clipPath>
-  ${tailFront ? '' : tail}${feetB}${ears}
+  ${acc ? `<defs>${acc.defs}</defs>` : ''}
+  ${tailFront ? '' : tail}${feetB}${acc ? acc.back : ''}${acc && acc.earsOver ? '' : ears}
   ${body}
   ${feetF}${tailFront ? tail : ''}
-  ${band}${knot}${face.join('')}${arms}
+  ${acc ? acc.front + acc.earFront + (acc.earsOver ? ears : '') : band + knot}${face.join('')}${acc ? acc.top : ''}${arms}
 </svg>`;
 }
 
@@ -453,8 +476,12 @@ function frontLayered(id) {
   }).join('');
   const REST_L = [[64.5, 103], [64, 113], [68, 122], [75, 127.5]];
   const mir = (P) => P.map(([x, y]) => [160 - x, y]);
+  // 飾品（正面 θ=0）；耳朵後面的小花跟耳朵一起畫，其餘在頭帶的位置；眼鏡放進 .face 跟著眼睛動
+  const acc = accLayers(0, id);
+  const earsSvg = (acc ? acc.earBehind.filter((e) => e.z < -12).map((e) => e.svg).join('') : '') + ear('ear-l', 58) + ear('ear-r', 102) + (acc ? acc.earBehind.filter((e) => e.z >= -12).map((e) => e.svg).join('') : '');
+  const bandSvg = `<path class="band" d="M49.5 34 Q80 25 110.5 34 L110 28 Q80 19 50 28 Z" style="fill: var(--band, #e5533d)"/>`;
   return `<svg viewBox="0 0 160 196" class="char-svg view-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${DEFS(id)}
-  <defs>
+  <defs>${acc ? acc.defs : ''}
     <clipPath id="c${id}"><path d="${FO}"/></clipPath>
     <radialGradient id="vb${id}" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset=".7" stop-color="#eceae3"/><stop offset="1" stop-color="#bdb9ae"/></radialGradient>
     <radialGradient id="bb${id}" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#f6a35a"/><stop offset=".65" stop-color="#e27a2c"/><stop offset="1" stop-color="#a94e16"/></radialGradient>
@@ -480,7 +507,7 @@ function frontLayered(id) {
       <g class="foot-l"><path d="M56 162 C50 172 52 190 59 194 C66 196 71 184 73 167 Z" fill="${FOOT}" filter="url(#fz${id})"/>${[55.5, 59, 62.5].map((x) => CLAW(x, 193.4, 4, 3)).join('')}</g>
       <g class="foot-r"><path d="M104 162 C110 172 108 190 101 194 C94 196 89 184 87 167 Z" fill="${FOOT}" filter="url(#fz${id})"/>${[97.5, 101, 104.5].map((x) => CLAW(x, 193.4, -4, 3)).join('')}</g>
     </g>
-    ${ear('ear-l', 58)}${ear('ear-r', 102)}
+    ${acc ? acc.back : ''}${acc && acc.earsOver ? '' : earsSvg}
     <!-- 頭身一體的毛皮 -->
     <path d="${FO}" fill="url(#bg${id})" filter="url(#fz${id})"/>
     <g clip-path="url(#c${id})">
@@ -491,7 +518,7 @@ function frontLayered(id) {
       <path d="${FO}" fill="none" stroke="#fff6e6" stroke-width="3" opacity=".35" filter="url(#b1${id})"/>
       ${fur(1150, 36, 124)}
     </g>
-    <path class="band" d="M49.5 34 Q80 25 110.5 34 L110 28 Q80 19 50 28 Z" style="fill: var(--band, #e5533d)"/>
+    ${acc ? acc.front + acc.earFront + (acc.earsOver ? earsSvg : '') : bandSvg}
 
     <g class="face">
       <g class="blush"><ellipse cx="60" cy="56" rx="7" ry="4" fill="#f0907c" filter="url(#b1${id})"/><ellipse cx="100" cy="56" rx="7" ry="4" fill="#f0907c" filter="url(#b1${id})"/></g>
@@ -506,6 +533,7 @@ function frontLayered(id) {
       <g class="mouth-open" ${H}><path d="M80 ${my} V${my + 1.6}" stroke="#2a211b" stroke-width="1.3"/><path d="M70.5 ${my - .5} Q80 ${my + 3} 89.5 ${my - .5} Q88 ${my + 9} 80 ${my + 9.5} Q72 ${my + 9} 70.5 ${my - .5} Z" fill="#4a2622" stroke="#2a211b" stroke-width="1.2"/><path d="M75 ${my + 6.5} Q80 ${my + 4} 85 ${my + 6.5} Q83 ${my + 9} 80 ${my + 9} Q77 ${my + 9} 75 ${my + 6.5} Z" fill="#e58a8a"/></g>
       <g class="mouth-o" ${H}><path d="M80 ${my} V${my + 1.6}" stroke="#2a211b" stroke-width="1.3"/><ellipse cx="80" cy="${my + 5}" rx="3" ry="3.6" fill="#4a2622" stroke="#2a211b" stroke-width="1.1"/></g>
       <g class="mouth-chew" ${H}><path d="M80 ${my} V${my + 2}" stroke="#2a211b" stroke-width="1.3"/><ellipse class="chew" cx="80" cy="${my + 4.6}" rx="3.4" ry="2.2" fill="#4a2622" stroke="#2a211b" stroke-width="1"/></g>
+      ${acc ? acc.top : ''}
     </g>
 
     <!-- 手：平時合在胸前／揮手／摸臉／舉高／捧葉子／墊球／右手運動 -->

@@ -23,6 +23,23 @@
     { id: 'sand', name: '淺沙', w: 12, dh: 4, sat: 0.82, dl: 0.06, rufous: 0.05 }
   ];
   const BAND_COLORS = ['#e5533d', '#3f7fd9', '#e9a23b', '#3fa66b', '#a05ad1', '#e2588f'];
+  // 飾品：種類、部位（同部位不重複戴）、出現權重、可抽的顏色（畫法在 quokka-acc.js）
+  const ACCESSORIES = [
+    { id: 'band', name: '頭帶', slot: 'head', w: 1.6, colors: BAND_COLORS },
+    { id: 'bow', name: '蝴蝶結', slot: 'ear', w: 1, colors: ['#e2588f', '#e5533d', '#f08fb0', '#5b8fd9', '#f2b33d', '#a05ad1'] },
+    { id: 'flower', name: '耳後小花', slot: 'ear', w: 1, colors: ['#c77dbb', '#e48fb5', '#a98bd8', '#d86fa8'] },
+    { id: 'straw', name: '草帽', slot: 'head', w: 1, colors: ['#e5533d', '#3f7fd9', '#3fa66b', '#2f3a56', '#e2588f'] },
+    { id: 'beanie', name: '毛線帽', slot: 'head', w: 1, colors: ['#e5533d', '#3f7fd9', '#e9a23b', '#3fa66b', '#8e6cc9', '#f08fb0', '#4fb3bf'] },
+    { id: 'glasses', name: '圓框眼鏡', slot: 'face', w: 1, colors: ['#c9a14a', '#8a5a36', '#4d5560', '#c0504d'] },
+    { id: 'scarf', name: '小圍巾', slot: 'neck', w: 1, colors: ['#e5533d', '#3f7fd9', '#3fa66b', '#e9a23b', '#8e6cc9'] },
+    { id: 'bandana', name: '三角領巾', slot: 'neck', w: 1, colors: ['#e5533d', '#3f7fd9', '#3fa66b', '#e9a23b', '#e2588f'] },
+    { id: 'collar', name: '鈴鐺項圈', slot: 'neck', w: 1, colors: ['#e5533d', '#3f7fd9', '#a05ad1', '#3fa66b', '#e2588f'] },
+    { id: 'wreath', name: '葉子花冠', slot: 'head', w: 1, colors: ['#e48fb5', '#c77dbb', '#f6f1e4', '#f2c94e'] },
+    { id: 'hardhat', name: '工地安全帽', slot: 'head', w: 1, colors: ['#f4c430', '#f6b52e', '#f2d04a'] },
+    { id: 'beret', name: '貝雷帽', slot: 'head', w: 1, colors: ['#c0392b', '#2f3a56', '#3d6b4f', '#7b4b8a', '#d98c3a'] }
+  ];
+  // 可以一起戴的部位：頭／耳＋臉或脖子、臉＋脖子（不會同時戴兩頂帽子，也不會帽子配蝴蝶結）
+  const PAIRS = { head: ['face', 'neck'], ear: ['face', 'neck'], face: ['head', 'ear', 'neck'], neck: ['head', 'ear', 'face'] };
 
   // 可重現的亂數（同一個 seed 產生同一隻）
   function rng(seed) {
@@ -82,7 +99,32 @@
       band: BAND_COLORS[Math.floor(r() * BAND_COLORS.length)]
     };
     t.personality = personality(t);
+    t.accessory = accessoryFor(seed, t.band);
     return t;
+  }
+
+  // 飾品：用從 seed 衍生的獨立亂數抽，不動到上面體型、毛色、個性的亂數序列（舊的 seed 生出來的那隻不會變）
+  // 約 12% 會多戴一件不同部位的（例如眼鏡＋帽子、圍巾＋蝴蝶結）
+  function accessoryFor(seed, band) {
+    const r = rng(((seed >>> 0) ^ 0x2c1b3c6d) >>> 0);
+    const pickColor = (a) => (a.id === 'band' && band ? band : a.colors[Math.floor(r() * a.colors.length)]);
+    const a = pickWeighted(r, ACCESSORIES);
+    const out = { type: a.id, color: pickColor(a) };
+    if (r() < 0.12) {
+      const b = pickWeighted(r, ACCESSORIES.filter((x) => PAIRS[a.slot].includes(x.slot) && x.id !== 'band'));
+      out.extra = { type: b.id, color: pickColor(b) };
+    }
+    return out;
+  }
+  // 舊資料沒有飾品欄位：預設戴頭帶（顏色沿用 band）
+  function ensureAccessory(t) {
+    if (t && !t.accessory) t.accessory = { type: 'band', color: t.band || BAND_COLORS[0] };
+    return t;
+  }
+  function accessoryName(acc) {
+    const one = (a) => { const d = a && ACCESSORIES.find((x) => x.id === a.type); return d ? d.name : ''; };
+    if (!acc) return '頭帶';
+    return [one(acc), one(acc.extra)].filter(Boolean).join('＋') || '頭帶';
   }
 
   // ---------------------------------------------------------------------------
@@ -104,7 +146,8 @@
       ['坐高', '約 ' + t.sitHeightCm + ' cm'],
       ['體重', t.weightKg + ' kg'],
       ['體型', buildName(t.condition)],
-      ['毛色', t.fur.name + (t.fur.rufous > 0.5 ? '，臉偏紅' : '') + (t.fur.grey > 0.12 ? '，略帶灰白' : '')]
+      ['毛色', t.fur.name + (t.fur.rufous > 0.5 ? '，臉偏紅' : '') + (t.fur.grey > 0.12 ? '，略帶灰白' : '')],
+      ['飾品', accessoryName(t.accessory)]
     ];
   }
 
@@ -269,7 +312,7 @@
     return svg.replace(/#[0-9a-fA-F]{6}\b/g, (c) => m[c.toLowerCase()] || c);
   }
 
-  const api = { generate, describe, describePersonality, ensurePersonality, behavior, personaText, ARCHETYPES, shape, recolor, colorMap, RANGES, FUR_TYPES, BAND_COLORS };
+  const api = { generate, describe, describePersonality, ensurePersonality, ensureAccessory, accessoryName, ACCESSORIES, behavior, personaText, ARCHETYPES, shape, recolor, colorMap, RANGES, FUR_TYPES, BAND_COLORS };
   if (typeof window !== 'undefined') window.QuokkaTraits = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();
