@@ -212,12 +212,10 @@ button.primary:hover, button#chatSend:hover { background: var(--graphite-hi); }
 .char-name-zh { font-size: 12px; font-weight: 700; color: var(--ink); margin-top: 2px; }
 .char-name-en { font-size: 10px; color: var(--muted); letter-spacing: 0.3px; }
 
-/* --- 運動按鈕（僅會運動的角色顯示） --- */
-.sport-row { margin: 8px 0 2px; flex-shrink: 0; }
-.sport-row[hidden] { display: none; }
-.sport-label { font-size: 13px; color: var(--ink); margin-right: 4px; }
-.sport-row button { font-size: 12px; padding: 4px 12px; margin-right: 6px; }
-.sport-row .hint { margin-top: 6px; }
+/* --- 動作按鈕（依角色的 actionGroups 分組） --- */
+.action-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; flex-shrink: 0; }
+.action-label { font-size: 13px; color: var(--ink); min-width: 64px; }
+.action-row button { font-size: 12px; padding: 4px 12px; }
 
 /* --- 名言列表 --- */
 .quote-list { list-style: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; }

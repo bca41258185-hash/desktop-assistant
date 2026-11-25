@@ -184,7 +184,7 @@ function speak(text) {
   }
 }
 
-// 讓桌寵切換姿勢：'idle' | 'think' | 'happy'，或該角色會的運動（如 'badminton'）
+// 讓桌寵切換姿勢：'idle' | 'think' | 'happy'，或該角色會的動作（如 'badminton'、'eat'）
 function setPetPose(pose) {
   if (petWindow && !petWindow.isDestroyed()) {
     petWindow.webContents.send('pet:pose', pose);
@@ -412,11 +412,11 @@ function registerIpc() {
     return { ok: true, id };
   });
 
-  // 讓目前角色打一項球（僅限該角色 sports 清單內的項目）
-  ipcMain.handle('pet:play-sport', (e, sport) => {
+  // 讓目前角色做一個動作（球類或招牌動作，僅限該角色 actions 清單內的項目）
+  ipcMain.handle('pet:play-action', (e, action) => {
     const c = CHARACTERS[currentCharacterId()];
-    if (!c || !Array.isArray(c.sports) || !c.sports.includes(sport)) return { ok: false };
-    setPetPose(sport);
+    if (!c || !Array.isArray(c.actions) || !c.actions.includes(action)) return { ok: false };
+    setPetPose(action);
     return { ok: true };
   });
 

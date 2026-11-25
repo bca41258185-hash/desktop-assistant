@@ -276,21 +276,28 @@ const charPicker = document.getElementById('charPicker');
 // 目前選用的造型（供儲存設定時一併帶上）
 let selectedCharId = (window.CHAR_DEFAULT || 'quokka');
 
-// 運動按鈕：依目前造型的 sports 清單產生
-const sportRow = document.getElementById('sportRow');
-const sportButtons = document.getElementById('sportButtons');
-function renderSportButtons() {
-  if (!sportRow || !sportButtons) return;
-  const c = (window.CHARACTERS || {})[selectedCharId];
-  const sports = (c && c.sports) || [];
-  sportRow.hidden = !sports.length;
-  sportButtons.innerHTML = '';
-  sports.forEach((sport) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = (c.sportNames && c.sportNames[sport]) || sport;
-    btn.addEventListener('click', () => window.api.playSport(sport));
-    sportButtons.appendChild(btn);
+// 動作按鈕：依目前造型的 actionGroups 分組產生（打球／招牌動作）
+const actionRows = document.getElementById('actionRows');
+function renderActionButtons() {
+  if (!actionRows) return;
+  const c = (window.CHARACTERS || {})[selectedCharId] || {};
+  const groups = c.actionGroups || (c.actions ? [{ title: '動作', ids: c.actions }] : []);
+  actionRows.innerHTML = '';
+  groups.forEach((g) => {
+    const row = document.createElement('div');
+    row.className = 'action-row';
+    const label = document.createElement('span');
+    label.className = 'action-label';
+    label.textContent = g.title + '：';
+    row.appendChild(label);
+    g.ids.forEach((id) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = (c.actionNames && c.actionNames[id]) || id;
+      btn.addEventListener('click', () => window.api.playAction(id));
+      row.appendChild(btn);
+    });
+    actionRows.appendChild(row);
   });
 }
 
@@ -316,12 +323,12 @@ function renderCharPicker() {
       selectedCharId = id;
       charPicker.querySelectorAll('.char-card').forEach((el) =>
         el.classList.toggle('selected', el.dataset.id === id));
-      renderSportButtons();
+      renderActionButtons();
       await window.api.setCharacter(id);   // 立即切換桌寵並持久化
     });
     charPicker.appendChild(card);
   });
-  renderSportButtons();
+  renderActionButtons();
 }
 
 async function loadSettings() {

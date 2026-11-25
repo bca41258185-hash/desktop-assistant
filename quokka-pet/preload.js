@@ -11,7 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   // 角色與姿勢
   onCharacter: (cb) => ipcRenderer.on('pet:character', (_e, payload) => cb(payload)),
   onPose: (cb) => ipcRenderer.on('pet:pose', (_e, pose) => cb(pose)),
-  playSport: (sport) => ipcRenderer.invoke('pet:play-sport', sport),
+  playAction: (action) => ipcRenderer.invoke('pet:play-action', action),
   setCharacter: (id) => ipcRenderer.invoke('character:set', id),
   onCharacterChanged: (cb) => ipcRenderer.on('character:changed', (_e, id) => cb(id)),
 

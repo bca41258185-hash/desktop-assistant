@@ -80,6 +80,46 @@
       "sourceZh": "生態小知識",
       "kind": "fact",
       "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "我的前爪很靈巧，可以捧著葉子吃東西。",
+      "source": "General fact",
+      "sourceZh": "生態小知識",
+      "kind": "fact",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "為了吃到葉子，我們會爬上大約兩公尺高的灌木或矮樹。",
+      "source": "General fact",
+      "sourceZh": "生態小知識",
+      "kind": "fact",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "白天我多半躲在陰涼的灌木叢下休息，常常是坐著睡，頭低低地靠向腳邊。",
+      "source": "General fact",
+      "sourceZh": "生態小知識",
+      "kind": "fact",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "我看起來一直在笑，其實是臉部構造的關係，不代表我每分每秒都很開心喔。",
+      "source": "General fact",
+      "sourceZh": "生態小知識",
+      "kind": "fact",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "要趕快離開的時候，我會用兩隻後腳一蹦一蹦地跳。",
+      "source": "General fact",
+      "sourceZh": "生態小知識",
+      "kind": "fact",
+      "lang": "zh"
     }
   ]
 }

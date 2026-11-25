@@ -1,4 +1,4 @@
-// 桌寵 renderer：角色注入／切換、姿勢（idle/think/happy＋運動）、說話氣泡、拖曳與點擊。
+// 桌寵 renderer：角色注入／切換、姿勢與動作（球類＋招牌動作）、說話氣泡、拖曳與點擊。
 
 const petEl = document.getElementById('pet');
 const petArt = document.getElementById('petArt');
@@ -14,56 +14,64 @@ function renderCharacter(id) {
   currentId = c.id;
   petArt.innerHTML = c.svg;
   petEl.dataset.character = c.id;
-  scheduleSport();
+  scheduleAction();
 }
 
-// --- 姿勢：idle / think / happy（happy 會在數秒後自動回到 idle） ---
-// 運動姿勢（羽球／排球／籃球）只有具備 sports 的角色才有，播完 SPORT_MS 後回到 idle。
-const SPORT_MS = 4800;            // 需與 pet.css 的運動動畫總長一致
-let happyTimer = null;
-function sportsOf(id) {
-  const c = CHARS[id];
-  return (c && Array.isArray(c.sports)) ? c.sports : [];
-}
+// --- 姿勢 ---
+// 基本姿勢：idle / think / happy；動作（球類＋招牌動作）由角色的 actions 清單定義，
+// 播完 actionMs 指定的長度後回到 idle，並說一句 actionLines。
+const BASE_POSES = ['idle', 'think', 'happy'];
+let poseTimer = null;
+function charOf(id) { return CHARS[id] || {}; }
+function actionsOf(id) { const c = charOf(id); return Array.isArray(c.actions) ? c.actions : []; }
 function setPose(pose) {
-  if (happyTimer) { clearTimeout(happyTimer); happyTimer = null; }
+  if (poseTimer) { clearTimeout(poseTimer); poseTimer = null; }
   pose = pose || 'idle';
-  const isSport = sportsOf(currentId).includes(pose);
-  // 不認得的姿勢（例如切到不會運動的角色後才送達的運動指令）一律視為 idle
-  if (!isSport && !['idle', 'think', 'happy'].includes(pose)) pose = 'idle';
-  if (petEl.dataset.pose === pose && isSport) {
-    // 同一項運動連按：先回 idle 並強制重排，讓 CSS 動畫從頭播放
+  const isAction = actionsOf(currentId).includes(pose);
+  // 不認得的姿勢（例如角色不會的動作）一律視為 idle
+  if (!isAction && !BASE_POSES.includes(pose)) pose = 'idle';
+  if (petEl.dataset.pose === pose && (isAction || pose === 'happy')) {
+    // 同一個動作連按：先回 idle 並強制重排，讓 CSS 動畫從頭播放
     petEl.dataset.pose = 'idle';
     void petEl.offsetWidth;
   }
   petEl.dataset.pose = pose;
   if (pose === 'happy') {
-    happyTimer = setTimeout(() => { petEl.dataset.pose = 'idle'; }, 2500);
-  } else if (isSport) {
-    happyTimer = setTimeout(() => {
+    poseTimer = setTimeout(() => { petEl.dataset.pose = 'idle'; }, 2000);
+  } else if (isAction) {
+    const c = charOf(currentId);
+    const ms = (c.actionMs && c.actionMs[pose]) || 4800;
+    poseTimer = setTimeout(() => {
       petEl.dataset.pose = 'idle';
-      const c = CHARS[currentId];
-      const line = c && c.sportLines && c.sportLines[pose];
+      const line = c.actionLines && c.actionLines[pose];
       if (line && !bubbleEl.classList.contains('show')) showBubble({ text: line, duration: 2500 });
-    }, SPORT_MS);
+    }, ms);
   }
 }
 
-// 待機時每隔 20–40 秒自動輪流打一項球（氣泡顯示中、拖曳中、非 idle 時略過這一輪）
-let sportTimer = null;
-let sportIndex = Math.floor(Math.random() * 3);
+// 待機時每隔 20–40 秒依權重隨機做一個動作（不連續重複）；
+// 氣泡顯示中、拖曳中、非 idle 時略過這一輪。
+let actionTimer = null;
+let lastAction = '';
 const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-function scheduleSport() {
-  if (sportTimer) { clearTimeout(sportTimer); sportTimer = null; }
-  if (reduceMotion || !sportsOf(currentId).length) return;
-  sportTimer = setTimeout(() => {
-    const list = sportsOf(currentId);
+function pickAction() {
+  const c = charOf(currentId);
+  const list = actionsOf(currentId).filter((a) => a !== lastAction);
+  const w = (a) => (c.actionWeights && c.actionWeights[a]) || 1;
+  let r = Math.random() * list.reduce((sum, a) => sum + w(a), 0);
+  for (const a of list) { r -= w(a); if (r < 0) return a; }
+  return list[0];
+}
+function scheduleAction() {
+  if (actionTimer) { clearTimeout(actionTimer); actionTimer = null; }
+  if (reduceMotion || !actionsOf(currentId).length) return;
+  actionTimer = setTimeout(() => {
     const busy = petEl.dataset.pose !== 'idle' || bubbleEl.classList.contains('show') || dragging;
-    if (list.length && !busy) {
-      sportIndex = (sportIndex + 1) % list.length;
-      setPose(list[sportIndex]);
+    if (!busy) {
+      lastAction = pickAction();
+      if (lastAction) setPose(lastAction);
     }
-    scheduleSport();
+    scheduleAction();
   }, 20000 + Math.random() * 20000);
 }
 
@@ -144,6 +152,7 @@ renderCharacter(currentId);
 window.addEventListener('mouseup', () => {
   if (!dragging) return;
   dragging = false;
-  // 位移很小 → 視為點擊 → 開/關面板
+  // 位移很小 → 視為點擊 → 開/關面板；真的拖曳過 → 放下時蹦一下（短尾矮袋鼠用後腳跳）
   if (moved < 5) window.api.togglePanel();
+  else if (petEl.dataset.pose === 'idle' && actionsOf(currentId).includes('hop') && !reduceMotion) setPose('hop');
 });
