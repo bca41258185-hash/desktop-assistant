@@ -83,38 +83,92 @@
 
   // ---- 道具與特效（畫面座標） ----------------------------------------------
   const PROP_DEFS = (id) => `
-    <radialGradient id="vb${id}" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset=".7" stop-color="#eceae3"/><stop offset="1" stop-color="#bdb9ae"/></radialGradient>
-    <radialGradient id="bb${id}" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#f6a35a"/><stop offset=".65" stop-color="#e27a2c"/><stop offset="1" stop-color="#a94e16"/></radialGradient>
+    <radialGradient id="vb${id}" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#efece4"/><stop offset="1" stop-color="#c9c3b5"/></radialGradient>
+    <radialGradient id="bb${id}" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#f8b276"/><stop offset=".6" stop-color="#e3813a"/><stop offset="1" stop-color="#b05a22"/></radialGradient>
     <linearGradient id="lf${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8cc06b"/><stop offset="1" stop-color="#4d8a3a"/></linearGradient>
     <linearGradient id="lg${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cdd6c2"/><stop offset=".45" stop-color="#a9b79d"/><stop offset="1" stop-color="#7f9076"/></linearGradient>
     <radialGradient id="fg${id}" cx="40%" cy="30%" r="80%"><stop offset="0" stop-color="#f0c9e6"/><stop offset=".55" stop-color="#cf93c3"/><stop offset="1" stop-color="#9c5c92"/></radialGradient>
     <linearGradient id="sg${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a08a6c"/><stop offset="1" stop-color="#6e5a44"/></linearGradient>
     <filter id="lz${id}" x="-20%" y="-60%" width="140%" height="220%"><feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="2" seed="7"/><feDisplacementMap in="SourceGraphic" scale="1.1" xChannelSelector="R" yChannelSelector="G"/></filter>
     <filter id="lb${id}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation=".7"/></filter>
+    <linearGradient id="tg${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a9c77f"/><stop offset=".5" stop-color="#7fa35a"/><stop offset="1" stop-color="#557a3c"/></linearGradient>
+    <linearGradient id="rf${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6d9fd6"/><stop offset=".5" stop-color="#3f74b3"/><stop offset="1" stop-color="#2a5189"/></linearGradient>
+    <linearGradient id="gr${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#f3ecdd"/><stop offset=".6" stop-color="#ddd2bb"/><stop offset="1" stop-color="#b9ac92"/></linearGradient>
+    <linearGradient id="sh${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c9ced6"/><stop offset="1" stop-color="#7f8794"/></linearGradient>
+    <radialGradient id="ck${id}" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#fff8ea"/><stop offset=".7" stop-color="#e8d6b4"/><stop offset="1" stop-color="#c8b08a"/></radialGradient>
+    <linearGradient id="fe${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9dde3"/></linearGradient>
+    <linearGradient id="rm${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f08a4e"/><stop offset="1" stop-color="#c4522a"/></linearGradient>
+    <linearGradient id="bd${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e3e1da"/></linearGradient>
     <radialGradient id="fl${id}"><stop offset="0" stop-color="#fff" stop-opacity="1"/><stop offset=".5" stop-color="#fff6c8" stop-opacity=".7"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>`;
+  // ---- 道具：畫風與庫卡一致（漸層、柔邊、模糊亮面與陰影，不用黑色硬邊）----
+  const soft = (id, d, dx = .8, dy = 1.2, op = .18) => `<path d="${d}" fill="#4a3a2e" opacity="${op}" transform="translate(${dx} ${dy})" filter="url(#lb${id})"/>`;
   function racket(id, hx, hy, ang, len = 1, hit = false, swoosh = false) {
     // ang：拍子方向（0＝朝上，順時針為正）；握把從手掌往外
     return `<g transform="translate(${f1(hx)} ${f1(hy)}) rotate(${f1(ang)}) scale(${len})">
-      <line x1="0" y1="4" x2="0" y2="-11" stroke="#2f3540" stroke-width="2.6" stroke-linecap="round"/>
-      <line x1="0" y1="3" x2="0" y2="-4" stroke="#d9d3c4" stroke-width="3.2" stroke-linecap="round"/>
-      <path d="M-1.4 -11 L0 -14 L1.4 -11" fill="none" stroke="#2b5f9a" stroke-width="1.4"/>
-      <ellipse cx="0" cy="-25" rx="9" ry="11.5" fill="#ffffff" fill-opacity=".5" stroke="#2b5f9a" stroke-width="2.2"/>
-      <path d="M-5 -34 V-16 M0 -36.5 V-13.5 M5 -34 V-16 M-8 -30 H8 M-8.8 -25 H8.8 M-8 -20 H8" stroke="#a7bdd1" stroke-width=".6" fill="none"/>
-      ${swoosh ? `<path d="M14 -6 Q20 -30 2 -44" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".75"/><path d="M14 -6 Q20 -30 2 -44" fill="none" stroke="#b8c7da" stroke-width="1.5" stroke-linecap="round"/>` : ''}
+      <path d="M0 4 L0 -12" stroke="#4a3a2e" stroke-width="3.2" stroke-linecap="round" opacity=".16" transform="translate(.8 1)" filter="url(#lb${id})"/>
+      <path d="M0 -2 L0 -13" stroke="url(#sh${id})" stroke-width="1.9" stroke-linecap="round"/>
+      <path d="M0 4.5 L0 -4" stroke="url(#gr${id})" stroke-width="3.6" stroke-linecap="round"/>
+      <path d="M-1.6 1.5 L1.6 .3 M-1.6 -1 L1.6 -2.2" stroke="#b9ac92" stroke-width=".5" opacity=".7"/>
+      <ellipse cx="0" cy="-25" rx="9" ry="11.5" fill="none" stroke="#4a3a2e" stroke-width="2.6" opacity=".15" transform="translate(.8 1)" filter="url(#lb${id})"/>
+      <ellipse cx="0" cy="-25" rx="9" ry="11.5" fill="#ffffff" fill-opacity=".35"/>
+      <path d="M-5 -34 V-16 M0 -36.5 V-13.5 M5 -34 V-16 M-8 -30 H8 M-8.8 -25 H8.8 M-8 -20 H8" stroke="#c9d6e4" stroke-width=".55" fill="none" opacity=".9"/>
+      <ellipse cx="0" cy="-25" rx="9" ry="11.5" fill="none" stroke="url(#rf${id})" stroke-width="2.3"/>
+      <path d="M-6 -32 Q-7.5 -27 -6.6 -21" fill="none" stroke="#cfe2f6" stroke-width=".9" stroke-linecap="round" opacity=".7" filter="url(#lb${id})"/>
+      ${swoosh ? `<path d="M14 -6 Q20 -30 2 -44" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".75" filter="url(#lb${id})"/><path d="M14 -6 Q20 -30 2 -44" fill="none" stroke="#c9d6e4" stroke-width="1.4" stroke-linecap="round" opacity=".8"/>` : ''}
       ${hit ? fx(id, 'impact', 0, -27, 0, .8) : ''}
     </g>`;
   }
-  const shuttle = (x, y, rot = 0, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
-      <path d="M-2 0 L-13 -6.5 L-13 6.5 Z" fill="#ffffff" stroke="#b9bec5" stroke-width=".8" stroke-linejoin="round"/>
-      <path d="M-2 0 L-12.5 -3 M-2 0 L-12.5 3 M-2 0 L-13 0" stroke="#d6dade" stroke-width=".5"/>
-      <circle cx="0" cy="0" r="3.3" fill="#fff8ec" stroke="#c9483a" stroke-width="1.4"/></g>`;
-  const vball = (id, x, y, rot = 0, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
-      <circle r="12" fill="url(#vb${id})" stroke="#9aa0a8" stroke-width=".9"/>
-      <path d="M-12 0 Q0 -6.3 12 0 M-7.6 -9.2 Q2.5 -2.5 3.3 11.5 M7.6 -9.2 Q5.3 2.3 -6.6 9.9" fill="none" stroke="#3f6fb5" stroke-width="1.5"/>
-      <path d="M-10.1 6 Q-1.3 7.6 5.7 10.5" fill="none" stroke="#e2b53b" stroke-width="1.5"/></g>`;
-  const bball = (id, x, y, rot = 0, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
+  const FEATHER = 'M-2 0 L-13 -6.5 L-13 6.5 Z';
+  const shuttle = (id, x, y, rot = 0, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
+      ${soft(id, FEATHER)}
+      <path d="${FEATHER}" fill="url(#fe${id})"/>
+      <path d="M-2 0 L-12.5 -3 M-2 0 L-12.5 3 M-2 0 L-13 0" stroke="#c7ccd3" stroke-width=".5" opacity=".8"/>
+      <path d="M-12.6 -6.2 L-12.6 6.2" stroke="#e9ecf0" stroke-width="1.2" stroke-linecap="round"/>
+      <circle cx=".6" cy=".8" r="3.4" fill="#4a3a2e" opacity=".16" filter="url(#lb${id})"/>
+      <circle cx="0" cy="0" r="3.4" fill="url(#ck${id})"/>
+      <path d="M-2.3 -2.4 Q-3.4 0 -2.3 2.4" fill="none" stroke="#d6685a" stroke-width="1.5" stroke-linecap="round"/>
+      <ellipse cx=".8" cy="-1.3" rx="1.2" ry=".8" fill="#fff" opacity=".8" filter="url(#lb${id})"/></g>`;
+  const ballShade = (id) => `<circle cx="1.6" cy="2.2" r="12" fill="#4a3a2e" opacity=".16" filter="url(#lb${id})"/>`;
+  const ballHi = (id) => `<ellipse cx="-4.2" cy="-5" rx="3.6" ry="2.4" fill="#fff" opacity=".55" transform="rotate(-30 -4.2 -5)" filter="url(#lb${id})"/><path d="M-12 0 A12 12 0 0 0 12 0" fill="none" stroke="#4a3a2e" stroke-width="3" opacity=".08" filter="url(#lb${id})"/>`;
+  const vball = (id, x, y, rot = 0, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) scale(${s})">${ballShade(id)}<g transform="rotate(${f1(rot)})">
+      <circle r="12" fill="url(#vb${id})"/>
+      <path d="M-12 0 Q0 -6.3 12 0 M-7.6 -9.2 Q2.5 -2.5 3.3 11.5 M7.6 -9.2 Q5.3 2.3 -6.6 9.9" fill="none" stroke="#6a93cc" stroke-width="2" stroke-linecap="round" opacity=".85"/>
+      <path d="M-10.1 6 Q-1.3 7.6 5.7 10.5" fill="none" stroke="#e8c463" stroke-width="2" stroke-linecap="round" opacity=".9"/></g>${ballHi(id)}</g>`;
+  const bball = (id, x, y, rot = 0, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) scale(${s})">${ballShade(id)}<g transform="rotate(${f1(rot)})">
       <circle r="12" fill="url(#bb${id})"/>
-      <path d="M-12 0 H12 M0 -12 V12 M-8.6 -8.3 Q-2 0 -8.6 8.3 M8.6 -8.3 Q2 0 8.6 8.3" fill="none" stroke="#5a2a0d" stroke-width="1.15"/></g>`;
+      <path d="M-12 0 H12 M0 -12 V12 M-8.6 -8.3 Q-2 0 -8.6 8.3 M8.6 -8.3 Q2 0 8.6 8.3" fill="none" stroke="#7a3f1c" stroke-width="1.1" stroke-linecap="round" opacity=".7"/></g>${ballHi(id)}</g>`;
+  // 大片葉子：西澳大陸森林族群最偏好的 Thomasia（以 T. macrocarpa 為參考）
+  // 特徵：葉片 3–12 × 1.5–7 cm、心形到卵形、邊緣細鋸齒、密生星狀毛（年輕葉絨絨的）
+  const bigLeaf = (id, x, y, rot = 0, s = 1) => {
+    const pts = [];
+    for (let i = 0; i <= 40; i++) {           // 葉緣：卵形＋心形基部，加上細鋸齒
+      const t = i / 40 * Math.PI * 2, w = Math.sin(t), h = Math.cos(t);
+      const L = 30, W = 12 * (1 - .25 * h);       // 葉長（沿 -x 方向）與半寬，基部較寬
+      let px = -L / 2 * (1 - h), py = W * w * (0.55 + 0.45 * Math.sin((1 - h) / 2 * Math.PI));
+      if (i % 2 === 1 && Math.abs(w) > .2) { px += .5; py *= 1.05; }
+      pts.push([px, py]);
+    }
+    const d = I.cr(pts);
+    const vein = 'M0 0 Q-15 -.8 -29 0';
+    const side = [-6, -11, -16, -21].map((vx) => `M${vx} ${(-vx * .02).toFixed(1)} Q${vx - 3} -4 ${vx - 5} -7.5 M${vx} ${(-vx * .02).toFixed(1)} Q${vx - 3} 4 ${vx - 5} 7.5`).join(' ');
+    return `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
+      ${soft(id, d, 1, 1.6, .2)}
+      <path d="M2 .4 L0 0" stroke="url(#sg${id})" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${d}" fill="url(#tg${id})" filter="url(#lz${id})"/>
+      <path d="${vein}" fill="none" stroke="#c6dba8" stroke-width=".9" stroke-linecap="round" opacity=".85"/>
+      <path d="${side}" fill="none" stroke="#c6dba8" stroke-width=".55" stroke-linecap="round" opacity=".6"/>
+      <ellipse cx="-11" cy="-4.5" rx="8" ry="3" fill="#eef5e2" opacity=".35" filter="url(#lb${id})"/>
+    </g>`;
+  };
+  const hoop = (id, x, y, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) scale(${s})">
+      <path d="M21 8 L21 132" stroke="#4a3a2e" stroke-width="4" opacity=".12" filter="url(#lb${id})"/>
+      <path d="M20 6 L20 130" stroke="url(#sh${id})" stroke-width="3.2" stroke-linecap="round"/>
+      <rect x="15.8" y="-25" width="6" height="40" rx="2" fill="#4a3a2e" opacity=".12" filter="url(#lb${id})"/>
+      <rect x="15" y="-26" width="6" height="40" rx="2" fill="url(#bd${id})"/>
+      <rect x="16.4" y="-12" width="3.2" height="10" rx=".8" fill="none" stroke="#e08a6a" stroke-width=".8" opacity=".8"/>
+      <path d="M-12 1 L-9 19 M-5 3 L-3.5 20 M3 3 L1.5 20 M9 1 L6 19 M-10 10 H8 M-9 16 H6" stroke="#e6e7e9" stroke-width="1" fill="none" opacity=".9"/>
+      <ellipse cx="-1" cy="1" rx="12" ry="3.4" fill="none" stroke="#4a3a2e" stroke-width="3" opacity=".12" filter="url(#lb${id})"/>
+      <ellipse cx="-1" cy="0" rx="12" ry="3.4" fill="none" stroke="url(#rm${id})" stroke-width="2.6"/></g>`;
   // 葉子：短尾矮袋鼠在羅特尼斯島最偏好的食物 Guichenotia ledifolia（錦葵科）
   // 特徵：葉片細長（約 1.5–6 cm × 2–5 mm）、邊緣反捲、兩面密生白色星狀毛 → 銀灰綠；花為下垂的粉紫色鐘形小花（7–11 月）
   // 畫法：一小段枝條，上面幾片細長銀灰葉（淺色中線表現反捲的邊），枝頭一朵下垂小花
@@ -136,25 +190,20 @@
         <ellipse cx="-1" cy="6.6" rx=".8" ry="1.6" fill="#fbe8f5" opacity=".6" filter="url(#lb${id})"/></g>` : ''}
     </g>`;
   };
-  const hoop = (x, y, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) scale(${s})">
-      <line x1="20" y1="6" x2="20" y2="130" stroke="#8a8f98" stroke-width="3" stroke-linecap="round"/>
-      <rect x="15" y="-26" width="6" height="40" rx="1.5" fill="#fbfbf8" stroke="#9aa0a8" stroke-width="1.2"/>
-      <path d="M-12 1 L-9 19 M-5 3 L-3.5 20 M3 3 L1.5 20 M9 1 L6 19 M-10 10 H8" stroke="#cfd2d6" stroke-width="1" fill="none"/>
-      <ellipse cx="-1" cy="0" rx="12" ry="3.4" fill="none" stroke="#d9572a" stroke-width="2.6"/></g>`;
   function fx(id, kind, x, y, rot = 0, s = 1) {
     const g = (inner) => `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">${inner}</g>`;
     switch (kind) {
-      case 'impact': return g(`<circle r="16" fill="url(#fl${id})"/><path d="M0 -15 L3 -5 L13 -8 L6 0 L14 7 L4 5 L0 15 L-3 5 L-13 8 L-6 0 L-14 -7 L-4 -5 Z" fill="#ffe27a" stroke="#f0a92b" stroke-width="1" stroke-linejoin="round"/>`);
+      case 'impact': return g(`<circle r="16" fill="url(#fl${id})"/><path d="M0 -15 L3 -5 L13 -8 L6 0 L14 7 L4 5 L0 15 L-3 5 L-13 8 L-6 0 L-14 -7 L-4 -5 Z" fill="#ffd66b" opacity=".55" filter="url(#lb${id})"/><path d="M0 -12 L2.4 -4 L10.4 -6.4 L4.8 0 L11.2 5.6 L3.2 4 L0 12 L-2.4 4 L-10.4 6.4 L-4.8 0 L-11.2 -5.6 L-3.2 -4 Z" fill="#ffe89a"/>`);
       case 'speed': return g(`<path d="M0 -6 H-26 M2 0 H-34 M0 6 H-22" stroke="#9aa0a8" stroke-width="1.5" stroke-linecap="round" opacity=".8"/>`);
       case 'arc': return g(`<path d="M-20 10 Q0 -22 22 8" fill="none" stroke="#c4c9d1" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 5"/>`);
       case 'swoosh': return g(`<path d="M-18 14 Q-22 -10 4 -22" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity=".85"/><path d="M-18 14 Q-22 -10 4 -22" fill="none" stroke="#b8c7da" stroke-width="1.6" stroke-linecap="round"/>`);
-      case 'sweat': return g(`<path d="M0 0 Q-3 5 0 7 Q3 5 0 0 Z" fill="#8fc3f0" stroke="#5a92c8" stroke-width=".6"/>`);
+      case 'sweat': return g(`<path d="M0 0 Q-3 5 0 7 Q3 5 0 0 Z" fill="#9fcdf2"/><ellipse cx="-.8" cy="4" rx=".7" ry="1.2" fill="#fff" opacity=".7"/>`);
       case 'heart': return g(`<path d="M-5 -2 c0-3 4-4 5-1 c1-3 5-2 5 1 c0 3-5 6-5 6 s-5-3-5-6Z" fill="#ef6f7c"/>`);
       case 'sparkle': return g(`<path d="M0 -6 L1.6 -1.6 L6 0 L1.6 1.6 L0 6 L-1.6 1.6 L-6 0 L-1.6 -1.6 Z" fill="#ffd34d"/>`);
-      case 'star': return g(`<path d="M0 -5 l1.6 3.6 3.9.4-2.9 2.6.8 3.8-3.4-2-3.4 2 .8-3.8-2.9-2.6 3.9-.4Z" fill="#ffcf3d" stroke="#d9a520" stroke-width=".6"/>`);
+      case 'star': return g(`<path d="M0 -5 l1.6 3.6 3.9.4-2.9 2.6.8 3.8-3.4-2-3.4 2 .8-3.8-2.9-2.6 3.9-.4Z" fill="#ffd34d" opacity=".5" filter="url(#lb${id})"/><path d="M0 -5 l1.6 3.6 3.9.4-2.9 2.6.8 3.8-3.4-2-3.4 2 .8-3.8-2.9-2.6 3.9-.4Z" fill="#ffd95e"/>`);
       case 'dust': return g(`<ellipse cx="-10" cy="0" rx="6" ry="3" fill="#d8cbb4" opacity=".7"/><ellipse cx="10" cy="0" rx="6" ry="3" fill="#d8cbb4" opacity=".7"/><ellipse cx="-17" cy="-2" rx="3" ry="2" fill="#e5dac6" opacity=".6"/><ellipse cx="17" cy="-2" rx="3" ry="2" fill="#e5dac6" opacity=".6"/>`);
       case 'zzz': return g(`<text x="0" y="0" font-family="Arial, sans-serif" font-weight="700" font-size="10" fill="#7c8696">Z</text><text x="8" y="-9" font-family="Arial, sans-serif" font-weight="700" font-size="12" fill="#7c8696">Z</text>`);
-      case 'note': return g(`<path d="M0 0 V-10 L7 -12 V-2" fill="none" stroke="#6b7fb0" stroke-width="1.4"/><ellipse cx="-1.6" cy="0" rx="2.4" ry="1.8" fill="#6b7fb0"/><ellipse cx="5.4" cy="-2" rx="2.4" ry="1.8" fill="#6b7fb0"/>`);
+      case 'note': return g(`<path d="M0 0 V-10 L7 -12 V-2" fill="none" stroke="#8296c4" stroke-width="1.4" stroke-linecap="round"/><ellipse cx="-1.6" cy="0" rx="2.4" ry="1.8" fill="#8296c4"/><ellipse cx="5.4" cy="-2" rx="2.4" ry="1.8" fill="#8296c4"/>`);
       case 'shadow': return g(`<ellipse cx="0" cy="0" rx="24" ry="4.5" fill="#000" opacity=".12"/>`);
       default: return '';
     }
@@ -315,11 +364,11 @@
         const hs = p.hand === 'both' ? [hands.L, hands.R].filter(Boolean) : [hands[p.hand]].filter(Boolean);
         if (hs.length) { x = hs.reduce((a, h) => a + h.X, 0) / hs.length + ((p.off || [])[0] || 0); y = hs.reduce((a, h) => a + h.Y, 0) / hs.length + ((p.off || [])[1] || 0); }
       }
-      if (p.t === 'shuttle') svg = shuttle(x, y, p.rot, p.s);
+      if (p.t === 'shuttle') svg = shuttle(id, x, y, p.rot, p.s);
       else if (p.t === 'vball') svg = vball(id, x, y, p.rot, p.s);
       else if (p.t === 'bball') svg = bball(id, x, y, p.rot, p.s);
-      else if (p.t === 'leaf') svg = leaf(id, x, y, p.rot, p.s);
-      else if (p.t === 'hoop') svg = hoop(x, y, p.s);
+      else if (p.t === 'leaf') svg = p.kind === 'big' ? bigLeaf(id, x, y, p.rot, p.s) : leaf(id, x, y, p.rot, p.s);
+      else if (p.t === 'hoop') svg = hoop(id, x, y, p.s);
       else if (p.t === 'fx') svg = fx(id, p.kind, x, y, p.rot, p.s);
       (p.behind ? props.back : props.front).push(svg);
     });
