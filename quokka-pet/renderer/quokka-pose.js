@@ -330,11 +330,11 @@
       const Z = q.Z + (tR.Z - tF.Z) * w;
       tq.push({ X: q.X + (tR.X - tF.X) * w, Y: q.Y + (tR.Y - tF.Y) * w + Math.max(0, Z - tR.Z) * .2 * (1 - up * .6), Z, r: r * (T.k + 1) / 2 });
     }
-    const tl = Math.hypot(tq[8].X - tq[0].X, tq[8].Y - tq[0].Y), fs = clamp(1 - tl / 40, 0, 1);
+    const tl = Math.hypot(tq[8].X - tq[0].X, tq[8].Y - tq[0].Y), fs = clamp((1 - tl / 60) * 1.3, 0, 1);
     tq.forEach((q, i) => { q.r = q.r + (Math.max(q.r, 5.6 - i * .12) - q.r) * fs; });
     if (tl > 5) {
       const tailD = tubePath(tq);
-      const tailSvg = `<defs><linearGradient id="tg2${id}" gradientUnits="userSpaceOnUse" x1="${f1(tq[0].X)}" y1="${f1(tq[0].Y)}" x2="${f1(tq[8].X)}" y2="${f1(tq[8].Y)}"><stop offset="0" stop-color="#a38a6a"/><stop offset=".3" stop-color="#93704c"/><stop offset=".75" stop-color="#7a5c40"/><stop offset="1" stop-color="#5e4632"/></linearGradient></defs>
+      const tailSvg = `<defs><linearGradient id="tg2${id}" gradientUnits="userSpaceOnUse" x1="${f1(tq[0].X)}" y1="${f1(tq[0].Y)}" x2="${f1(tq[8].X)}" y2="${f1(tq[8].Y)}"><stop offset="0" stop-color="#b9a283"/><stop offset=".22" stop-color="#a38a6a"/><stop offset=".45" stop-color="#93704c"/><stop offset=".75" stop-color="#7a5c40"/><stop offset="1" stop-color="#5e4632"/></linearGradient></defs>
         <path d="${tailD}" fill="#4a3a2e" opacity=".16" transform="translate(0 1.6)" filter="url(#b1${id})"/>
         <path d="${tailD}" fill="url(#tg2${id})" filter="url(#fz${id})"/>
         <path d="M${tq.slice(1, 7).map((q) => f1(q.X - q.ty * q.r * -.35) + ' ' + f1(q.Y - q.r * .35)).join(' L')}" fill="none" stroke="#d8bd98" stroke-width="1.6" stroke-linecap="round" opacity=".25" filter="url(#b1${id})"/>`;
@@ -439,7 +439,7 @@
           case 'wide': face.push(g(I.eye(ex, ey - .5, id, { scale: 1.35 }))); break;
           case 'focus': face.push(g(I.eye(ex, ey, id) + brow(-5.2, -7.8))); break;
           case 'sad': face.push(g(I.eye(ex, ey + .4, id, { scale: 1.04 }) + `<ellipse cx="${f1(ex)}" cy="${f1(ey + 3.3)}" rx="2.6" ry="1" fill="#bfe0f8" opacity=".7"/>` + brow(-8.2, -5.4))); break;
-          case 'sleepy': face.push(g(I.eye(ex, ey + .4, id) + `<path d="M${f1(e.X - 5.6)} ${f1(e.Y + .2)} A5.6 5.6 0 0 1 ${f1(e.X + 5.6)} ${f1(e.Y + .2)} Q${f1(e.X)} ${f1(e.Y + 1.6)} ${f1(e.X - 5.6)} ${f1(e.Y + .2)} Z" fill="#a37a52"/><path d="M${f1(e.X - 4.9)} ${f1(e.Y + .3)} Q${f1(e.X)} ${f1(e.Y + 1.7)} ${f1(e.X + 4.9)} ${f1(e.Y + .3)}" fill="none" stroke="#1f1814" stroke-width="1.3" stroke-linecap="round"/>`)); break;
+          case 'sleepy': face.push(g(I.eye(ex, ey + .4, id) + `<path d="M${f1(e.X - 5.6)} ${f1(e.Y + .2)} A5.6 5.6 0 0 1 ${f1(e.X + 5.6)} ${f1(e.Y + .2)} Q${f1(e.X)} ${f1(e.Y + .9)} ${f1(e.X - 5.6)} ${f1(e.Y + .2)} Z" fill="#a37a52"/><path d="M${f1(e.X - 4.6)} ${f1(e.Y + .3)} Q${f1(e.X)} ${f1(e.Y + 1)} ${f1(e.X + 4.6)} ${f1(e.Y + .3)}" fill="none" stroke="#3a2c22" stroke-width="1" stroke-linecap="round"/>`)); break;
           default: face.push(g(I.eye(ex, ey, id)));
         }
       }
@@ -453,7 +453,7 @@
       face.push(`<ellipse cx="${f1(n.X)}" cy="${f1(n.Y)}" rx="${f1(w + 1)}" ry="${f1(nh + .8)}" fill="#3b2f26" opacity=".3" filter="url(#b1${id})"/><ellipse cx="${f1(n.X)}" cy="${f1(n.Y)}" rx="${f1(w)}" ry="${f1(nh)}" fill="url(#ns${id})"/><ellipse cx="${f1(n.X - w * .32)}" cy="${f1(n.Y - nh * .45)}" rx="${f1(w * .38)}" ry="1.1" fill="#d4dfec" opacity=".5"/>`);
       const mf = 0.3 + 0.7 * aC;
       // 嘴：各點都在口鼻表面上；張嘴類的中心隨轉頭往回收，並裁在輪廓內
-      const mc0 = PH([0, 63, 29 - 7 * aS]), mc = { X: mc0.X, Y: mc0.Y };
+      const mc0 = PH([0, 63, 29 - 3 * aS]), mc = { X: mc0.X, Y: mc0.Y };
       const mp = [[-9, 60, 22], [-4.4, 64, 30], [0, 62.2, 34.5], [4.4, 64, 30], [9, 60, 22]].map((p) => ({ q: PH(p), f: facingH([p[0] / 20, 0, 1]), far: p[0] * sH > 0 })).filter((m) => m.f > (m.far ? 0.6 : -0.1));
       const smile = mp.length > 1 ? `<path d="M${f1(mp[0].q.X)} ${f1(mp[0].q.Y)} ${mp.slice(1).map((m, i) => { const a = mp[i].q, bq = m.q; return 'Q' + f1((a.X + bq.X) / 2) + ' ' + f1(Math.max(a.Y, bq.Y) + 1.2) + ' ' + f1(bq.X) + ' ' + f1(bq.Y); }).join(' ')}" fill="none" stroke="#2a211b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>` : '';
       // 人中：轉到側面就淡出（|sin|>0.8 不畫），不會變成往下滴的黑線
@@ -488,7 +488,7 @@
       const sh = P(Sw), el = P(sol.elbow), wr = P(sol.hand);
       const vx = wr.X - el.X, vy = wr.Y - el.Y, fl = Math.hypot(vx, vy);
       const fixedPaw = spec && spec.paw != null;
-      const palm = !!spec && !fixedPaw && fl < FORE * .38 && wr.Z > el.Z + 12;           // 手伸向觀者 → 畫掌心
+      const palm = !!spec && !fixedPaw && fl < FORE * .6 && wr.Z > el.Z + 10;           // 手伸向觀者 → 畫掌心
       const ang = fixedPaw ? spec.paw : palm ? 180 : Math.atan2(-vx, vy) * 180 / Math.PI;
       const zKey = .35 * sh.Z + .65 * wr.Z, behind = zKey < -3;
       const c1 = [sh.X + (el.X - sh.X) * 1.25, sh.Y + (el.Y - sh.Y) * 1.25], c2 = [el.X + (wr.X - el.X) * .25, el.Y + (wr.Y - el.Y) * .25];

@@ -2,6 +2,11 @@
 // 比例依使用者提供的照片量測（照片 y112–1055 → SVG y14–173，中心 x372 → 80），
 // 造型為「萌化 A」：大眼雙反光、暖色高彩度毛色、毛流減量、從胸毛伸出的短前臂與小爪子。
 // 同時供 renderer（window.QuokkaArt）與 Node（module.exports）使用。
+//
+// 造型修正後的分工：身體的 3D 橢球模型（Q3_BASE）、毛邊濾鏡與漸層（DEFS）、手臂與前爪（arm／paw）、眼睛（eye）在這裡；
+// 實際把一隻畫出來（任意角度、任意姿勢、五官、尾巴、腳、道具、分層）在 quokka-pose.js。
+// views()／render3d() 的十六方位靜態圖也交給 quokka-pose.js 畫，所以靜態圖與動態畫面必定一致；
+// 下面 side()/back()/f34()/b34()/frontLayered() 與 q3render() 的後半是舊畫法，只在姿勢模組沒載入時當後備。
 (function () {
 function cr(pts) {
   const n = pts.length, f = (v) => v.toFixed(1);
