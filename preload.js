@@ -7,10 +7,22 @@ contextBridge.exposeInMainWorld('api', {
   // --- 桌寵 ---
   movePetBy: (dx, dy) => ipcRenderer.send('pet:move-by', { dx, dy }),
   togglePanel: () => ipcRenderer.send('panel:toggle'),
+  showPetMenu: () => ipcRenderer.send('pet:menu'),
+  openCompose: () => ipcRenderer.send('pet:compose-open'),
+  composeSend: (text, targetId) => ipcRenderer.send('pet:compose-send', { text, targetId }),
+  focusClaude: (sessionId) => ipcRenderer.send('claude:focus', sessionId),
+  answerChoice: (requestId, choice, text) => ipcRenderer.send('pet:choice', { requestId, choice, text }),
+  notifyTyping: (requestId) => ipcRenderer.send('pet:typing', requestId),
+  onInputExpire: (cb) => ipcRenderer.on('pet:input-expire', (_e, id) => cb(id)),
+  onDismissReply: (cb) => ipcRenderer.on('pet:dismiss-reply', () => cb()),
   onSpeak: (cb) => ipcRenderer.on('pet:speak', (_e, text) => cb(text)),
   // 角色與姿勢
   onCharacter: (cb) => ipcRenderer.on('pet:character', (_e, payload) => cb(payload)),
   onPose: (cb) => ipcRenderer.on('pet:pose', (_e, pose) => cb(pose)),
+  setBubbleOpen: (open) => ipcRenderer.send('pet:bubble', !!open),
+  reportShape: (rects) => ipcRenderer.send('pet:shape', rects),
+  onLayout: (cb) => ipcRenderer.on('pet:layout', (_e, layout) => cb(layout)),
+  onStatus: (cb) => ipcRenderer.on('pet:status', (_e, status) => cb(status)),
   setCharacter: (id) => ipcRenderer.invoke('character:set', id),
   onCharacterChanged: (cb) => ipcRenderer.on('character:changed', (_e, id) => cb(id)),
 
@@ -26,6 +38,18 @@ contextBridge.exposeInMainWorld('api', {
   removeFolder: (folder) => ipcRenderer.invoke('folders:remove', folder),
   listChanges: () => ipcRenderer.invoke('changes:list'),
   onChanges: (cb) => ipcRenderer.on('changes:update', (_e, list) => cb(list)),
+
+  // --- AI 專案（Claude Code / Codex 進度，唯讀） ---
+  listAi: () => ipcRenderer.invoke('ai:list'),
+  addAiProject: () => ipcRenderer.invoke('ai:add-project'),
+  removeAiProject: (p) => ipcRenderer.invoke('ai:remove-project', p),
+  recentAiSessions: () => ipcRenderer.invoke('ai:recent-sessions'),
+  addAiSession: (s) => ipcRenderer.invoke('ai:add-session', s),
+  removeAiSession: (id) => ipcRenderer.invoke('ai:remove-session', id),
+  setAiSessionCharacter: (id, characterId) => ipcRenderer.invoke('ai:set-session-character', { id, characterId }),
+  installAiHooks: () => ipcRenderer.invoke('ai:hooks-install'),
+  uninstallAiHooks: () => ipcRenderer.invoke('ai:hooks-uninstall'),
+  onAiUpdate: (cb) => ipcRenderer.on('ai:update', (_e, list) => cb(list)),
 
   // --- 設定 ---
   getSettings: () => ipcRenderer.invoke('config:get-settings'),

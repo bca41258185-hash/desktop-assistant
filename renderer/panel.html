@@ -4,115 +4,170 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
-  <title>桌面大師工作室</title>
+  <title>桌面大師</title>
   <link rel="stylesheet" href="panel.css" />
 </head>
 <body>
+  <!-- 只有三個分頁；其餘功能收在「更多」裡 -->
   <nav class="tabs">
-    <button class="tab active" data-tab="chat">聊天</button>
-    <button class="tab" data-tab="folders">資料夾</button>
-    <button class="tab" data-tab="tasks">任務</button>
-    <button class="tab" data-tab="quotes">名言</button>
-    <button class="tab" data-tab="settings">設定</button>
+    <button class="tab active" data-tab="ai">💬 對話</button>
+    <button class="tab" data-tab="tasks">✅ 任務</button>
+    <button class="tab" data-tab="more">⋯ 更多</button>
   </nav>
 
-  <!-- 聊天 -->
-  <section class="panel-view active" id="view-chat">
-    <div class="chat-log" id="chatLog"></div>
-    <label class="ctx-row">
-      <input type="checkbox" id="withContext" />
-      帶上近期資料夾變更作為上下文
-    </label>
-    <div class="chat-input">
-      <textarea id="chatInput" rows="2" placeholder="輸入訊息，按 Enter 送出（Shift+Enter 換行）"></textarea>
-      <button id="chatSend">送出</button>
+  <!-- 對話：一顆大按鈕＋一份清單 -->
+  <section class="panel-view active" id="view-ai">
+    <button id="aiAddSession" class="big-add">＋ 加入對話</button>
+    <div class="ai-session-picker" id="aiSessionPicker" hidden>
+      <div class="ai-picker-head">
+        <span>點一下就加入（近三天用過的對話）</span>
+        <button id="aiPickerClose">關閉</button>
+      </div>
+      <input type="text" id="aiPickerSearch" class="ai-picker-search" placeholder="🔍 打幾個字找對話…" />
+      <ul class="ai-picker-list" id="aiPickerList"></ul>
     </div>
-  </section>
-
-  <!-- 資料夾 -->
-  <section class="panel-view" id="view-folders">
-    <div class="section-head">
-      <h2>監看中的資料夾</h2>
-      <button id="pickFolders">+ 加入資料夾</button>
-    </div>
-    <p class="hint">本版本為「唯讀監看」：只會通知變更，絕不會刪除、搬移或改名任何檔案。</p>
-    <ul class="folder-list" id="folderList"></ul>
-
-    <h2 class="mt">近期檔案變更</h2>
-    <ul class="change-list" id="changeList"></ul>
+    <div class="ai-list" id="aiList"></div>
   </section>
 
   <!-- 任務 -->
   <section class="panel-view" id="view-tasks">
     <div class="section-head">
-      <h2>今日工作進度 <span id="taskProgress" class="progress-badge">0/0</span></h2>
+      <h2>今天要做的事 <span id="taskProgress" class="progress-badge">0/0</span></h2>
     </div>
     <div class="task-add">
-      <input type="text" id="taskInput" placeholder="新增一項任務…" />
+      <input type="text" id="taskInput" placeholder="新增一件事…" />
       <button id="taskAdd">新增</button>
     </div>
     <ul class="task-list" id="taskList"></ul>
   </section>
 
+  <!-- 更多：四顆大按鈕 -->
+  <section class="panel-view" id="view-more">
+    <div class="more-grid">
+      <button class="more-item" data-open="settings"><span class="more-icon">🧑‍🎨</span>換角色／設定</button>
+      <button class="more-item" data-open="quotes"><span class="more-icon">📜</span>名言</button>
+      <button class="more-item" data-open="folders"><span class="more-icon">📁</span>檔案變更通知</button>
+      <button class="more-item" data-open="chat"><span class="more-icon">🗨️</span>和大師聊天</button>
+    </div>
+  </section>
 
-  <!-- 名言：目前大師的查證引言（與問候語分開） -->
+  <!-- 聊天 -->
+  <section class="panel-view" id="view-chat">
+    <button class="back" data-back>‹ 返回</button>
+    <div class="chat-log" id="chatLog"></div>
+    <label class="ctx-row">
+      <input type="checkbox" id="withContext" />
+      把最近的檔案變更一起告訴大師
+    </label>
+    <div class="chat-input">
+      <textarea id="chatInput" rows="2" placeholder="想和大師聊天，要先到「更多 → 換角色／設定 → 進階設定」填 API Key（需要自己的 AI 金鑰）"></textarea>
+      <button id="chatSend">送出</button>
+    </div>
+  </section>
+
+  <!-- 檔案變更 -->
+  <section class="panel-view" id="view-folders">
+    <button class="back" data-back>‹ 返回</button>
+    <div class="section-head">
+      <h2>要留意的資料夾</h2>
+      <button id="pickFolders">＋ 加入資料夾</button>
+    </div>
+    <p class="hint">資料夾裡有檔案新增或修改時通知你。只看不動，不會刪改任何檔案。</p>
+    <ul class="folder-list" id="folderList"></ul>
+
+    <h2 class="mt">最近的變更</h2>
+    <ul class="change-list" id="changeList"></ul>
+  </section>
+
+  <!-- 名言 -->
   <section class="panel-view" id="view-quotes">
+    <button class="back" data-back>‹ 返回</button>
     <div class="section-head">
       <h2>大師名言 <span id="quoteMaster" class="progress-badge"></span></h2>
       <button id="quoteRandom">隨機說一句</button>
     </div>
-    <p class="hint">以下為查證過的真實引言（訪談、著作或得獎致詞），與桌寵啟動時的原創問候語不同。</p>
+    <p class="hint">都是查證過的真實引言。</p>
     <ul class="quote-list" id="quoteList"></ul>
   </section>
 
   <!-- 設定 -->
   <section class="panel-view" id="view-settings">
-    <h2>選擇你的大師</h2>
-    <p class="hint">私人用的 Q 版致敬造型，點選即可即時換角色。</p>
+    <button class="back" data-back>‹ 返回</button>
+    <h2>選一個角色</h2>
     <div class="char-picker" id="charPicker"></div>
 
-    <h2 class="mt">AI 供應商設定</h2>
+    <h2 class="mt">提醒</h2>
     <label class="field">
-      供應商
-      <select id="setProvider">
-        <option value="openai">OpenAI 相容（HTTP）</option>
-        <option value="stub">本地／Ollama（尚未實作，佔位）</option>
-      </select>
-    </label>
-    <label class="field">
-      Base URL
-      <input type="text" id="setBaseUrl" placeholder="https://api.openai.com/v1" />
-    </label>
-    <label class="field">
-      Model
-      <input type="text" id="setModel" placeholder="gpt-4o-mini" />
-    </label>
-    <label class="field">
-      API Key
-      <input type="password" id="setApiKey" placeholder="sk-..." autocomplete="off" />
-    </label>
-    <p class="hint" id="envHint"></p>
-
-    <h2 class="mt">提醒設定</h2>
-    <label class="field">
-      工作進度提醒間隔（分鐘，0 = 關閉）
+      每隔幾分鐘提醒我今天的任務進度（0 = 不提醒）
       <input type="number" id="setReminder" min="0" step="1" />
     </label>
     <label class="field">
-      名言氣泡間隔（分鐘，0 = 關閉；預設 20）
+      每隔幾分鐘說一句名言（0 = 不說）
       <input type="number" id="setQuoteInterval" min="0" step="1" />
     </label>
-    <p class="hint">也可在桌寵上按右鍵，或到「名言」分頁點選，立即讓大師說一句。</p>
 
-    <button id="saveSettings" class="primary">儲存設定</button>
+    <label class="ctx-row">
+      <input type="checkbox" id="setAiRemarks" />
+      大師偶爾說說看法（Claude 做事時），沒事時彼此聊聊天
+    </label>
+
+    <label class="ctx-row">
+      <input type="checkbox" id="setReplyAfterDone" />
+      Claude 做完後等我 20 秒，讓我可以直接在泡泡回覆（關掉就不等）
+    </label>
+
+    <button id="saveSettings" class="primary">儲存</button>
     <span id="saveStatus" class="save-status"></span>
 
-    <p class="hint mt">
-      提示：也可用環境變數設定金鑰，啟動前設定
-      <code>OPENAI_API_KEY</code>、<code>OPENAI_BASE_URL</code>、<code>OPENAI_MODEL</code>（環境變數優先於此處設定）。金鑰只存在本機，不會進入 repo。
-    </p>
+    <!-- 進階：平常用不到的東西全部收在這裡 -->
+    <details class="advanced">
+      <summary>進階設定（即時提醒、聊天金鑰）</summary>
+
+      <div class="ai-config">
+        <div class="ai-config-row">
+          <span><strong>即時提醒</strong> <span id="aiHookStatus" class="ai-hook-status"></span></span>
+          <button id="aiHookBtn"></button>
+        </div>
+        <p class="hint" id="aiHookHint"></p>
+      </div>
+
+      <div class="ai-config">
+        <div class="ai-config-row">
+          <strong>追蹤整個資料夾裡的所有對話</strong>
+          <button id="aiAddProject">＋ 加入資料夾</button>
+        </div>
+        <ul class="ai-watch-list" id="aiWatchList"></ul>
+        <label class="ctx-row">
+          <input type="checkbox" id="setAiWatch" />
+          追蹤 AI 對話（關掉就完全不看）
+        </label>
+      </div>
+
+      <h2 class="mt">聊天功能（不聊天可以不填）</h2>
+      <label class="field">
+        供應商
+        <select id="setProvider">
+          <option value="openai">OpenAI 相容（HTTP）</option>
+        </select>
+      </label>
+      <label class="field">
+        Base URL
+        <input type="text" id="setBaseUrl" placeholder="https://api.openai.com/v1" />
+      </label>
+      <label class="field">
+        Model
+        <input type="text" id="setModel" placeholder="gpt-4o-mini" />
+      </label>
+      <label class="field">
+        API Key
+        <input type="password" id="setApiKey" placeholder="sk-..." autocomplete="off" />
+      </label>
+      <p class="hint" id="envHint"></p>
+      <p class="hint">改完按上面的「儲存」。金鑰只存在這台電腦。</p>
+    </details>
   </section>
 
+  <script src="characters-philosophers.js"></script>
   <script src="characters.js"></script>
   <script src="panel.js"></script>
 </body>

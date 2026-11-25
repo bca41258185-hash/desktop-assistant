@@ -29,28 +29,260 @@ function setPose(pose) {
 // --- 說話氣泡（字串＝一般訊息；物件可帶出處，用於名言） ---
 const bubbleTextEl = bubbleEl.querySelector('.bubble-text') || bubbleEl;
 const bubbleAttrEl = bubbleEl.querySelector('.bubble-attr');
+const bubbleImgEl = bubbleEl.querySelector('.bubble-img');
+const bubbleHintEl = document.getElementById('bubbleHint');
+const bubbleChoicesEl = document.getElementById('bubbleChoices');
+const bubbleInputLabelEl = document.getElementById('bubbleInputLabel');
+const bubbleTargetsEl = document.getElementById('bubbleTargets');
+const bubbleSkipEl = document.getElementById('bubbleSkip');
+let composeTargetId = '';
+let replySessionId = '';   // 「等你回答」的泡泡是哪一個對話（點了就開到那個對話）
+if (bubbleSkipEl) {
+  bubbleSkipEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const id = bubbleSkipEl.dataset.requestId;
+    if (id && window.api.answerChoice) window.api.answerChoice(id, 'pass');
+    hideBubble();
+  });
+}
+const bubbleInputEl = document.getElementById('bubbleInput');
+const bubbleTextInput = document.getElementById('bubbleTextInput');
+if (bubbleInputEl) {
+  bubbleInputEl.addEventListener('click', (e) => e.stopPropagation());
+  bubbleInputEl.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = bubbleTextInput.value.trim();
+    const id = bubbleInputEl.dataset.requestId;
+    if (text && stickyAction === 'compose') {       // 主動說話：不屬於任何一個等待中的詢問
+      hideBubble();
+      if (window.api.composeSend) window.api.composeSend(text, composeTargetId);
+      return;
+    }
+    // 完成泡泡的回覆：鉤子已經不在等了，改用「主動說話」送到同一個對話
+    if (text && !id && bubbleInputEl.dataset.composeTo) {
+      const to = bubbleInputEl.dataset.composeTo;
+      hideBubble();
+      if (window.api.composeSend) window.api.composeSend(text, to);
+      return;
+    }
+    if (!text || !id) return;
+    if (window.api.answerChoice) window.api.answerChoice(id, 'text', text);
+    hideBubble();
+  });
+  // 一開始打字（或點進輸入框）就通知主行程：請鉤子繼續等
+  const typing = () => { const id = bubbleInputEl.dataset.requestId; if (id && window.api.notifyTyping) window.api.notifyTyping(id); };
+  bubbleTextInput.addEventListener('focus', typing);
+  bubbleTextInput.addEventListener('input', typing);
+  // 等太久、鉤子已經結束：把輸入框收起來（泡泡本身留著）
+  if (window.api.onInputExpire) {
+    window.api.onInputExpire((id) => {
+      if (bubbleInputEl.dataset.requestId !== id) return;
+      // 鉤子等太久結束了：回覆框留著（之後送出會改走「主動說話」的路），只有沒地方可送才收起來
+      bubbleInputEl.dataset.requestId = '';
+      if (!bubbleInputEl.dataset.composeTo) bubbleInputEl.hidden = true;
+    });
+  }
+  // 中文輸入法選字時的 Enter 不算送出
+  bubbleTextInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.isComposing) e.stopPropagation(); });
+}
 let bubbleTimer = null;
+let stickyOpen = false;
+let deferredBubble = null;   // 使用者忙著回答／打字時被擋下、稍後要補顯示的通知
+let stickyAction = '';   // 'confirm'：點一下就收起；'reply'：點一下跳到 Claude 去回覆
 function showBubble(payload) {
   let text = '';
   let attr = '';
+  let image = '';
   let duration = 6000;
+  const sticky = !!(payload && payload.sticky);
+  // 等使用者確認的泡泡還在時，只有 AI 對話的新訊息能取代它（名言、提醒不行）
+  if (stickyOpen && !(payload && payload.ai)) return;
+  // 使用者正在回答（選擇題／允許拒絕）或正在打字（說話）時，不讓「開始處理」「完成」這類通知
+  // 把它蓋掉——否則按鈕和打到一半的字會突然消失。只有新的詢問（choice）可以取代。
+  if (stickyOpen && (stickyAction === 'choice' || stickyAction === 'compose') && !(payload && payload.action === 'choice')) {
+    // 被擋下的重要通知（等你回答、完成）先記著，等使用者答完／送出後再顯示；回覆框那時多半已過期，所以拿掉
+    if (payload && payload.sticky) deferredBubble = Object.assign({}, payload, { requestId: '', inputPlaceholder: '' });
+    return;
+  }
   if (payload && typeof payload === 'object') {
     text = payload.text || payload.zh || '';
     attr = payload.attribution || payload.sourceZh || '';
+    // 只接受 data: 圖片（對話紀錄裡的截圖／貼上的圖片），不載入任何外部網址
+    image = /^data:image\/(png|jpeg|gif|webp);base64,/.test(payload.image || '') ? payload.image : '';
     duration = Number(payload.duration) || (attr ? 12000 : 6000);
   } else {
     text = String(payload || '');
   }
-  if (!text) return;
+  if (!text && !image) return;
+  if (bubbleImgEl) {
+    if (image) bubbleImgEl.src = image; else bubbleImgEl.removeAttribute('src');
+    bubbleImgEl.hidden = !image;
+  }
+  bubbleEl.classList.toggle('has-img', !!image);
   bubbleTextEl.textContent = text;
+  // 字多就自動縮小，讓整段內容放得下（有圖片時字級由樣式另外決定）
+  const len = text.length;
+  let size = image ? '' : len <= 26 ? '' : len <= 50 ? '32px' : len <= 90 ? '26px' : len <= 150 ? '22px' : '19px';
+  // 選項直排時樣式本來就把題目縮到 28px，短題目不要反而放大
+  if (payload && Array.isArray(payload.choices) && payload.choices.length > 2 && size === '32px') size = '';
+  bubbleTextEl.style.fontSize = size;
+  bubbleTextEl.style.lineHeight = size ? '1.4' : '';
+  // 底紋的橫線是配最大字級的行距畫的；字縮小、有圖、或是小泡泡時行距對不上，就不畫橫線
+  bubbleEl.classList.toggle('plain', !!size || !!image || !!(payload && (payload.chat || payload.choices || payload.inputPlaceholder)));
   if (bubbleAttrEl) {
     bubbleAttrEl.textContent = attr;
     bubbleAttrEl.hidden = !attr;
   }
   bubbleEl.classList.toggle('has-attr', !!attr);
+  // 先請主行程把視窗展開，再顯示泡泡；泡泡消失後收回，只留角色大小
+  if (window.api.setBubbleOpen) window.api.setBubbleOpen(true);
   bubbleEl.classList.add('show');
+  stickyAction = sticky ? (['reply', 'choice', 'compose'].includes(payload.action) ? payload.action : 'confirm') : '';
+  // 選擇題：在泡泡裡放幾顆大選項，點了就把答案送回去
+  if (bubbleChoicesEl) {
+    bubbleChoicesEl.innerHTML = '';
+    const choices = stickyAction === 'choice' && Array.isArray(payload.choices) ? payload.choices : [];
+    choices.forEach((c) => {
+      const b = document.createElement('button');
+      b.className = 'bubble-choice ' + c.id;
+      b.textContent = c.label;
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.api.answerChoice) window.api.answerChoice(payload.requestId, c.id);
+        hideBubble();
+      });
+      bubbleChoicesEl.appendChild(b);
+    });
+    // 超過兩個選項、或選項文字較長時改成直排
+    bubbleChoicesEl.classList.toggle('stack', choices.length > 2 || choices.some((c) => String(c.label).length > 6));
+    bubbleChoicesEl.hidden = !choices.length;
+  }
+  // 打字回覆：選項之外也可以自己輸入
+  if (bubbleInputEl) {
+    const canType = sticky && !!payload.inputPlaceholder && (!!payload.requestId || !!payload.composeTo || stickyAction === 'compose');
+    bubbleInputEl.dataset.composeTo = canType ? (payload.composeTo || '') : '';
+    bubbleInputEl.hidden = !canType;
+    bubbleInputEl.dataset.requestId = canType ? (payload.requestId || '') : '';
+    bubbleTextInput.value = '';
+    bubbleTextInput.placeholder = canType ? payload.inputPlaceholder : '';
+    const sendBtn = document.getElementById('bubbleSend');
+    if (sendBtn) sendBtn.textContent = (canType && payload.inputButton) || '送出';
+    // 輸入框上方的常駐說明（提示字一打字就看不到，重要的後果要一直看得到）
+    if (bubbleInputLabelEl) {
+      bubbleInputLabelEl.textContent = canType ? (payload.inputLabel || '') : '';
+      bubbleInputLabelEl.hidden = !(canType && payload.inputLabel);
+    }
+    if (stickyAction === 'compose') setTimeout(() => bubbleTextInput.focus(), 150);
+  }
+  // 主動說話：有好幾個對話時，列出來讓使用者點要送到哪一個（預設第一個）
+  if (bubbleTargetsEl) {
+    const targets = stickyAction === 'compose' && Array.isArray(payload.targets) ? payload.targets : [];
+    bubbleTargetsEl.innerHTML = '';
+    composeTargetId = targets.length ? targets[0].id : '';
+    if (targets.length) {
+      const label = document.createElement('div');
+      label.className = 'bubble-targets-label';
+      label.textContent = '要送到哪一個？點一下就換：';
+      bubbleTargetsEl.appendChild(label);
+    }
+    targets.forEach((t, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'bubble-target' + (i === 0 ? ' on' : '');
+      b.textContent = t.title;
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        composeTargetId = t.id;
+        bubbleTargetsEl.querySelectorAll('.bubble-target').forEach((x) => x.classList.toggle('on', x === b));
+        bubbleTextInput.focus();
+      });
+      bubbleTargetsEl.appendChild(b);
+    });
+    bubbleTargetsEl.hidden = !targets.length;
+  }
+  // 選擇題／允許拒絕：給一個「先不回答」的出口（Claude 那邊的詢問還在，之後可以去那裡回答）
+  if (bubbleSkipEl) {
+    bubbleSkipEl.hidden = stickyAction !== 'choice';
+    bubbleSkipEl.dataset.requestId = stickyAction === 'choice' ? (payload.requestId || '') : '';
+  }
+  replySessionId = stickyAction === 'reply' ? (payload.sessionId || '') : '';
+  bubbleEl.classList.toggle('sticky', sticky);
+  bubbleEl.classList.toggle('confirm', stickyAction === 'confirm');
+  bubbleEl.classList.toggle('compose', stickyAction === 'compose');
+  // 助手之間閒聊：用小一點、窄一點的泡泡，各自出現在自己頭上，兩位站很近也不會疊在一起
+  bubbleEl.classList.toggle('chat', !!(payload && payload.chat));
+  bubbleEl.classList.toggle('reply', stickyAction === 'reply' || stickyAction === 'choice');
+  if (bubbleHintEl) {
+    const canReplyHere = stickyAction === 'confirm' && !!payload.inputPlaceholder && (!!payload.requestId || !!payload.composeTo);
+    bubbleHintEl.textContent = stickyAction === 'reply' ? '點一下，打開那個對話去回答'
+      : stickyAction === 'compose' ? '不說了就點一下泡泡'
+        : canReplyHere ? '不回覆就點一下泡泡' : '知道了就點一下泡泡';
+    bubbleHintEl.hidden = !sticky || stickyAction === 'choice';
+  }
+  stickyOpen = sticky;
   if (bubbleTimer) clearTimeout(bubbleTimer);
-  bubbleTimer = setTimeout(() => bubbleEl.classList.remove('show'), duration);
+  bubbleTimer = sticky ? null : setTimeout(hideBubble, duration);
+}
+
+function hideBubble() {
+  stickyOpen = false;
+  if (bubbleTimer) clearTimeout(bubbleTimer);
+  bubbleTimer = null;
+  stickyAction = '';
+  bubbleEl.classList.remove('show', 'sticky', 'confirm', 'reply', 'compose', 'chat', 'plain');
+  if (bubbleHintEl) bubbleHintEl.hidden = true;
+  if (bubbleChoicesEl) bubbleChoicesEl.hidden = true;
+  if (bubbleInputEl) bubbleInputEl.hidden = true;
+  if (bubbleInputLabelEl) bubbleInputLabelEl.hidden = true;
+  if (bubbleTargetsEl) bubbleTargetsEl.hidden = true;
+  if (bubbleSkipEl) bubbleSkipEl.hidden = true;
+  if (window.api.setBubbleOpen) window.api.setBubbleOpen(false);
+  if (deferredBubble) {
+    const later = deferredBubble;
+    deferredBubble = null;
+    setTimeout(() => { if (!stickyOpen) showBubble(later); }, 1500);
+  }
+}
+// 點泡泡本身就是確認；等你回覆的泡泡點了會把 Claude 視窗叫到最前面
+bubbleEl.addEventListener('click', () => {
+  // 名言、看法、閒聊這類一般泡泡：點一下就關掉
+  if (!stickyOpen) {
+    if (bubbleEl.classList.contains('show')) hideBubble();
+    return;
+  }
+  if (stickyAction === 'choice') return;   // 選擇題要點選項才算
+  const action = stickyAction;
+  // 完成泡泡若還開著回覆框：點泡泡確認 = 不回覆，讓 Claude 馬上結束等待
+  const rid = bubbleInputEl ? bubbleInputEl.dataset.requestId : '';
+  if (rid && window.api.answerChoice) window.api.answerChoice(rid, 'pass');
+  hideBubble();
+  if (action === 'reply' && window.api.focusClaude) window.api.focusClaude(replySessionId);
+});
+// Claude 已經不再等你（例如你已在 Claude 裡回覆）→ 自動收起「等你回覆」的泡泡
+if (window.api.onDismissReply) {
+  window.api.onDismissReply(() => {
+    // Claude 已經不在等了：之前記著要補顯示的「等你回答」也不用了
+    if (deferredBubble && deferredBubble.action === 'reply') deferredBubble = null;
+    if (stickyOpen && (stickyAction === 'reply' || stickyAction === 'choice')) hideBubble(); });
+}
+
+// 視窗被推回螢幕內時，角色反向位移以維持在原位
+const stageEl = document.getElementById('stage');
+if (window.api.onLayout) {
+  window.api.onLayout((layout) => {
+    stageEl.style.setProperty('--pet-shift', ((layout && layout.shift) || 0) + 'px');
+  });
+}
+
+// 小狀態標籤
+const statusEl = document.getElementById('status');
+if (window.api.onStatus && statusEl) {
+  window.api.onStatus((st) => {
+    const text = (st && st.text) || '';
+    statusEl.textContent = text;
+    statusEl.className = 'status-chip' + (st && st.cls ? ' ' + st.cls : '');
+    statusEl.hidden = !text;
+  });
 }
 
 // 先以預設角色渲染，避免切換前空白
@@ -77,7 +309,9 @@ let moved = 0;
 
 petEl.addEventListener('contextmenu', (e) => {
   e.preventDefault();
-  if (window.api.speakRandomQuote) window.api.speakRandomQuote();
+  // 右鍵 → 選單（打開面板、說名言、開機啟動、結束）
+  if (window.api.showPetMenu) window.api.showPetMenu();
+  else if (window.api.speakRandomQuote) window.api.speakRandomQuote();
 });
 
 petEl.addEventListener('mousedown', (e) => {
@@ -102,6 +336,73 @@ window.addEventListener('mousemove', (e) => {
 window.addEventListener('mouseup', () => {
   if (!dragging) return;
   dragging = false;
-  // 位移很小 → 視為點擊 → 開/關面板
-  if (moved < 5) window.api.togglePanel();
+  if (moved >= 5) return;                 // 有移動 = 拖曳，不算點擊
+  // 點一下 = 下一句名言；快速點兩下 = 打開面板
+  if (clickTimer) {
+    clearTimeout(clickTimer);
+    clickTimer = null;
+    window.api.togglePanel();
+  } else {
+    clickTimer = setTimeout(() => {
+      clickTimer = null;
+      if (window.api.speakRandomQuote) window.api.speakRandomQuote();
+    }, 280);
+  }
+});
+let clickTimer = null;
+
+// ✏️ 按鈕：隨時對 Claude 說話
+const composeBtn = document.getElementById('composeBtn');
+if (composeBtn) {
+  composeBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+  composeBtn.addEventListener('click', (e) => { e.stopPropagation(); if (window.api.openCompose) window.api.openCompose(); });
+}
+
+// 📋 按鈕：打開面板（和點角色兩下一樣，只是看得見）
+const panelBtn = document.getElementById('panelBtn');
+if (panelBtn) {
+  panelBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+  panelBtn.addEventListener('click', (e) => { e.stopPropagation(); window.api.togglePanel(); });
+}
+
+// ---------------------------------------------------------------------------
+// 可見區域：視窗大小固定，這裡把「現在看得到的東西」所在的幾塊矩形回報給主行程，
+// 其餘地方不畫、滑鼠會穿過去。內容一有變化（泡泡出現／消失、狀態標籤、位移）就重新回報。
+// ---------------------------------------------------------------------------
+let lastShape = '';
+function reportShape() {
+  if (!window.api.reportShape) return;
+  const rects = [];
+  const add = (node, pad) => {
+    if (!node || node.hidden) return;
+    const r = node.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return;
+    rects.push({ x: r.left - pad, y: r.top - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+  };
+  add(petEl, 22);                                  // 角色（留一點邊給開心時的彈跳）
+  add(document.getElementById('status'), 6);
+  add(document.getElementById('panelBtn'), 6);
+  add(document.getElementById('composeBtn'), 6);
+  if (bubbleEl.classList.contains('show')) add(bubbleEl, 36);   // 泡泡（含發光的外框）
+  const key = JSON.stringify(rects.map((r) => [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]));
+  if (key === lastShape) return;
+  lastShape = key;
+  window.api.reportShape(rects);
+}
+// 泡泡有淡入與縮放動畫，內容也可能晚一點才排好版：變化後多回報幾次
+function reportShapeSoon() {
+  requestAnimationFrame(reportShape);
+  setTimeout(reportShape, 120);
+  setTimeout(reportShape, 320);
+}
+new MutationObserver(reportShapeSoon).observe(document.getElementById('stage'), { attributes: true, childList: true, subtree: true, characterData: true });
+window.addEventListener('resize', reportShapeSoon);
+window.addEventListener('load', reportShapeSoon);
+setInterval(reportShape, 1000);    // 保險：萬一漏掉某次變化
+reportShapeSoon();
+
+// 點泡泡旁邊的空白處（視窗裡看得到的那一圈）也可以關掉一般泡泡；等你處理的泡泡不受影響
+document.getElementById('stage').addEventListener('click', (e) => {
+  if (e.target !== e.currentTarget) return;
+  if (!stickyOpen && bubbleEl.classList.contains('show')) hideBubble();
 });

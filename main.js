@@ -1,28 +1,50 @@
 // 主行程：負責視窗、IPC、資料夾監看、設定讀寫、提醒、AI 呼叫。
 // Main process: windows, IPC, folder watching, config I/O, reminders, AI calls.
 
-const { app, BrowserWindow, ipcMain, dialog, screen, Menu, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, Menu, shell, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
-const { createProvider } = require('./providers');
-const { CHARACTERS, DEFAULT_ID } = require('./renderer/characters');
 
+// 設定與資料一律放在 %APPDATA%\desktop-assistant（不隨打包後的產品名稱改變），
+// 這樣開發版、安裝版、免安裝版用的是同一份設定，更新或換版本都不會遺失。
+app.setPath('userData', path.join(app.getPath('appData'), 'desktop-assistant'));
+const { createProvider } = require('./providers');
+const { createAiWatcher, defaultRoots } = require('./ai-watch');
+const hooksInstaller = require('./ai-watch/hooks-installer');
+const { listClaudeSessions, desktopSessionMeta } = require('./ai-watch/claude-sessions');
+const compose = require('./ai-watch/compose');
+const { remarkFor } = require('./data/remarks');
+const { pickChat, scenesFor } = require('./data/chats');
+const { CHARACTERS, ORDER: ACTIVE_CHARACTERS, DEFAULT_ID, categoryOf } = require('./renderer/characters');
+// 只有開放中的角色可以選；封存的角色（設定檔裡的舊值）一律換成預設角色
+const isActiveCharacter = (id) => ACTIVE_CHARACTERS.includes(id);
+
+// 名言資料：讀取 data/ 下所有 quotes*.json（每個職業一個檔，方便擴充）
 function loadQuotes() {
+  const map = {};
+  const dir = path.join(__dirname, 'data');
+  let files = [];
   try {
-    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'quotes.json'), 'utf-8'));
-    const list = Array.isArray(raw) ? raw : (raw.quotes || []);
-    const map = {};
-    for (const q of list) {
-      if (!q || !q.id || !q.zh) continue;
-      if (!map[q.id]) map[q.id] = [];
-      map[q.id].push(q);
-    }
-    return map;
+    files = fs.readdirSync(dir).filter((f) => /^quotes.*\.json$/.test(f)).sort();
   } catch (e) {
-    console.error('載入名言失敗:', e.message);
-    return {};
+    console.error('讀取名言資料夾失敗:', e.message);
+    return map;
   }
+  for (const f of files) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8'));
+      const list = Array.isArray(raw) ? raw : (raw.quotes || []);
+      for (const q of list) {
+        if (!q || !q.id || !q.zh) continue;
+        if (!map[q.id]) map[q.id] = [];
+        map[q.id].push(q);
+      }
+    } catch (e) {
+      console.error(`載入名言失敗（${f}）:`, e.message);
+    }
+  }
+  return map;
 }
 let petWindow = null;
 let panelWindow = null;
@@ -33,6 +55,8 @@ let quoteTimer = null;
 let lastQuoteIndex = -1;
 let config = null;
 let QUOTES_BY_ID = loadQuotes();
+let aiWatcher = null;             // AI 專案監看（Claude Code / Codex）
+let aiSnapshot = [];
 
 // ---------------------------------------------------------------------------
 // 設定讀寫（存於 app.getPath('userData')，絕不放進 repo）
@@ -47,14 +71,17 @@ const CONFIG_DEFAULTS = {
     model: '',
     reminderIntervalMinutes: 30,
     quoteIntervalMinutes: 20,      // 名言氣泡間隔（0＝關閉）
-    characterId: DEFAULT_ID        // 目前選用的大師（'ando' | 'gehry' | ...）
+    characterId: DEFAULT_ID,       // 目前選用的大師（'ando' | 'gehry' | ...）
+    aiWatch: true,                 // 監看 Claude Code / Codex 對話進度（唯讀）
+    aiRemarks: true,               // Claude 進行中時，角色依人物設定發表看法
+    aiProjects: []                 // 只監看這些專案資料夾內的對話（空 = 不讀任何對話）
   }
 };
 
 // 回傳有效且存在的角色 id（避免設定檔殘留無效值）
 function currentCharacterId() {
   const id = config && config.settings && config.settings.characterId;
-  return CHARACTERS[id] ? id : DEFAULT_ID;
+  return isActiveCharacter(id) ? id : DEFAULT_ID;
 }
 
 function configPath() {
@@ -100,39 +127,188 @@ function effectiveSettings() {
 // ---------------------------------------------------------------------------
 // 視窗
 // ---------------------------------------------------------------------------
-function createPetWindow() {
-  petWindow = new BrowserWindow({
-    width: 250,
-    height: 400,
+// 桌寵視窗平常只有角色大小（不擋住後面的畫面），說話時才向上展開放泡泡。
+// 兩種大小都以「角色底部中央」為錨點，所以角色不會跳動。
+const APP_ICON = path.join(__dirname, 'assets', 'icon.png');   // 由 tools/make-icon.js 產生
+const PET_SMALL = { width: 240, height: 250 };
+const PET_BIG = { width: 520, height: 640 };
+
+// 可以同時有好幾位助手：每位角色一個視窗，各自盯著分配給他的對話。
+//   pets：角色 id → { id, win, expanded, shift }
+//   名言、任務提醒這類不屬於任何對話的事，由 primaryPet()（主助手在場就是他，否則是第一位）負責。
+const pets = new Map();
+
+function primaryPet() {
+  return pets.get(currentCharacterId()) || [...pets.values()][0] || null;
+}
+
+function petOf(characterId) {
+  const p = characterId && pets.get(characterId);
+  return p && !p.win.isDestroyed() ? p : primaryPet();
+}
+
+function petBySender(sender) {
+  for (const p of pets.values()) if (!p.win.isDestroyed() && p.win.webContents === sender) return p;
+  return null;
+}
+
+function sendToPet(characterId, channel, payload) {
+  const p = petOf(characterId);
+  if (p && !p.win.isDestroyed()) p.win.webContents.send(channel, payload);
+}
+
+// 助手視窗的大小固定不變（PET_BIG，放得下最大的泡泡）。
+// 以前是說話時把視窗放大、說完再縮小，每說一句就閃一下；現在改成只切換「可見區域」：
+// 視窗裡只有角色、按鈕、泡泡所在的那幾塊會顯示、能點，其餘完全透明而且滑鼠會穿過去。
+//
+// 每位助手記的是「錨點」＝角色腳底中央在螢幕上的位置（anchor.x、anchor.bottom）。
+// 視窗貼著錨點擺；太靠近螢幕左右邊緣時視窗會被推回畫面內，角色在視窗裡反向位移（shift）補回來。
+
+function placePet(pet) {
+  if (!pet || pet.win.isDestroyed()) return;
+  const want = Math.round(pet.anchor.x - PET_BIG.width / 2);
+  const wa = screen.getDisplayNearestPoint({ x: Math.round(pet.anchor.x), y: Math.round(pet.anchor.bottom) - 10 }).workArea;
+  const x = Math.min(Math.max(want, wa.x), wa.x + wa.width - PET_BIG.width);
+  const y = Math.round(pet.anchor.bottom - PET_BIG.height);
+  const shift = want - x;
+  pet.win.setBounds({ x, y, width: PET_BIG.width, height: PET_BIG.height });
+  if (shift !== pet.shift) {
+    pet.shift = shift;
+    pet.win.webContents.send('pet:layout', { shift });
+  }
+}
+
+// 泡泡開著與否（由助手視窗回報）：用來讓說話的那位站到最前面，以及判斷他現在方不方便聊天
+function setPetExpanded(pet, open) {
+  if (!pet || pet.win.isDestroyed()) return;
+  pet.expanded = open;
+  if (open) pet.win.moveTop();
+}
+
+// 助手視窗回報目前要顯示的幾塊區域（視窗內座標）；其餘地方不畫、滑鼠穿過去
+function setPetShape(pet, rects) {
+  if (!pet || pet.win.isDestroyed() || !Array.isArray(rects) || !rects.length) return;
+  const clean = rects.slice(0, 12).map((r) => ({
+    x: Math.max(0, Math.round(r.x)), y: Math.max(0, Math.round(r.y)),
+    width: Math.max(1, Math.round(r.width)), height: Math.max(1, Math.round(r.height))
+  })).filter((r) => r.x < PET_BIG.width && r.y < PET_BIG.height);
+  if (!clean.length) return;
+  try { pet.win.setShape(clean); } catch (e) { /* 這個平台不支援就維持整個視窗 */ }
+}
+
+// 第 index 位助手的預設錨點：從主螢幕右下角往左一位一位排
+function defaultPetAnchor(index) {
+  const { workArea } = screen.getPrimaryDisplay();
+  return {
+    x: workArea.x + workArea.width - 40 - index * (PET_SMALL.width + 8) - PET_SMALL.width / 2,
+    bottom: workArea.y + workArea.height - 20
+  };
+}
+
+// 使用者把這位助手拖到哪裡，下次開啟就站在哪裡（錨點還在某個螢幕裡才採用）
+// 設定檔裡存的是「角色小方塊的左上角」（PET_SMALL），這裡換算成錨點
+function savedPetAnchor(characterId) {
+  const p = (config.settings.petPositions || {})[characterId];
+  if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
+  const a = { x: Math.round(p.x + PET_SMALL.width / 2), bottom: Math.round(p.y + PET_SMALL.height) };
+  const visible = screen.getAllDisplays().some((d) => {
+    const w = d.workArea;
+    return a.x >= w.x && a.x <= w.x + w.width && a.bottom - 100 >= w.y && a.bottom - 100 <= w.y + w.height;
+  });
+  return visible ? a : null;
+}
+
+let petPositionTimer = null;
+function rememberPetPosition(pet) {
+  if (!pet || pet.win.isDestroyed()) return;
+  if (!config.settings.petPositions) config.settings.petPositions = {};
+  config.settings.petPositions[pet.id] = {
+    x: Math.round(pet.anchor.x - PET_SMALL.width / 2), y: Math.round(pet.anchor.bottom - PET_SMALL.height)
+  };
+  // 拖曳時事件很密，停手半秒後才寫入設定檔
+  if (petPositionTimer) clearTimeout(petPositionTimer);
+  petPositionTimer = setTimeout(saveConfig, 500);
+}
+
+// greeting：這位助手出現時要說的第一句話（不說就留空）
+function createPet(characterId, index, greeting) {
+  const win = new BrowserWindow({
+    width: PET_BIG.width,
+    height: PET_BIG.height,
+    show: false,                     // 等可見區域設定好再顯示，避免一開始整塊視窗擋住滑鼠
     frame: false,
     transparent: true,
     resizable: false,
     alwaysOnTop: true,
     hasShadow: false,
-    skipTaskbar: false,
+    skipTaskbar: index > 0,          // 工作列只留主助手一個圖示
+    icon: APP_ICON,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false
     }
   });
+  const pet = {
+    id: characterId, win, expanded: false, shift: 0,
+    anchor: savedPetAnchor(characterId) || defaultPetAnchor(index)
+  };
+  pets.set(characterId, pet);
 
-  petWindow.loadFile(path.join(__dirname, 'renderer', 'pet.html'));
-  petWindow.setAlwaysOnTop(true, 'screen-saver');
+  win.loadFile(path.join(__dirname, 'renderer', 'pet.html'));
+  win.setAlwaysOnTop(true, 'screen-saver');
+  placePet(pet);
 
-  // 載入完成後，告知桌寵目前選用的大師並顯示其問候語
-  petWindow.webContents.on('did-finish-load', () => {
-    const id = currentCharacterId();
-    const c = CHARACTERS[id];
-    petWindow.webContents.send('pet:character', { id, greeting: c.greeting });
+  // 載入完成後，告知這個視窗它是哪一位大師；需要時顯示問候語
+  win.webContents.on('did-finish-load', () => {
+    win.webContents.send('pet:layout', { shift: pet.shift });
+    win.webContents.send('pet:character', { id: characterId, greeting: greeting || undefined });
+    win.webContents.send('pet:status', petStatusOf(sessionsOfPet(characterId)));
+    // 保險：就算可見區域沒回報成功，也在一小段時間後把視窗顯示出來
+    setTimeout(() => { if (!win.isDestroyed() && !win.isVisible()) win.showInactive(); }, 1200);
   });
+  return pet;
+}
 
-  // 預設放在主螢幕右下角
-  const { workArea } = screen.getPrimaryDisplay();
-  petWindow.setPosition(
-    workArea.x + workArea.width - 270,
-    workArea.y + workArea.height - 420
-  );
+// 現在應該在場的助手：每個追蹤中的對話被分配到的角色（不重複），一位盯一個對話。
+// 完全沒有追蹤對話時，才由主助手（設定裡選的角色）一個人站著。
+function wantedPetIds() {
+  const ids = [];
+  aiSessions().forEach((s) => {
+    const c = characterOfSession(s.id);
+    if (!ids.includes(c)) ids.push(c);
+  });
+  return ids.length ? ids : [currentCharacterId()];
+}
+
+// 讓畫面上的助手和設定一致：多的請走，少的請來
+// mode：'startup'＝剛開程式，主助手說自己的問候語；'join'＝新加入的助手說明他來盯對話；其他＝不說話
+function syncPets(mode) {
+  const want = wantedPetIds();
+  for (const [id, p] of [...pets]) {
+    if (!want.includes(id)) {
+      pets.delete(id);
+      if (!p.win.isDestroyed()) p.win.destroy();
+    }
+  }
+  want.forEach((id) => {
+    if (!pets.has(id)) {
+      // 新來的站在還沒人站的位置
+      let index = 0;
+      const taken = new Set([...pets.values()].map((p) => p.slot));
+      while (taken.has(index)) index += 1;
+      const c = CHARACTERS[id];
+      const greeting = mode === 'startup' ? (id === currentCharacterId() && c ? c.greeting : '')
+        : mode === 'join' ? '這個對話交給我來盯。' : '';
+      createPet(id, index, greeting).slot = index;
+    }
+  });
+  petWindow = primaryPet() ? primaryPet().win : null;
+}
+
+// 相容舊名稱：建立（或補齊）所有助手視窗
+function createPetWindow() {
+  syncPets('startup');
 }
 
 function createPanelWindow() {
@@ -140,7 +316,8 @@ function createPanelWindow() {
     width: 440,
     height: 640,
     show: false,
-    title: '桌面大師工作室',
+    title: '桌面大師',
+    icon: APP_ICON,
     backgroundColor: '#f4f1e9',
     autoHideMenuBar: true,
     webPreferences: {
@@ -176,30 +353,52 @@ function togglePanel() {
 }
 
 // ---------------------------------------------------------------------------
-// 讓桌寵「說話」：把文字送到桌寵視窗顯示氣泡
+// 讓助手「說話」：把文字送到某位助手的視窗顯示氣泡（沒指定就是主助手）
 // ---------------------------------------------------------------------------
-function speak(text) {
-  if (petWindow && !petWindow.isDestroyed()) {
-    petWindow.webContents.send('pet:speak', text);
-  }
+function speak(text, characterId) {
+  sendToPet(characterId, 'pet:speak', text);
 }
 
-// 讓桌寵切換姿勢：'idle' | 'think' | 'happy'
-function setPetPose(pose) {
-  if (petWindow && !petWindow.isDestroyed()) {
-    petWindow.webContents.send('pet:pose', pose);
-  }
+// 讓助手切換姿勢：'idle' | 'think' | 'happy'
+function setPetPose(pose, characterId) {
+  sendToPet(characterId, 'pet:pose', pose);
 }
 
-// 切換桌寵角色並播放該大師的問候語
+// 換主助手的角色：重新整理在場的助手，並讓新的主助手打招呼
 function setPetCharacter(id, withGreeting) {
-  if (petWindow && !petWindow.isDestroyed()) {
-    const c = CHARACTERS[id];
-    petWindow.webContents.send('pet:character', {
-      id,
-      greeting: withGreeting && c ? c.greeting : undefined
-    });
-  }
+  syncPets('');
+  const c = CHARACTERS[id];
+  if (withGreeting && c) sendToPet(id, 'pet:speak', c.greeting);
+}
+
+// 換主助手時：原本交給舊主助手的對話改跟新主助手，原本交給新主助手那位角色的則換給舊的
+// （這樣「換角色」只是換一張臉，不會憑空多出一位助手）
+function swapPrimaryCharacter(oldId, newId) {
+  aiSessions().forEach((s) => {
+    if (s.characterId === oldId) s.characterId = newId;
+    else if (s.characterId === newId) s.characterId = oldId;
+  });
+}
+
+// --- 哪個對話由哪位助手盯 ---
+// 對話有指定角色（而且那位角色目前開放）就用他，否則歸主助手
+function characterOfSession(sessionId) {
+  const w = aiSessions().find((x) => x.id === sessionId);
+  return w && isActiveCharacter(w.characterId) ? w.characterId : currentCharacterId();
+}
+
+// 新加入的對話要分配給誰：先找還沒有盯任何對話的角色（主助手優先），都有事就給手上最少的
+function nextCharacterForNewSession() {
+  const order = [currentCharacterId()].concat(ACTIVE_CHARACTERS.filter((id) => id !== currentCharacterId()));
+  const load = new Map(order.map((id) => [id, 0]));
+  aiSessions().forEach((s) => { const c = characterOfSession(s.id); load.set(c, (load.get(c) || 0) + 1); });
+  return order.slice().sort((a, b) => load.get(a) - load.get(b) || order.indexOf(a) - order.indexOf(b))[0];
+}
+
+// 某位助手負責的對話（面板快照裡的格式）。主助手另外包辦沒有個別加入的對話（整個資料夾追蹤到的）
+function sessionsOfPet(characterId) {
+  const all = [].concat(...(aiSnapshot || []).map((p) => p.sessions || []));
+  return all.filter((s) => characterOfSession(path.basename(String(s.id || ''), '.jsonl')) === characterId);
 }
 
 // ---------------------------------------------------------------------------
@@ -272,34 +471,29 @@ function setupReminder() {
 // 名言：目前大師的查證引言（與角色問候語分開）
 // ---------------------------------------------------------------------------
 function quotesFor(id) {
-  return QUOTES_BY_ID[id] || QUOTES_BY_ID[DEFAULT_ID] || [];
+  // 沒有收錄名言的角色回傳空陣列，避免誤顯示其他人的名言
+  return QUOTES_BY_ID[id] || [];
 }
 
-function speakQuote(quote) {
+function speakQuote(quote, characterId) {
   if (!quote || !quote.zh) return false;
   const master = CHARACTERS[quote.id] || CHARACTERS[currentCharacterId()];
   const name = master ? master.nameZh : '';
   const source = quote.sourceZh || quote.source || '';
   const attribution = [name, source].filter(Boolean).join(' ／ ');
-  if (petWindow && !petWindow.isDestroyed()) {
-    petWindow.webContents.send('pet:speak', {
-      text: quote.zh,
-      attribution: attribution ? '—— ' + attribution : '',
-      duration: 12000
-    });
-  }
+  speak({ text: quote.zh, attribution: attribution ? '—— ' + attribution : '', duration: 12000 }, characterId);
   return true;
 }
 
-function speakRandomQuote() {
-  const list = quotesFor(currentCharacterId());
+function speakRandomQuote(characterId) {
+  const list = quotesFor(characterId || currentCharacterId());
   if (!list.length) return false;
   let idx = Math.floor(Math.random() * list.length);
   if (list.length > 1 && idx === lastQuoteIndex) {
     idx = (idx + 1) % list.length;
   }
   lastQuoteIndex = idx;
-  return speakQuote(list[idx]);
+  return speakQuote(list[idx], characterId);
 }
 
 function setupQuoteTimer() {
@@ -314,20 +508,549 @@ function setupQuoteTimer() {
 // ---------------------------------------------------------------------------
 // IPC
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// AI 專案監看：即時反映 Claude Code / Codex 的對話進度（唯讀，只讀對話紀錄檔）
+// ---------------------------------------------------------------------------
+const aiLastBubble = new Map();   // sessionId+kind -> 時間，避免同一事件連續洗版
+
+// 給泡泡用的一句話：取回覆的第一行、去掉 Markdown 符號，只留第一句；太長才截斷
+function petLine(text, n) {
+  const first = String(text || '').split('\n').map((l) => l.trim()).find((l) => l && !/^[-=*_#>|\s]+$/.test(l) && !l.startsWith('#')) || '';   // 標題行不算
+  const plain = first.replace(/^[#>*\s-]+/, '').replace(/[*_`]/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').trim();
+  if (plain.length <= n) return plain;       // 放得下就整段顯示（泡泡會依字數自動縮小字級）
+  // 太長：在 n 個字以內找最後一個句尾，停在完整的句子上（引號裡的問號不算句尾）
+  let cut = -1;
+  const re = /[。！？!?](?![」』）)"'])/g;
+  for (let m = re.exec(plain); m && m.index < n; m = re.exec(plain)) cut = m.index + 1;
+  return cut > 0 ? plain.slice(0, cut) : plain.slice(0, n - 1) + '…';
+}
+
+function clip(text, n) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  return t.length > n ? t.slice(0, n) + '…' : t;
+}
+
+// 同時追蹤好幾個對話時，「完成」泡泡註明是哪一個做完了（只有一個就不寫）
+function doneFrom(s) {
+  return composeTargets(characterOfSession(sessionIdOf(s))).length > 1 && s.title && s.title !== '（尚無指令）' ? '做完的是：' + clip(s.title, 24) : '';
+}
+
+// 把「Claude 想用某個工具」說成白話（不出現 Bash、Edit 這類名稱）
+function permissionQuestion(tool, summary) {
+  const what = clip(summary, 80);
+  const quoted = what ? `「${what}」` : '';
+  switch (tool) {
+    case 'Bash': case 'PowerShell': return `Claude 想在電腦上執行${quoted || '一個指令'}，要讓它做嗎？`;
+    case 'Edit': case 'MultiEdit': case 'NotebookEdit': return `Claude 想修改檔案${quoted}，要讓它改嗎？`;
+    case 'Write': return `Claude 想寫入檔案${quoted}，要讓它寫嗎？`;
+    case 'Read': return `Claude 想讀取檔案${quoted}，要讓它讀嗎？`;
+    case 'WebFetch': case 'WebSearch': return `Claude 想上網查資料${quoted}，要讓它查嗎？`;
+    default: return `Claude 想做一件需要你同意的事${quoted}，要讓它做嗎？`;
+  }
+}
+
+// --- 在泡泡上回答 Claude 的權限詢問 ---
+const pendingPermissions = new Set();   // 還在等使用者回答的請求 id
+const pendingReplies = new Set();       // 做完後等使用者回覆的請求 id
+const pendingQuestions = new Map();     // 請求 id → { questions, index, answers }（Claude 的選擇題，一題一題問）
+
+function askNextQuestion(id) {
+  const st = pendingQuestions.get(id);
+  if (!st) return;
+  const q = st.questions[st.index];
+  speak({ // 送給負責這個對話的助手（見最後的 st.who）
+    text: q.question,
+    attribution: [st.from, st.questions.length > 1 ? `第 ${st.index + 1} 題，共 ${st.questions.length} 題` : ''].filter(Boolean).join('・'),
+    ai: true, sticky: true, action: 'choice', requestId: id,
+    choices: q.options.map((label, i) => ({ id: 'opt' + i, label })),
+    inputLabel: '都不是？自己打字回答：', inputPlaceholder: '打字，按 Enter 送出'
+  }, st.who);
+}
+
+// 讓鉤子知道桌寵開著（沒開的話鉤子不會讓 Claude 空等）
+function touchAlive() {
+  try {
+    fs.mkdirSync(aiHooksDir(), { recursive: true });
+    fs.writeFileSync(path.join(aiHooksDir(), 'app-alive'), String(Date.now()));
+  } catch (e) { /* ignore */ }
+}
+
+// choice：'allow'｜'deny'｜'pass'（不回答，交回 Claude 自己的詢問畫面）
+function permLog(msg) {
+  try { fs.appendFileSync(path.join(aiHooksDir(), 'permission-debug.log'), `${new Date().toISOString()} app ${msg}
+`); } catch (e) { /* ignore */ }
+}
+
+function answerPermission(id, choice, answers, message) {
+  permLog(`${id} answer=${choice}${answers ? '+answers' : ''} pending=${pendingPermissions.has(id)}`);
+  pendingQuestions.delete(id);
+  if (!/^[\w-]+$/.test(String(id || '')) || !pendingPermissions.delete(id)) return;
+  try {
+    const dir = path.join(aiHooksDir(), 'permission');
+    if (!fs.existsSync(path.join(dir, id + '.json'))) {
+      // 鉤子已經結束（等太久）：答案送不過去了，直接帶使用者到 Claude 去回答
+      permLog(`${id} expired`);
+      if (choice !== 'pass') focusClaudeWindow();
+      return;
+    }
+    fs.writeFileSync(path.join(dir, id + '.answer.json'), JSON.stringify(Object.assign({ choice }, answers ? { answers } : {}, message ? { message } : {})));
+  } catch (e) {
+    console.error('寫入權限回答失敗:', e.message);
+  }
+}
+
+function onAiEvent({ kind, session: s, image, fromUser, request }) {
+  // 這個對話由哪位助手盯，泡泡和姿勢就出現在他身上
+  const who = characterOfSession(sessionIdOf(s));
+  const say = (payload) => speak(payload, who);
+  const pose = (p) => setPetPose(p, who);
+  if (kind === 'reply-open') {
+    // Claude 做完了，而且鉤子還在等：完成泡泡多一格輸入框，打字就把話交給 Claude 繼續做
+    const id = request.id;
+    permLog(`${id} reply-open`);
+    pendingPermissions.add(id);
+    pendingReplies.add(id);
+    replyBySession.set(sessionIdOf(s), id);
+    pose('happy');
+    say({
+      text: petLine(s.lastTextFull || s.lastText, 150) || '完成了',
+      composeTo: sessionIdOf(s),
+      attribution: doneFrom(s),
+      ai: true, sticky: true, action: 'confirm', requestId: id, inputPlaceholder: '回覆 Claude…'
+    });
+    // 20 秒內沒有開始打字，鉤子會自己結束；輸入框也跟著收起來
+    setTimeout(() => {
+      if (!pendingReplies.has(id)) return;
+      if (fs.existsSync(path.join(aiHooksDir(), 'permission', id + '.hold'))) return;
+      pendingReplies.delete(id);
+      pendingPermissions.delete(id);
+      sendToPet(who, 'pet:input-expire', id);
+    }, 19000);
+    return;
+  }
+  if (kind === 'permission') {
+    permLog(`${request.id} shown tool=${request.tool}`);
+    pendingPermissions.add(request.id);
+    pose('idle');
+    // 同時追蹤好幾個對話時，註明是哪一個在問（只有一個就不囉嗦）
+    const from = composeTargets(characterOfSession(sessionIdOf(s))).length > 1 && s.title && s.title !== '（尚無指令）' ? '來自：' + clip(s.title, 24) : '';
+    if (Array.isArray(request.questions) && request.questions.length) {
+      pendingQuestions.set(request.id, { questions: request.questions, index: 0, answers: {}, from, who });
+      askNextQuestion(request.id);
+      return;
+    }
+    say({
+      text: permissionQuestion(request.tool, request.summary),
+      attribution: from,
+      ai: true, sticky: true, action: 'choice', requestId: request.id,
+      choices: [{ id: 'allow', label: '允許' }, { id: 'deny', label: '拒絕' }],
+      inputLabel: '不同意？打字告訴 Claude 要怎麼改：', inputPlaceholder: '打字告訴 Claude…', inputButton: '拒絕並送出'
+    });
+    return;
+  }
+  // 使用者自己貼的圖不顯示（自己已經看過），只顯示 Claude 在對話中開的圖
+  if (kind === 'image' && fromUser) return;
+  const key = s.id + ':' + kind;
+  const t = Date.now();
+  // 圖片不節流：連續好幾張時一律顯示最新的一張
+  if (kind !== 'image' && t - (aiLastBubble.get(key) || 0) < 4000) return;
+  aiLastBubble.set(key, t);
+  // 剛顯示圖片的幾秒內，「開始」不要蓋掉圖片（等你確認、完成比較重要，照樣顯示）
+  if (kind === 'start' && t - (aiLastBubble.get(s.id + ':image') || 0) < 8000) {
+    pose('think');
+    return;
+  }
+
+  // 泡泡只說發生了什麼，不寫專案／對話名稱（字大、空間小，名稱只是雜訊）
+  if (kind === 'image') {
+    say({ text: '我在看的圖', image, duration: 15000, ai: true });
+  } else if (kind === 'start') {
+    pose('think');
+    // 主句是「Claude 開始處理了」；你剛下的指令用小字放在下面（它是你說的話，不是大師說的）
+    say({ text: 'Claude 開始處理了', attribution: s.lastPrompt ? '你說：' + clip(s.lastPrompt, 80) : '', ai: true, duration: 6000 });
+  } else if (kind === 'waiting') {
+    pose('idle');
+    // 等你回覆的泡泡也留著，點一下就跳到 Claude
+    // 點泡泡會直接開到這一個對話；同時追蹤好幾個時註明是哪一個
+    const multi = composeTargets(characterOfSession(sessionIdOf(s))).length > 1 && s.title && s.title !== '（尚無指令）';
+    // 沒裝即時提醒時這只是推測（工具很久沒回應），話不能說死
+    const sure = !!s.waitingMessage || s.viaHooks;
+    say({
+      text: sure ? 'Claude 在等你回答' : 'Claude 可能在等你回答（也可能只是做比較久）', attribution: multi ? '來自：' + clip(s.title, 24) : '',
+      ai: true, sticky: true, action: 'reply', sessionId: sessionIdOf(s)
+    });
+  } else if (kind === 'done') {
+    if (s.interrupted) {
+      pose('idle');
+      say({ text: '已中斷', ai: true });
+    } else {
+      pose('happy');
+      // 「完成」要等使用者按確認才消失，不會自己不見，也不會被名言／提醒蓋掉
+      // 回覆框一直留著：鉤子還在等就直接交給它，過了等待時間就改用「主動說話」的路送出
+      say({
+        text: petLine(s.lastTextFull || s.lastText, 150) || '完成了', attribution: doneFrom(s),
+        ai: true, sticky: true, action: 'confirm', composeTo: sessionIdOf(s), inputPlaceholder: '回覆 Claude…'
+      });
+    }
+  }
+}
+
+// --- 主動對 Claude 說話 ---
+const replyBySession = new Map();   // 對話 ID → 做完後還在等回覆的鉤子請求 id
+
+function sessionIdOf(s) {
+  return path.basename(String((s && s.id) || ''), '.jsonl');
+}
+
+// 可以送話過去的對話：所有追蹤中的對話，等你的 > 進行中的 > 最近有動靜的；第一個是預設
+// characterId：只列出那位助手負責的對話（他手上沒有對話時才列出全部）
+function composeTargets(characterId) {
+  const rank = { waiting: 0, working: 1, done: 2, idle: 3 };
+  const out = new Map();
+  const live = [].concat(...(aiSnapshot || []).map((p) => p.sessions || []));
+  live.sort((a, b) => (rank[a.status] - rank[b.status]) || (b.lastActivity - a.lastActivity));
+  live.forEach((s) => out.set(sessionIdOf(s), {
+    id: sessionIdOf(s), title: (s.title && s.title !== '（尚無指令）') ? s.title : '對話', status: s.status
+  }));
+  aiSessions().forEach((w) => { if (!out.has(w.id)) out.set(w.id, { id: w.id, title: w.title || '對話', status: 'idle' }); });
+  const all = [...out.values()];
+  if (!characterId) return all;
+  const mine = all.filter((t) => characterOfSession(t.id) === characterId);
+  return mine.length ? mine : all;
+}
+
+function composeTarget(id, characterId) {
+  const list = composeTargets(characterId);
+  return list.find((t) => t.id === id) || list[0] || null;
+}
+
+function openCompose(characterId) {
+  const list = composeTargets(characterId);
+  if (!list.length) {
+    speak({ text: '還沒有可以說話的對話。先按「📋 對話清單」，再按「＋ 加入對話」。', duration: 10000 }, characterId);
+    return;
+  }
+  speak({
+    text: '要跟 Claude 說什麼？',
+    // 只有一個對話時直接寫出名稱；有好幾個時列出來讓使用者點選
+    attribution: list.length > 1 ? '' : '送到：' + clip(list[0].title, 30),
+    targets: list.length > 1 ? list.slice(0, 5).map((t) => ({ id: t.id, title: clip(t.title, 26) })) : [],
+    ai: true, sticky: true, action: 'compose', inputPlaceholder: '打字，按 Enter 送出'
+  }, characterId);
+}
+
+async function sendCompose(text, targetId, characterId) {
+  text = String(text || '').trim().slice(0, 4000);
+  const t = composeTarget(targetId, characterId);
+  if (!text || !t) return;
+  const say = (msg) => speak({ text: msg, ai: true, duration: 7000 }, characterId);
+  try {
+    // 1. Claude 剛做完、鉤子還在等：直接交給它
+    const rid = replyBySession.get(t.id);
+    if (rid && pendingReplies.delete(rid)) {
+      answerPermission(rid, 'reply', null, text);
+      return say('送出了。');
+    }
+    // 2. Claude 正在做事：先放進待送信箱，這一回合做完就會交給它
+    if (t.status === 'working' || t.status === 'waiting') {
+      compose.queueMessage(aiHooksDir(), t.id, text);
+      return say('收到，Claude 做完手上的事就會看到。');
+    }
+    // 3. Claude 閒著：用官方連結開到那段對話，把字貼進去送出
+    let meta = null;
+    try { meta = desktopSessionMeta().get(t.id); } catch (e) { /* 沒有桌面版資料 */ }
+    const clipboardBefore = clipboard.readText();
+    clipboard.writeText(text);
+    if (!meta || !/^local_[A-Za-z0-9-]+$/.test(meta.localId || '')) {
+      focusClaudeWindow();
+      return say('已經複製好了。請到 Claude 的輸入框按 Ctrl+V 貼上，再按 Enter 送出。');
+    }
+    await shell.openExternal('claude://code/continue?session=' + meta.localId);
+    const r = await compose.pasteIntoClaude();
+    // 成功貼上後把剪貼簿還給使用者（沒貼成功就留著，讓使用者自己貼）
+    if (r === 'sent') setTimeout(() => { try { clipboard.writeText(clipboardBefore); } catch (e) { /* ignore */ } }, 1500);
+    say(r === 'sent' ? '送出了。' : '已經複製好了。請到 Claude 的輸入框按 Ctrl+V 貼上，再按 Enter 送出。');
+  } catch (e) {
+    console.error('送出訊息失敗:', e.message);
+    say('沒送出去，請到 Claude 直接打字。');
+  }
+}
+
+// --- 角色在 Claude 進行中時發表看法（依人物設定） ---
+const REMARK_FIRST_MS = 40 * 1000;          // 開始做事後多久說第一句
+const REMARK_GAP_MS = [150 * 1000, 240 * 1000];   // 之後每隔 2.5～4 分鐘說一句
+const REMARK_LONG_MS = 5 * 60 * 1000;       // 一個回合超過這麼久，會說一次「做很久了」的看法
+const remarkState = new Map();              // 對話 id → { since, nextAt, saidLong, last }
+
+function remarkTick() {
+  if (config.settings.aiRemarks === false) return;
+  const allWorking = [].concat(...(aiSnapshot || []).map((p) => p.sessions || [])).filter((s) => s.status === 'working');
+  // 已經不在進行中的對話：清掉記錄，下次重新計時
+  const ids = new Set(allWorking.map((s) => s.id));
+  [...remarkState.keys()].forEach((id) => { if (!ids.has(id)) remarkState.delete(id); });
+  // 每位助手各自對「自己負責、正在進行」的對話發表看法
+  for (const pet of pets.values()) remarkTickFor(pet.id);
+}
+
+function remarkTickFor(characterId) {
+  const t = Date.now();
+  const working = sessionsOfPet(characterId).filter((s) => s.status === 'working');
+  if (!working.length) return;
+  working.sort((a, b) => b.lastActivity - a.lastActivity);
+  const s = working[0];
+  let st = remarkState.get(s.id);
+  if (!st) {
+    st = { since: t, nextAt: t + REMARK_FIRST_MS, saidLong: false, last: '' };
+    remarkState.set(s.id, st);
+    return;
+  }
+  if (t < st.nextAt) return;
+  const longRunning = !st.saidLong && t - st.since > REMARK_LONG_MS;
+  // avoid：不連續說同一句。這位角色沒有台詞（已封存）時回傳空字串，就不說話
+  const line = remarkFor(characterId, { lastAction: s.lastAction, longRunning, avoid: st.last });
+  st.nextAt = t + REMARK_GAP_MS[0] + Math.random() * (REMARK_GAP_MS[1] - REMARK_GAP_MS[0]);
+  if (!line) return;
+  if (longRunning) st.saidLong = true;
+  st.last = line;
+  // 一般泡泡（不是 ai 通知）：有等你回答／完成的泡泡開著時不會蓋掉它
+  speak({ text: line, duration: 9000 }, characterId);
+}
+
+// --- 空閒時，在場的助手彼此聊天 ---
+const CHAT_FIRST_IDLE_MS = 30 * 1000;                 // 大家都閒下來多久後開始第一段
+const CHAT_GAP_MS = [3 * 60 * 1000, 6 * 60 * 1000];   // 之後每隔 3～6 分鐘聊一段
+const CHAT_LINE_MS = 5000;                            // 一句話之後隔多久接下一句
+let chatLastBusyAt = Date.now();
+let chatNextAt = 0;
+let chatLastIndex = -1;
+let chatPlaying = false;
+
+// 現在符合哪些閒聊情境（剛做完／很久沒動靜／深夜／早上／平常）
+function chatScenes() {
+  const t = Date.now();
+  const all = [].concat(...(aiSnapshot || []).map((p) => p.sessions || []));
+  const done = all.filter((s) => s.status === 'done').map((s) => t - s.lastActivity);
+  const act = all.map((s) => t - s.lastActivity);
+  return scenesFor({
+    hour: new Date().getHours(),
+    msSinceDone: done.length ? Math.min(...done) : undefined,
+    msSinceActivity: act.length ? Math.min(...act) : undefined
+  });
+}
+
+function anySessionBusy() {
+  return [].concat(...(aiSnapshot || []).map((p) => p.sessions || []))
+    .some((s) => s.status === 'working' || s.status === 'waiting');
+}
+
+function chatTick() {
+  const t = Date.now();
+  if (anySessionBusy()) { chatLastBusyAt = t; chatNextAt = 0; return; }
+  if (config.settings.aiRemarks === false || chatPlaying || pets.size < 2) return;
+  if (!chatNextAt) chatNextAt = chatLastBusyAt + CHAT_FIRST_IDLE_MS;
+  if (t < chatNextAt) return;
+  const chat = pickChat([...pets.keys()], { avoid: chatLastIndex, scenes: chatScenes() });
+  if (!chat) { chatNextAt = t + CHAT_GAP_MS[0]; return; }
+  // 要聊的人裡有誰的泡泡還開著（例如「完成了」還沒按確認）：半分鐘後再看看
+  if (chat.lines.some(([who]) => pets.get(who) && pets.get(who).expanded)) { chatNextAt = t + 30 * 1000; return; }
+  chatNextAt = t + CHAT_GAP_MS[0] + Math.random() * (CHAT_GAP_MS[1] - CHAT_GAP_MS[0]);
+  playChat(chat, false);
+}
+
+// force：開發測試用（啟動參數 --test-chat），不管有沒有對話在忙都把一段聊完
+function playChat(chat, force) {
+  chatLastIndex = chat.index;
+  chatPlaying = true;
+  const sayLine = (i) => {
+    // 中途有對話開始忙了、或有人離場，就不聊了
+    if (i >= chat.lines.length || (!force && anySessionBusy()) || !chat.lines.every(([who]) => pets.has(who))) {
+      chatPlaying = false;
+      return;
+    }
+    const [who, text] = chat.lines[i];
+    // 一般泡泡（不是 ai 通知）：有等你回答／完成的泡泡開著時不會蓋掉它
+    // 小泡泡各自在自己頭上；留到對方說完下一句，看起來像你一句我一句
+    speak({ text, chat: true, duration: CHAT_LINE_MS * 2 - 600 }, who);
+    setTimeout(() => sayLine(i + 1), CHAT_LINE_MS);
+  };
+  sayLine(0);
+}
+
+// 角色頭上的小狀態標籤：等你 > 進行中 > 剛完成（10 分鐘內）；都沒有就不顯示
+function petStatusOf(all) {
+  all = all || [];
+  if (all.some((s) => s.status === 'waiting')) return { text: '等你回答', cls: 'waiting' };
+  const working = all.filter((s) => s.status === 'working').length;
+  if (working) return { text: working > 1 ? `${working} 個對話進行中` : '進行中', cls: 'working' };
+  if (all.some((s) => s.status === 'done' && Date.now() - s.lastActivity < 10 * 60 * 1000)) return { text: '完成', cls: 'done' };
+  return { text: '', cls: '' };
+}
+
+function onAiUpdate(list) {
+  aiSnapshot = list;
+  let anyWaiting = false;
+  for (const pet of pets.values()) {
+    if (pet.win.isDestroyed()) continue;
+    const st = petStatusOf(sessionsOfPet(pet.id));
+    pet.win.webContents.send('pet:status', st);
+    if (st.cls === 'waiting') anyWaiting = true;
+    else pet.win.webContents.send('pet:dismiss-reply');
+  }
+  // 已經沒有任何對話在等了（例如你在 Claude 裡回答了）：放掉還在等的鉤子
+  if (!anyWaiting) [...pendingPermissions].filter((id) => !pendingReplies.has(id)).forEach((id) => answerPermission(id, 'pass'));
+  if (panelWindow && !panelWindow.isDestroyed()) {
+    panelWindow.webContents.send('ai:update', list);
+  }
+}
+
+// 把鉤子腳本複製到使用者資料夾裡的固定位置，Claude 的設定指向這一份。
+// 這樣不管程式是安裝版、免安裝版（每次開啟都解壓到不同的暫存資料夾）還是之後更新、搬家，
+// 路徑都不會變；程式更新時這一份也會跟著換新。
+function ensureHookScript() {
+  const src = path.join(__dirname, 'hooks', 'claude-hook.js');
+  const dst = path.join(aiHooksDir(), 'claude-hook.js');
+  try {
+    fs.mkdirSync(aiHooksDir(), { recursive: true });
+    const want = fs.readFileSync(src);
+    let have = null;
+    try { have = fs.readFileSync(dst); } catch (e) { /* 還沒有 */ }
+    if (!have || !have.equals(want)) fs.writeFileSync(dst, want);
+    return dst;
+  } catch (e) {
+    console.error('複製鉤子腳本失敗:', e.message);
+    return src;
+  }
+}
+
+// 鉤子腳本與桌寵交換資料的資料夾（userData/ai-hooks）
+function aiHooksDir() {
+  return path.join(app.getPath('userData'), 'ai-hooks');
+}
+
+function aiProjects() {
+  const list = config.settings.aiProjects;
+  return Array.isArray(list) ? list.filter((p) => typeof p === 'string' && p) : [];
+}
+
+// 個別指定的 Claude Code 對話：[{ id, title, cwd }]
+function aiSessions() {
+  const list = config.settings.aiSessions;
+  return Array.isArray(list) ? list.filter((s) => s && typeof s.id === 'string' && s.id) : [];
+}
+
+// 把指定專案／對話清單寫給鉤子腳本讀（鉤子據此決定要不要記錄事件）
+function writeWatchProjects() {
+  try {
+    fs.mkdirSync(aiHooksDir(), { recursive: true });
+    const on = config.settings.aiWatch !== false;
+    // answer：允許鉤子等使用者在泡泡上按「允許／拒絕」
+    // replyAfterDone：Claude 做完後先等一下，讓使用者可以在泡泡上打字回覆
+    const data = {
+      projects: on ? aiProjects() : [], sessions: on ? aiSessions().map((s) => s.id) : [],
+      answer: on, replyAfterDone: on && config.settings.aiReplyAfterDone !== false
+    };
+    fs.writeFileSync(path.join(aiHooksDir(), 'watch-projects.json'), JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error('寫入監看專案清單失敗:', e.message);
+  }
+}
+
+function setupAiWatch() {
+  if (aiWatcher) { aiWatcher.stop(); aiWatcher = null; }
+  writeWatchProjects();
+  if (config.settings.aiWatch === false) { onAiUpdate([]); return; }
+  aiWatcher = createAiWatcher({
+    projects: aiProjects(),
+    sessions: aiSessions().map((s) => s.id),
+    hookEventsFile: path.join(aiHooksDir(), 'hook-events.jsonl'),
+    hooksInstalled: !!hooksInstaller.status().installed,   // 裝了即時提醒就不再用時間猜「在等你」
+    onEvent: onAiEvent,
+    onUpdate: onAiUpdate
+  }).start();
+  onAiUpdate([]);
+}
+
+function aiState() {
+  return {
+    enabled: !!aiWatcher,
+    roots: aiWatcher ? aiWatcher.roots : null,
+    watchProjects: aiProjects(),
+    watchSessions: aiSessions().map((s) => Object.assign({}, s, { characterId: characterOfSession(s.id) })),
+    hooks: hooksInstaller.status(),
+    projects: aiSnapshot
+  };
+}
+
 function registerIpc() {
   // 桌寵拖曳：依位移移動視窗
   ipcMain.on('pet:move-by', (e, { dx, dy }) => {
-    if (!petWindow) return;
-    const [x, y] = petWindow.getPosition();
-    petWindow.setPosition(Math.round(x + dx), Math.round(y + dy));
+    const pet = petBySender(e.sender);
+    if (!pet) return;
+    // 移動的是錨點（角色腳底中央）；視窗跟著錨點重新擺放
+    pet.anchor.x += dx;
+    pet.anchor.bottom += dy;
+    placePet(pet);
+    rememberPetPosition(pet);
+  });
+
+  // 泡泡出現／消失（視窗大小不變，只記錄狀態）
+  ipcMain.on('pet:bubble', (e, open) => setPetExpanded(petBySender(e.sender), !!open));
+  // 助手視窗回報可見區域；第一次回報後才把視窗顯示出來
+  ipcMain.on('pet:shape', (e, rects) => {
+    const pet = petBySender(e.sender);
+    if (!pet) return;
+    setPetShape(pet, rects);
+    if (!pet.win.isVisible()) pet.win.showInactive();
   });
 
   // 點擊桌寵 → 開/關面板
   ipcMain.on('panel:toggle', () => togglePanel());
+  ipcMain.on('pet:menu', (e) => showPetMenu(petBySender(e.sender)));
+  ipcMain.on('pet:compose-open', (e) => { const p = petBySender(e.sender); openCompose(p && p.id); });
+  ipcMain.on('pet:compose-send', (e, { text, targetId }) => { const p = petBySender(e.sender); sendCompose(text, targetId, p && p.id); });
+  ipcMain.on('claude:focus', (e, sessionId) => {
+    // 知道是哪個對話就用官方連結直接開到那一個；不知道才只把 Claude 視窗叫出來
+    let meta = null;
+    try { meta = sessionId ? desktopSessionMeta().get(String(sessionId)) : null; } catch (err) { /* 沒有桌面版資料 */ }
+    if (meta && /^local_[A-Za-z0-9-]+$/.test(meta.localId || '')) {
+      shell.openExternal('claude://code/continue?session=' + meta.localId).catch(() => focusClaudeWindow());
+    } else {
+      focusClaudeWindow();
+    }
+  });
+  // 使用者開始在泡泡上打字：請鉤子繼續等
+  ipcMain.on('pet:typing', (e, requestId) => {
+    if (!pendingReplies.has(requestId)) return;
+    try { fs.writeFileSync(path.join(aiHooksDir(), 'permission', requestId + '.hold'), '1'); } catch (err) { /* ignore */ }
+  });
+
+  ipcMain.on('pet:choice', (e, { requestId, choice, text }) => {
+    permLog(`${requestId} clicked ${choice}`);
+    const typed = choice === 'text' ? String(text || '').trim().slice(0, 2000) : '';
+    // 做完後的回覆：有打字就交給 Claude 繼續；只是點泡泡確認就放掉鉤子
+    if (pendingReplies.delete(requestId)) {
+      return answerPermission(requestId, typed ? 'reply' : 'pass', null, typed);
+    }
+    // Claude 的選擇題：記下這題的答案，還有下一題就繼續問，問完一次回覆
+    const st = pendingQuestions.get(requestId);
+    if (st) {
+      const q = st.questions[st.index];
+      // 自己打字的回答直接當成這題的答案（等同 Claude 畫面上的「其他」）
+      const label = typed || q.options[Number(String(choice).replace('opt', ''))];
+      if (label === undefined) return answerPermission(requestId, 'pass');
+      st.answers[q.question] = label;
+      st.index += 1;
+      if (st.index < st.questions.length) return askNextQuestion(requestId);
+      return answerPermission(requestId, 'allow', st.answers);
+    }
+    // 權限詢問時打字 = 不允許這一步，並把你的話交給 Claude（等同 Claude 畫面上「告訴它改怎麼做」）
+    if (typed) return answerPermission(requestId, 'deny', null, typed);
+    answerPermission(requestId, choice === 'allow' ? 'allow' : choice === 'deny' ? 'deny' : 'pass');
+  });
 
   // --- 資料夾 ---
   ipcMain.handle('folders:pick', async () => {
-    const res = await dialog.showOpenDialog(panelWindow || petWindow, {
+    const res = await dialog.showOpenDialog(panelWindow || (primaryPet() && primaryPet().win), {
       title: '選擇要監看的資料夾',
       properties: ['openDirectory', 'multiSelections']
     });
@@ -354,6 +1077,136 @@ function registerIpc() {
   // --- 變更紀錄 ---
   ipcMain.handle('changes:list', () => recentChanges);
 
+  // --- AI 專案 ---
+  ipcMain.handle('ai:list', () => aiState());
+
+  // 指定要監看的專案資料夾（只有這些資料夾內的對話會被讀取）
+  ipcMain.handle('ai:add-project', async () => {
+    const res = await dialog.showOpenDialog(panelWindow, {
+      title: '選擇要監看的專案資料夾（Claude Code／Codex 的工作目錄）',
+      properties: ['openDirectory', 'multiSelections']
+    });
+    if (res.canceled) return aiState();
+    const set = new Set(aiProjects());
+    res.filePaths.forEach((p) => set.add(p));
+    config.settings.aiProjects = [...set];
+    saveConfig();
+    setupAiWatch();
+    return aiState();
+  });
+
+  // 列出最近的 Claude Code 對話，讓使用者挑選要追蹤哪一段（標題與 Claude 桌面版側欄相同）
+  ipcMain.handle('ai:recent-sessions', () => {
+    const watched = new Set(aiSessions().map((s) => s.id));
+    // 只列近三天用過的對話，太久沒用的不出現
+    // 群組、母子關係、封存狀態照 Claude 桌面版側欄（讀不到就退回用資料夾名稱分組）
+    let meta = new Map();
+    try { meta = desktopSessionMeta(); } catch (e) { /* 沒有桌面版資料 */ }
+    const folderName = (p) => String(p || '').split(/[\\/]/).filter(Boolean).pop() || '其他';
+    // 清單只顯示近三天用過的（recent）；更早的（60 天內）只有打字搜尋時才會出現
+    const now = Date.now();
+    return listClaudeSessions(defaultRoots().claude, { limit: 200, maxAgeMs: 60 * 24 * 3600 * 1000 })
+      .filter((s) => !(meta.get(s.id) || {}).archived)
+      .map((s) => {
+        const m = meta.get(s.id) || {};
+        return {
+          id: s.id, title: m.title || s.title, cwd: s.cwd, mtime: s.mtime, watched: watched.has(s.id),
+          recent: now - s.mtime <= 3 * 24 * 3600 * 1000,
+          firstPrompt: s.firstPrompt || '',
+          group: m.group || folderName(s.cwd), parentTitle: m.parentTitle || ''
+        };
+      });
+  });
+
+  ipcMain.handle('ai:add-session', (e, s) => {
+    if (!s || typeof s.id !== 'string' || !/^[\w-]+$/.test(s.id)) return aiState();
+    config.settings.aiSessions = aiSessions().filter((x) => x.id !== s.id);
+    // 自動分配一位助手來盯這個對話（還有人沒事做就派他，都有事就派手上最少的）
+    const characterId = nextCharacterForNewSession();
+    config.settings.aiSessions.push({ id: s.id, title: String(s.title || '').slice(0, 80), cwd: String(s.cwd || ''), characterId });
+    saveConfig();
+    setupAiWatch();
+    syncPets('join');
+    return aiState();
+  });
+
+  // 改由另一位助手來盯某個對話
+  ipcMain.handle('ai:set-session-character', (e, { id, characterId }) => {
+    const w = aiSessions().find((x) => x.id === id);
+    if (w && isActiveCharacter(characterId)) {
+      w.characterId = characterId;
+      saveConfig();
+      syncPets('join');
+      onAiUpdate(aiSnapshot);   // 各助手頭上的狀態標籤重新分配
+    }
+    return aiState();
+  });
+
+  ipcMain.handle('ai:remove-session', (e, id) => {
+    config.settings.aiSessions = aiSessions().filter((x) => x.id !== id);
+    saveConfig();
+    setupAiWatch();
+    syncPets('');   // 沒有對話要盯的助手就先離開（主助手留著）
+    return aiState();
+  });
+
+  ipcMain.handle('ai:remove-project', (e, p) => {
+    config.settings.aiProjects = aiProjects().filter((x) => x !== p);
+    saveConfig();
+    setupAiWatch();
+    return aiState();
+  });
+
+  // 安裝／移除 Claude Code 通知鉤子：會修改使用者層級的 settings.json，因此一律先跳確認視窗
+  ipcMain.handle('ai:hooks-install', async () => {
+    const file = hooksInstaller.settingsPath();
+    const { response } = await dialog.showMessageBox(panelWindow, {
+      type: 'question',
+      buttons: ['開啟提醒', '先不要'],
+      defaultId: 1,
+      cancelId: 1,
+      title: '開啟即時提醒',
+      message: '要讓 Claude 在「等你回答」和「做完」時，立刻通知大師嗎？',
+      detail:
+        '・不會影響 Claude 的運作，也不會記錄你打的內容或 Claude 的回覆。\n' +
+        '・只對你加入追蹤的對話有作用。\n' +
+        '・會在 Claude 的設定裡加一小段（會先備份），隨時可以關掉還原。\n\n' +
+        `設定檔位置：${file}`
+    });
+    if (response !== 0) return { ok: false, canceled: true, state: aiState() };
+    try {
+      writeWatchProjects();
+      const r = hooksInstaller.install({
+        scriptPath: ensureHookScript(),
+        dataDir: aiHooksDir()
+      });
+      setupAiWatch();   // 讓監看器知道即時提醒已開啟
+      return { ok: true, backup: r.backup, state: aiState() };
+    } catch (err) {
+      return { ok: false, error: err.message, state: aiState() };
+    }
+  });
+
+  ipcMain.handle('ai:hooks-uninstall', async () => {
+    const { response } = await dialog.showMessageBox(panelWindow, {
+      type: 'question',
+      buttons: ['關閉提醒', '先不要'],
+      defaultId: 1,
+      cancelId: 1,
+      title: '關閉即時提醒',
+      message: '要關閉即時提醒嗎？',
+      detail: `會把桌面大師加進 Claude 設定檔的那一小段拿掉，其他設定不受影響（先自動備份）。\n\n設定檔位置：${hooksInstaller.settingsPath()}`
+    });
+    if (response !== 0) return { ok: false, canceled: true, state: aiState() };
+    try {
+      const r = hooksInstaller.uninstall();
+      setupAiWatch();   // 即時提醒關了：回到用時間推測
+      return { ok: true, removed: r.removed, backup: r.backup, state: aiState() };
+    } catch (err) {
+      return { ok: false, error: err.message, state: aiState() };
+    }
+  });
+
   // --- 設定 ---
   ipcMain.handle('config:get-settings', () => {
     const s = config.settings;
@@ -367,6 +1220,9 @@ function registerIpc() {
         ? 0
         : (Number(s.quoteIntervalMinutes) || 20),
       characterId: currentCharacterId(),
+      aiWatch: s.aiWatch !== false,
+      aiRemarks: s.aiRemarks !== false,
+      aiReplyAfterDone: s.aiReplyAfterDone !== false,
       // 提示 UI：哪些值被環境變數覆蓋
       env: {
         apiKey: !!process.env.OPENAI_API_KEY,
@@ -377,10 +1233,11 @@ function registerIpc() {
   });
 
   ipcMain.handle('config:save-settings', (e, incoming) => {
-    const nextCharacter = CHARACTERS[incoming.characterId]
+    const nextCharacter = isActiveCharacter(incoming.characterId)
       ? incoming.characterId
       : currentCharacterId();
     const changedCharacter = nextCharacter !== currentCharacterId();
+    if (changedCharacter) swapPrimaryCharacter(currentCharacterId(), nextCharacter);
     config.settings = {
       ...config.settings,
       provider: incoming.provider || 'openai',
@@ -391,21 +1248,27 @@ function registerIpc() {
       quoteIntervalMinutes: (incoming.quoteIntervalMinutes === 0 || incoming.quoteIntervalMinutes === '0')
         ? 0
         : (Number(incoming.quoteIntervalMinutes) || 20),
-      characterId: nextCharacter
+      characterId: nextCharacter,
+      aiWatch: incoming.aiWatch !== false,
+      aiRemarks: incoming.aiRemarks !== false,
+      aiReplyAfterDone: incoming.aiReplyAfterDone !== false
     };
     saveConfig();
     setupReminder();
     setupQuoteTimer();
+    setupAiWatch();
     if (changedCharacter) setPetCharacter(nextCharacter, true);
     return { ok: true };
   });
 
   // 切換大師：立即更新桌寵（不需重啟）、持久化、播放問候語
   ipcMain.handle('character:set', (e, id) => {
-    if (!CHARACTERS[id]) return { ok: false };
+    if (!isActiveCharacter(id)) return { ok: false };
+    if (id !== currentCharacterId()) swapPrimaryCharacter(currentCharacterId(), id);
     config.settings.characterId = id;
     saveConfig();
     setPetCharacter(id, true);
+    onAiUpdate(aiSnapshot);   // 狀態標籤跟著重新分配
     if (panelWindow && !panelWindow.isDestroyed()) {
       panelWindow.webContents.send('character:changed', id);
     }
@@ -433,8 +1296,10 @@ function registerIpc() {
     return { ok: true };
   });
 
-  ipcMain.handle('quotes:speak-random', () => {
-    return { ok: speakRandomQuote() };
+  ipcMain.handle('quotes:speak-random', (e) => {
+    // 從助手視窗來的（點一下角色）就由那位說；從面板來的由主助手說
+    const p = petBySender(e.sender);
+    return { ok: speakRandomQuote(p ? p.id : undefined) };
   });
 
   ipcMain.handle('shell:open-external', (e, url) => {
@@ -493,11 +1358,12 @@ function registerIpc() {
 
     // 進入思考姿勢
     setPetPose('think');
+    const cat = categoryOf(c.id);
     const systemPrompt =
-      `你是「大師」，一位沉穩、有涵養的建築工作室導師。` +
+      `你是「大師」，${cat.persona}。` +
       `此刻你以 ${c.nameZh}（${c.nameEn}）的風格與語氣與使用者對話。` +
       `請一律使用繁體中文，用字精煉、文化而不賣弄，不使用網路流行語或誇張口氣，` +
-      `像一位受人敬重的建築前輩，給予簡潔、到位而帶有工作室氣息的回應。` +
+      `${cat.style}。` +
       `避免逐字引用任何名人名言，以自己的語氣表達即可。`;
 
     try {
@@ -520,6 +1386,56 @@ function registerIpc() {
 // ---------------------------------------------------------------------------
 // 生命週期
 // ---------------------------------------------------------------------------
+// 只允許開一個桌寵：重複點捷徑時，改成把面板叫出來
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!panelWindow) return;
+    panelWindow.show();
+    panelWindow.focus();
+  });
+}
+
+// 開機自動啟動（未打包時要帶上程式資料夾當參數）
+function loginItemOptions() {
+  return app.isPackaged ? {} : { path: process.execPath, args: [app.getAppPath()] };
+}
+function autoStartEnabled() {
+  try { return !!app.getLoginItemSettings(loginItemOptions()).openAtLogin; } catch (e) { return false; }
+}
+
+// 把 Claude 桌面版的視窗叫到最前面（讓使用者去回覆）。找不到就不做任何事。
+function focusClaudeWindow() {
+  if (process.platform !== 'win32') return;
+  const ps = "$p = Get-Process claude -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | Select-Object -First 1; " +
+    "if ($p) { (New-Object -ComObject WScript.Shell).AppActivate($p.Id) | Out-Null }";
+  try {
+    require('child_process').spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', ps],
+      { windowsHide: true, stdio: 'ignore', detached: true }).unref();
+  } catch (e) { /* ignore */ }
+}
+
+// 桌寵的右鍵選單：所有「桌寵本身」的操作都在這裡，包含結束程式
+function showPetMenu(pet) {
+  pet = pet || primaryPet();
+  if (!pet || pet.win.isDestroyed()) return;
+  Menu.buildFromTemplate([
+    { label: '📋 打開對話清單', click: () => { if (!panelWindow.isVisible()) togglePanel(); else panelWindow.focus(); } },
+    { label: '✏️ 對 Claude 說', click: () => openCompose(pet.id) },
+    { label: '說一句名言', click: () => speakRandomQuote(pet.id) },
+    { type: 'separator' },
+    {
+      label: '開機時自動啟動',
+      type: 'checkbox',
+      checked: autoStartEnabled(),
+      click: (item) => app.setLoginItemSettings(Object.assign({ openAtLogin: item.checked }, loginItemOptions()))
+    },
+    { type: 'separator' },
+    { label: '結束桌面大師', click: () => app.quit() }
+  ]).popup({ window: pet.win });
+}
+
 app.whenReady().then(() => {
   config = loadConfig();
   // 移除整個應用程式的原生選單（避免出現英文 File/Edit/View... 選單列）
@@ -532,6 +1448,26 @@ app.whenReady().then(() => {
   for (const folder of config.folders) watchFolder(folder);
   setupReminder();
   setupQuoteTimer();
+  setupAiWatch();
+  touchAlive();
+  setInterval(touchAlive, 5000);
+  ensureHookScript();   // 程式更新後，固定位置那份鉤子腳本也跟著換新
+  setInterval(remarkTick, 10000);
+  setInterval(chatTick, 10000);
+  // 開發測試：啟動 8 秒後直接播一段閒聊（不必等大家都閒下來）
+  if (process.argv.includes('--test-chat')) {
+    setTimeout(() => { const c = pickChat([...pets.keys()], { scenes: chatScenes() }); if (c) playChat(c, true); }, 8000);
+  }
+
+  // 第一次使用（還沒追蹤任何對話）：自動打開面板，並由桌寵說明怎麼操作
+  if (!config.settings.welcomed && !aiSessions().length && !aiProjects().length) {
+    config.settings.welcomed = true;
+    saveConfig();
+    setTimeout(() => {
+      if (!panelWindow.isVisible()) panelWindow.show();
+      speak({ text: '對話清單打開了。請按上面的「＋ 加入對話」。', duration: 20000 });
+    }, 7000);
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createPetWindow();
@@ -543,6 +1479,7 @@ app.on('before-quit', () => {
   for (const w of watchers.values()) w.close();
   if (reminderTimer) clearInterval(reminderTimer);
   if (quoteTimer) clearInterval(quoteTimer);
+  if (aiWatcher) aiWatcher.stop();
 });
 
 // 桌寵常駐，不因關閉面板而退出；全部視窗關閉才退出（Windows/Linux）。

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>桌面大師</title>
+  <link rel="stylesheet" href="../renderer/pet.css" />
+</head>
+<body>
+  <div id="stage">
+    <!-- 說話氣泡：描圖紙風格的製圖便箋 -->
+    <div id="bubble" class="bubble">
+      <img class="bubble-img" alt="" hidden />
+      <div class="bubble-text"></div>
+      <div class="bubble-attr" hidden></div>
+      <div id="bubbleChoices" class="bubble-choices" hidden></div>
+      <div id="bubbleTargets" class="bubble-targets" hidden></div>
+      <div id="bubbleInputLabel" class="bubble-input-label" hidden></div>
+      <form id="bubbleInput" class="bubble-input" hidden>
+        <input type="text" id="bubbleTextInput" autocomplete="off" />
+        <button type="submit" id="bubbleSend">送出</button>
+      </form>
+      <button id="bubbleSkip" class="bubble-skip" hidden>晚點自己到 Claude 視窗回答</button>
+      <div id="bubbleHint" class="bubble-hint" hidden></div>
+    </div>
+
+    <!-- 小狀態標籤：追蹤中的 AI 對話目前在做什麼（進行中／等你確認／完成） -->
+    <div id="status" class="status-chip" hidden></div>
+
+    <!-- 隨時對 Claude 說話 -->
+    <button id="panelBtn" class="compose-btn panel-btn" title="打開對話清單（也可以點角色兩下）">📋 對話清單</button>
+    <button id="composeBtn" class="compose-btn" title="打字給 Claude">✏️ 對 Claude 說</button>
+
+    <!-- 角色：由 pet.js 依所選大師注入 inline SVG（無外部圖檔） -->
+    <div id="pet" class="pet" data-character="ando" data-pose="idle"
+         title="點一下：說一句名言・點兩下：打開對話清單・右鍵：選單">
+      <div id="petArt"></div>
+    </div>
+  </div>
+
+  <script src="../renderer/characters-philosophers.js"></script>
+  <script src="../renderer/characters.js"></script>
+  <script src="frame-api.js"></script><script src="../renderer/pet.js"></script>
+</body>
+</html>

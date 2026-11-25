@@ -1,3 +1,4 @@
+// 角色登錄中心：內建六位普立茲克建築大師，並載入其他職業的角色包（如哲學家）。
 // 六位普立茲克建築大師的 Q 版（chibi）造型資料。
 // Six Q-version (chibi) caricatures of Pritzker laureates — private personal toy.
 //
@@ -293,15 +294,66 @@
     }
   };
 
-  const ORDER = ['ando', 'gehry', 'hadid', 'pei', 'koolhaas', 'sejima'];
-  const DEFAULT_ID = 'ando';
+  // -------------------------------------------------------------------------
+  // 職業分類（類別）與角色包
+  //  - 建築大師為本檔內建；其他職業以「角色包」檔案擴充（例：characters-philosophers.js）。
+  //  - 每個類別帶 persona / style，供主行程組 AI 系統提示用。
+  // -------------------------------------------------------------------------
+  Object.values(CHARACTERS).forEach((c) => { c.category = 'architect'; });
 
-  const api = { CHARACTERS, ORDER, DEFAULT_ID };
+  const CATEGORIES = [{
+    id: 'architect',
+    label: '建築大師',
+    persona: '一位沉穩、有涵養的建築工作室導師',
+    style: '像一位受人敬重的建築前輩，給予簡潔、到位而帶有工作室氣息的回應',
+    order: ['ando', 'gehry', 'hadid', 'pei', 'koolhaas', 'sejima']
+  }];
+
+  const helpers = { SKIN, wrap, eyes, THINK_DOTS, SKETCH };
+  let packs = [];
+  if (typeof window !== 'undefined' && Array.isArray(window.CHAR_PACKS)) {
+    packs = window.CHAR_PACKS;
+  } else if (typeof require === 'function') {
+    packs = [require('./characters-philosophers')];
+  }
+  packs.forEach((factory) => {
+    const p = factory(helpers);
+    Object.values(p.characters).forEach((c) => {
+      if (CHARACTERS[c.id]) throw new Error('角色 id 重複：' + c.id);
+      c.category = p.category.id;
+      CHARACTERS[c.id] = c;
+    });
+    CATEGORIES.push(Object.assign({}, p.category, { order: p.order }));
+  });
+
+  // -------------------------------------------------------------------------
+  // 目前開放的角色。其他角色先「封存」：造型、名言、台詞都留著，只是不出現在選單裡。
+  // 要重新開放某位角色，把他的 id 加回 ACTIVE_IDS 即可。
+  // -------------------------------------------------------------------------
+  const ACTIVE_IDS = ['zhuangzi', 'laozi', 'mozi', 'hanfeizi', 'guiguzi', 'confucius'];
+  const ALL_CATEGORIES = CATEGORIES.slice();
+  ALL_CATEGORIES.forEach((cat) => {
+    cat.archivedOrder = cat.order.filter((id) => !ACTIVE_IDS.includes(id));
+    cat.order = cat.order.filter((id) => ACTIVE_IDS.includes(id));
+  });
+  // 選單只列出還有開放角色的類別
+  const VISIBLE_CATEGORIES = ALL_CATEGORIES.filter((cat) => cat.order.length > 0);
+
+  const ORDER = VISIBLE_CATEGORIES.flatMap((cat) => cat.order);
+  const DEFAULT_ID = ORDER[0];
+
+  function categoryOf(id) {
+    const c = CHARACTERS[id];
+    return ALL_CATEGORIES.find((cat) => c && cat.id === c.category) || ALL_CATEGORIES[0];
+  }
+
+  const api = { CHARACTERS, ORDER, DEFAULT_ID, CATEGORIES: VISIBLE_CATEGORIES, categoryOf };
 
   if (typeof window !== 'undefined') {
     window.CHARACTERS = CHARACTERS;
     window.CHAR_ORDER = ORDER;
     window.CHAR_DEFAULT = DEFAULT_ID;
+    window.CHAR_CATEGORIES = VISIBLE_CATEGORIES;
   }
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;
