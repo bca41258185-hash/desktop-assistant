@@ -15,6 +15,7 @@
 //   back   畫在身體輪廓之前（被頭或身體擋住的部分）
 //   ear    與耳朵依深度一起排序（耳朵附近的小飾品）：[{ z, svg }]
 //   front  畫在頭部明暗之後、五官之前（帽子、頭帶、圍巾…）
+//   overEars  畫在耳朵之後、五官之前（毛線帽的帽緣壓住耳根、耳邊的小花）
 //   top    畫在五官之後（眼鏡）
 //   earsOver  true＝耳朵要畫在帽子上面（毛線帽有耳洞）
 
@@ -149,6 +150,8 @@
 
   const FILL = (def) => `style="fill:var(--acc, ${def})"`;
   const STROKE = (def) => `style="stroke:var(--acc, ${def})"`;
+  // 同時上填色與描邊：一個標籤只能有一個 style 屬性（寫兩個的話，SVG 轉成圖片時整張會解析失敗）
+  const FILLSTROKE = (def) => `style="fill:var(--acc, ${def});stroke:var(--acc, ${def})"`;
   const DEFS = (id) => `
     <radialGradient id="acV${id}" cx=".36" cy=".28" r=".85"><stop offset="0" stop-color="#ffffff" stop-opacity=".42"/><stop offset=".38" stop-color="#ffffff" stop-opacity=".06"/><stop offset=".7" stop-color="#2a1d14" stop-opacity=".02"/><stop offset="1" stop-color="#2a1d14" stop-opacity=".3"/></radialGradient>
     <linearGradient id="acD${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".3"/><stop offset=".5" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#2a1d14" stop-opacity=".25"/></linearGradient>
@@ -180,10 +183,14 @@
     }).filter((r) => r.xy.length > 1);
   }
   // 頭部橢球表面法向量
-  const headN = (p) => norm([p[0] / (31 * 31), (p[1] - 45) / (30 * 30), (p[2] + 2) / (25 * 25)]);
+  // HE＝頭的主橢球 [cx,cy,cz,rx,ry,rz]（draw() 會換成呼叫端傳入的實際尺寸）
+  let HE = [0, 45, 3, 31, 30, 28];
+  const headN = (p) => norm([p[0] / (HE[3] * HE[3]), (p[1] - HE[1]) / (HE[4] * HE[4]), (p[2] - HE[2]) / (HE[5] * HE[5])]);
+  // 頭部橢球在高度 y 的水平截面上、方位角 a 的點（k＝往外推的倍率）
+  const headAt = (a, y, k = 1) => { const q = Math.sqrt(Math.max(0, 1 - ((y - HE[1]) / HE[4]) ** 2)); return [HE[3] * q * k * Math.sin(a), y, HE[2] + HE[5] * q * k * Math.cos(a)]; };
   // 繞頭一圈的東西（頭帶、花冠）用「水平徑向」法向量判斷朝前那半圈：在頭部局部座標裡算、經頭的旋轉後看朝向，
   // 永遠剛好是半圈，頭歪再大也不會變成整圈光環（畫出來的頭輪廓本身不會露出頭頂，所以不能多畫）
-  const radialN = (p) => norm([p[0] / (31 * 31), 0, (p[2] + 2) / (25 * 25)]);
+  const radialN = (p) => norm([p[0] / (HE[3] * HE[3]), 0, (p[2] - HE[2]) / (HE[5] * HE[5])]);
 
   // ===================================================================================
   // 各飾品
@@ -192,7 +199,7 @@
   // 頭帶：沿頭部截面一圈，只畫朝前那半；背後有結
   function band(H, L, ctx, col) {
     const id = ctx.id, w = 6.4 * ctx.hs, pts = [], ns = [];
-    for (let i = 0; i < 72; i++) { const a = i / 72 * Math.PI * 2; const p = [27.6 * Math.sin(a), 30 - 2.4 * Math.cos(a), -2 + 22.4 * Math.cos(a)]; pts.push(p); ns.push(radialN(p)); }
+    for (let i = 0; i < 72; i++) { const a = i / 72 * Math.PI * 2; const p = headAt(a, 30 - 1.2 * Math.cos(a), 1.03); pts.push(p); ns.push(radialN(p)); }
     ringRuns(H, pts, ns, { faceOnly: true }).forEach((r) => {
       const d = pathOpen(r.xy);
       L.front.push(`<path d="${d}" fill="none" stroke="#4a3a2e" stroke-width="${f1(w + 1)}" opacity=".2" transform="translate(0 1.2)" filter="url(#b1${id})"/>
@@ -200,7 +207,7 @@
         <path d="${d}" fill="none" stroke="#ffffff" stroke-width="${f1(w * .28)}" opacity=".3" transform="translate(0 -1.5)" filter="url(#acB${id})"/>
         <path d="${d}" fill="none" stroke="#2a1d14" stroke-width="${f1(w * .25)}" opacity=".14" transform="translate(0 2.2)" filter="url(#acB${id})"/>`);
     });
-    const kc = [0, 31, -27.5];
+    const kc = headAt(Math.PI, 31, 1.04);
     if (H.face([0, 0, -1]) > 0) {
       const k = decal(H, kc, [0, 0, -1], (front) => `
         <path d="M-2.6 1 Q-6 10 -10.5 16 L-7 17 Q-3 11 0 2 Z M2.6 1 Q6 10 10.5 16 L7 17 Q3 11 0 2 Z" fill="#4a3a2e" opacity=".2" transform="translate(.6 1.2)" filter="url(#b1${id})"/>
@@ -215,7 +222,7 @@
 
   // 蝴蝶結：別在右耳根旁的頭頂上
   function bow(H, L, ctx, col) {
-    const id = ctx.id, k = 1, c = [k * 13.5, 16.5, -6.5], n = norm([k * .35, -.55, .75]);
+    const id = ctx.id, k = 1, c = [k * 13.5, 16.5, -1.5], n = norm([k * .35, -.55, .75]);
     const art = (front) => `
       <path d="M0 0 C-3 -6.5 -11.5 -8.5 -12 -2.5 C-12.4 2.6 -6 4.6 0 0 Z M0 0 C3 -6.5 11.5 -8.5 12 -2.5 C12.4 2.6 6 4.6 0 0 Z M-1 1 Q-3.4 6 -6.2 10.4 L-3.6 10 L-2.4 12.2 Q.2 6.4 .6 1.6 Z M1 1 Q3.4 6 6.2 10.4 L3.6 10 L2.4 12.2 Q-.2 6.4 -.6 1.6 Z" fill="#4a3a2e" opacity=".22" transform="translate(.8 1.4)" filter="url(#b1${id})"/>
       <path d="M-1 1 Q-3.4 6 -6.2 10.4 L-3.6 10 L-2.4 12.2 Q.2 6.4 .6 1.6 Z M1 1 Q3.4 6 6.2 10.4 L3.6 10 L2.4 12.2 Q-.2 6.4 -.6 1.6 Z" ${FILL(col)}/>
@@ -227,14 +234,14 @@
       <ellipse cx="0" cy=".2" rx="2.9" ry="3.3" ${FILL(col)}/><ellipse cx="0" cy=".2" rx="2.9" ry="3.3" fill="url(#acV${id})"/>
       <circle cx="-4" cy="-1" r=".8" fill="#ffffff" opacity=".7"/><circle cx="-8.5" cy="-1.4" r=".8" fill="#ffffff" opacity=".7"/><circle cx="5" cy="-3.2" r=".8" fill="#ffffff" opacity=".7"/><circle cx="9" cy="-.2" r=".8" fill="#ffffff" opacity=".7"/>
       ${front ? '' : '<path d="M0 0 C-3 -6.5 -11.5 -8.5 -12 -2.5 C-12.4 2.6 -6 4.6 0 0 Z M0 0 C3 -6.5 11.5 -8.5 12 -2.5 C12.4 2.6 6 4.6 0 0 Z" fill="#2a1d14" opacity=".14"/>'}`;
-    const D = decal(H, c, n, art, { minW: .5, s: .95 });
+    const D = decal(H, c, n, art, { minW: .5, s: 1.08 });
     // 蝴蝶結有厚度：用往外推一點的點判斷，貼著頭皮掠過時不會整個消失
     if (H.hid(add(c, mul(n, 4.5)))) L.back.push(D.svg); else L.ear.push({ z: D.Z, svg: D.svg });
   }
 
   // 耳後小花：Guichenotia（羅特尼斯島庫卡最愛吃的灌木）粉紫色下垂鐘形小花＋銀灰細葉，塞在左耳後
   function flower(H, L, ctx, col) {
-    const id = ctx.id, k = -1, c = [k * 29, 23, -15], n = norm([k * .7, -.25, .45]);
+    const id = ctx.id, k = -1, c = [k * 31.5, 27, -3], n = norm([k * .55, -.2, .82]);
     const bell = (x, y, a, s) => `<g transform="translate(${x} ${y}) rotate(${a}) scale(${s})">
         <path d="M0 -4 Q.4 -2 0 0" fill="none" stroke="#7f8a63" stroke-width=".6"/>
         <path d="M-3 0 Q-3.6 4.5 -4.2 6.4 Q-2.8 6 -2 6.9 Q-1 6.2 0 7 Q1 6.2 2 6.9 Q2.8 6 4.2 6.4 Q3.6 4.5 3 0 Q0 -1.3 -3 0 Z" fill="#4a3a2e" opacity=".2" transform="translate(.6 .9)" filter="url(#acB${id})"/>
@@ -248,8 +255,9 @@
       <path d="M0 0 Q-3 2 -5 3.2 M0 0 Q2 2.4 4.6 3 M0 0 Q.6 3.4 .4 6.4" fill="none" stroke="#8a7a62" stroke-width=".7" stroke-linecap="round"/>
       ${bell(-5.5, 3.4, 14, 1.15)}${bell(5, 3, -12, 1.05)}${bell(.4, 6.6, 3, 1.25)}
       ${front ? '' : '<circle r="10" fill="#2a1d14" opacity=".08" filter="url(#b1' + id + ')"/>'}`;
-    const D = decal(H, c, n, art, { minW: .55 });
-    if (H.hid(add(c, mul(n, 4)))) L.back.push(D.svg); else L.ear.push({ z: D.Z, svg: D.svg });
+    const D = decal(H, c, n, art, { minW: .6, s: 1.35 });
+    // 花有厚度、又別在頭的外緣：只有整朵都轉到頭後面才放後層；其餘畫在耳朵之後（頭的前面）
+    if (H.hid(add(c, mul(n, 9))) && H.face(n) < -.2) L.back.push(D.svg); else L.overEars.push(D.svg);
   }
 
   // 帽簷（環狀面）：依前後切成兩半，後半畫在後層、前半畫在帽身之後
@@ -291,7 +299,7 @@
 
   // 草帽：帽身在兩耳之間、帽簷微微下垂；帽身繞一圈彩色緞帶，側邊打個小結
   function straw(H, L, ctx, col) {
-    const id = ctx.id, C = child(H, place([0, 17, -4], 9, 0, 0)), rx = 15, rz = 13.5;
+    const id = ctx.id, C = child(H, place([0, 17, 1], 9, 0, 0)), rx = 15, rz = 13.5;
     const crown = [];
     [[0, 1], [-5, 1.0], [-9, .97], [-11.5, .86], [-13, .62], [-13.8, .3], [-14, 0]].forEach(([y, k]) => {
       for (let i = 0; i < 28; i++) { const a = i / 28 * Math.PI * 2; crown.push([rx * k * Math.sin(a), y, rz * k * Math.cos(a)]); }
@@ -319,12 +327,12 @@
 
   // 毛線帽：罩住頭頂、反摺的羅紋帽緣、頂上一顆毛球；耳朵從耳洞鑽出來
   function beanie(H, L, ctx, col) {
-    const id = ctx.id, E = [0, 44, -2, 33.5, 32.5, 27.5], pts = [];
+    const id = ctx.id, E = [0, 44, HE[2], 33.5, 32.5, HE[5] + 2.5], pts = [];
     const ycb = (a) => 31.5 + 3 * Math.cos(a);          // 帽緣下緣（前面低、後面高）
     const sp = (a, e) => [E[3] * Math.cos(e) * Math.sin(a), E[1] - E[4] * Math.sin(e), E[2] + E[5] * Math.cos(e) * Math.cos(a)];
     const eEnd = (a) => Math.asin(Math.max(-1, Math.min(1, (E[1] - ycb(a)) / E[4])));
     for (let i = 0; i < 32; i++) { const a = i / 32 * Math.PI * 2, e0 = eEnd(a); for (let j = 0; j <= 7; j++) pts.push(sp(a, e0 + (Math.PI / 2 - e0) * j / 7)); }
-    pts.push([0, 8, -4]);                               // 頂端微微尖起（有點鬆垮）
+    pts.push([0, 8, HE[2] - 2]);                               // 頂端微微尖起（有點鬆垮）
     const d = blob(H, pts);
     // 直向羅紋
     const ribs = [];
@@ -338,9 +346,9 @@
     const cuff = [], cns = [];
     for (let i = 0; i < 72; i++) { const a = i / 72 * Math.PI * 2, y = ycb(a) - 3.4, e = Math.asin((E[1] - y) / E[4]), k = 1.04; cuff.push([E[3] * k * Math.cos(e) * Math.sin(a), y, E[2] + E[5] * k * Math.cos(e) * Math.cos(a)]); cns.push([Math.sin(a) / E[3], 0, Math.cos(a) / E[5]]); }
     const cw = 7.4 * ctx.hs;
-    const cuffS = ringRuns(H, cuff, cns, { off: 1 }).map((r) => { const p = pathOpen(r.xy); return `<path d="${p}" fill="none" stroke="#2a1d14" stroke-width="${f1(cw)}" opacity=".18" transform="translate(0 1.4)" filter="url(#b1${id})"/><path d="${p}" fill="none" ${STROKE(col)} stroke-width="${f1(cw)}" filter="url(#acZ${id})"/><path d="${p}" fill="none" stroke="#ffffff" stroke-width="${f1(cw)}" opacity=".16"/><path d="${p}" fill="none" stroke="#2a1d14" stroke-width="${f1(cw * .9)}" stroke-dasharray=".9 2.1" opacity=".14"/><path d="${p}" fill="none" stroke="#ffffff" stroke-width="${f1(cw * .25)}" opacity=".22" transform="translate(0 -2)" filter="url(#acB${id})"/>`; }).join('');
+    const cuffS = ringRuns(H, cuff, cns, { off: 1 }).map((r) => { const p = pathOpen(r.xy); return `<path d="${p}" fill="none" stroke="#2a1d14" stroke-width="${f1(cw)}" opacity=".18" transform="translate(0 1.4)" filter="url(#b1${id})"/><path d="${p}" fill="none" stroke="#2a1d14" stroke-width="${f1(cw)}" opacity=".2" transform="translate(0 -2.6)" filter="url(#b1${id})"/><path d="${p}" fill="none" ${STROKE(col)} stroke-width="${f1(cw)}" filter="url(#acZ${id})"/><path d="${p}" fill="none" stroke="#ffffff" stroke-width="${f1(cw)}" opacity=".16"/><path d="${p}" fill="none" stroke="#2a1d14" stroke-width="${f1(cw * .9)}" stroke-dasharray=".9 2.1" opacity=".14"/><path d="${p}" fill="none" stroke="#ffffff" stroke-width="${f1(cw * .25)}" opacity=".22" transform="translate(0 -2)" filter="url(#acB${id})"/>`; }).join('');
     // 毛球
-    const pc = H.P([0, 6.5, -5]), pr = 6.8 * ctx.hs;
+    const pc = H.P([0, 6.5, HE[2] - 3]), pr = 6.8 * ctx.hs;
     const pom = `<circle cx="${f1(pc.X + .8)}" cy="${f1(pc.Y + 2)}" r="${f1(pr)}" fill="#2a1d14" opacity=".2" filter="url(#b1${id})"/>
       <circle cx="${f1(pc.X)}" cy="${f1(pc.Y)}" r="${f1(pr)}" fill="#fbf3e4" filter="url(#fz${id})"/><circle cx="${f1(pc.X)}" cy="${f1(pc.Y)}" r="${f1(pr)}" fill="url(#acV${id})" filter="url(#fz${id})"/>
       <ellipse cx="${f1(pc.X - 2)}" cy="${f1(pc.Y - 2.4)}" rx="2.6" ry="1.6" fill="#ffffff" opacity=".7" filter="url(#acB${id})"/>`;
@@ -348,58 +356,66 @@
       <path d="${d}" ${FILL(col)} filter="url(#fz${id})"/>
       <g opacity=".9">${ribs.map((p) => `<path d="${p}" fill="none" stroke="#2a1d14" stroke-width="1.1" opacity=".13" stroke-linecap="round"/><path d="${p}" fill="none" stroke="#ffffff" stroke-width=".7" opacity=".12" stroke-linecap="round" transform="translate(.9 0)"/>`).join('')}</g>
       <path d="${d}" fill="url(#acV${id})" filter="url(#fz${id})"/>
-      ${cuffS}${pom}`);
+      ${pom}`);
+    // 耳朵從帽子的耳洞鑽出來；帽緣最後畫，壓住耳根，上緣再壓一道陰影
+    L.overEars.push(cuffS);
     L.earsOver = true;
   }
 
-  // 圓框眼鏡：鏡片在眼睛前方，鏡腳沿頭側往後到耳朵附近；轉到背面就被頭擋住
+  // 圓框眼鏡：鏡片綁在眼睛的 3D 位置（眼睛看不到的那一側就不畫，不會飄在臉外）；
+  // 鏡腳只畫近側、只到耳朵前面；轉到背面整副都看不到
   function glasses(H, L, ctx, col) {
-    const id = ctx.id, out = { front: [], back: [] }, sw = 1.5;
+    const id = ctx.id, out = [], sw = 1.9;
+    let shown = 0;
     [-1, 1].forEach((k) => {
-      const c = [k * 13, 43, 26.5], n = norm([k * .32, 0, 1]);
+      const en = norm([k * .5, 0, .87]);                // 與 quokka-pose.js 判斷眼睛是否可見的法向量相同
+      if (H.face(en) <= 0.05) return;
+      shown++;
+      const c = add([k * 13.5, 43, 21], mul(en, 5)), n = norm([k * .32, 0, 1]);
       const D = decal(H, c, n, () => `
         <circle r="7.4" fill="#e9f3fb" opacity=".16"/>
         <path d="M-4.6 -3.6 Q-2 -5.6 1.2 -5.2" fill="none" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round" opacity=".55" filter="url(#acB${id})"/>
         <circle r="7.4" fill="none" stroke="#2a1d14" stroke-width="${sw + .8}" opacity=".18" transform="translate(.5 1)" filter="url(#acB${id})"/>
         <circle r="7.4" fill="none" ${STROKE(col)} stroke-width="${sw}"/>
-        <path d="M-6.4 -3.6 A7.4 7.4 0 0 1 -1 -7.3" fill="none" stroke="#ffffff" stroke-width=".6" opacity=".55"/>`, {});
-      // 鏡片背面朝向觀者太多（從後腦勺看）就不畫，免得像耳環一樣掛在頭邊
-      if (H.face(n) > -0.35) (H.hid(add(c, mul(n, 1))) ? out.back : out.front).push({ z: D.Z, svg: D.svg });
-      // 鏡腳
-      const tp = [[k * 20.2, 42, 24.4], [k * 25.5, 41.4, 18], [k * 29.2, 40.4, 8], [k * 30.4, 39.4, -2], [k * 29.6, 38.6, -9]];
-      const vis = tp.map((p) => !H.hid(add(p, mul(headN(p), 1.2))));
-      runs(vis, false).forEach((r) => {
-        const xy = r.idx.map((i) => H.xy(tp[i]));
-        if (xy.length > 1) out.front.push({ z: -99, svg: `<path d="${pathOpen(xy)}" fill="none" ${STROKE(col)} stroke-width="${f1(sw * .85)}" stroke-linecap="round"/>` });
-      });
+        <path d="M-6.4 -3.6 A7.4 7.4 0 0 1 -1 -7.3" fill="none" stroke="#ffffff" stroke-width=".6" opacity=".55"/>`, { minW: .5 });
+      out.push({ z: D.Z, svg: D.svg });
+      // 鏡腳：從鏡框外緣沿頭側到耳朵前面
+      if (H.face([k, 0, 0]) > .15) {
+        const tp = [[k * 21.6, 42.4, 24.6], [k * 27, 41.8, 17.5], [k * 30.6, 41.2, 9], [k * 31.6, 40.6, 2]];
+        const vis = tp.map((p) => !H.hid(add(p, mul(headN(p), 1.6))));
+        runs(vis, false).forEach((r) => {
+          const xy = r.idx.map((i) => H.xy(tp[i]));
+          if (xy.length > 1) out.push({ z: -99, svg: `<path d="${pathOpen(xy)}" fill="none" ${STROKE(col)} stroke-width="${f1(sw * .85)}" stroke-linecap="round"/>` });
+        });
+      }
     });
-    // 鼻樑
-    const br = [[-6.4, 41.4, 27.4], [-3, 39.4, 30.4], [0, 39, 31.2], [3, 39.4, 30.4], [6.4, 41.4, 27.4]];
-    const bv = br.map((p) => !H.hid(add(p, [0, 0, 1])));
-    if (bv.filter(Boolean).length > 1) out.front.push({ z: 0, svg: `<path d="${pathOpen(br.filter((_, i) => bv[i]).map(H.xy))}" fill="none" ${STROKE(col)} stroke-width="${f1(sw)}" stroke-linecap="round"/>` });
-    else out.back.push({ z: 0, svg: `<path d="${pathOpen(br.map(H.xy))}" fill="none" ${STROKE(col)} stroke-width="${f1(sw)}" stroke-linecap="round"/>` });
-    const srt = (a) => a.sort((p, q) => p.z - q.z).map((p) => p.svg).join('');
-    if (out.back.length) L.back.push(srt(out.back));
-    if (out.front.length) L.top.push(srt(out.front));
+    // 鼻樑：兩片鏡片都看得到才畫
+    if (shown === 2) {
+      const br = [[-7, 41.6, 28.6], [-3.2, 39.6, 31.4], [0, 39.2, 32.2], [3.2, 39.6, 31.4], [7, 41.6, 28.6]];
+      out.push({ z: 0, svg: `<path d="${pathOpen(br.map(H.xy))}" fill="none" ${STROKE(col)} stroke-width="${f1(sw)}" stroke-linecap="round"/>` });
+    }
+    if (out.length) L.top.push(out.sort((p, q) => p.z - q.z).map((p) => p.svg).join(''));
+    else L.back.push('<g class="acc-hidden"/>');          // 整副被頭擋住：留一個空群組（飾品顏色變數仍在）
   }
 
   // 脖子上的環（身體座標）：中心、半徑、前低後高的傾斜
+  const NZ = -2;                                        // 脖子截面的中心（身體座標 z）
   const neckRing = (y, tilt, rx, rz, N = 72) => {
     const pts = [], ns = [];
-    for (let i = 0; i < N; i++) { const a = i / N * Math.PI * 2; pts.push([rx * Math.sin(a), y + tilt * Math.cos(a), -3 + rz * Math.cos(a)]); ns.push(norm([Math.sin(a) / rx, 0, Math.cos(a) / rz])); }
+    for (let i = 0; i < N; i++) { const a = i / N * Math.PI * 2; pts.push([rx * Math.sin(a), y + tilt * Math.cos(a), NZ + rz * Math.cos(a)]); ns.push(norm([Math.sin(a) / rx, 0, Math.cos(a) / rz])); }
     return { pts, ns };
   };
 
   // 小圍巾：毛線織的條紋圍巾繞脖子一圈，前面右側垂下兩條流蘇尾巴
   function scarf(B, L, ctx, col) {
-    const id = ctx.id, R = neckRing(80.5, 4.5, 32, 27), w = 11;
+    const id = ctx.id, R = neckRing(81, 4, 33, 29.5), w = 11;
     const ring = ringRuns(B, R.pts, R.ns, { off: 4 }).map((r) => { const p = pathOpen(r.xy); return `
       <path d="${p}" fill="none" stroke="#2a1d14" stroke-width="${w + 1}" opacity=".22" transform="translate(0 2.2)" filter="url(#b1${id})" stroke-linecap="round"/>
       <path d="${p}" fill="none" ${STROKE(col)} stroke-width="${w}" stroke-linecap="round" filter="url(#fz${id})"/>
       <path d="${p}" fill="none" stroke="#fbf3e4" stroke-width="${w * .92}" stroke-dasharray="2.6 5.4" opacity=".75" filter="url(#acZ${id})"/>
       <path d="${p}" fill="none" stroke="#ffffff" stroke-width="${w * .3}" opacity=".22" transform="translate(0 -2.6)" filter="url(#acB${id})"/>
       <path d="${p}" fill="none" stroke="#2a1d14" stroke-width="${w * .3}" opacity=".14" transform="translate(0 3)" filter="url(#acB${id})"/>`; }).join('');
-    const a0 = rad(38), c = [33.5 * Math.sin(a0), 80.5 + 4.5 * Math.cos(a0) + 1, -3 + 28.5 * Math.cos(a0)], n = [Math.sin(a0), .1, Math.cos(a0)];
+    const a0 = rad(38), c = [34.5 * Math.sin(a0), 81 + 4 * Math.cos(a0) + 1, NZ + 31 * Math.cos(a0)], n = [Math.sin(a0), .1, Math.cos(a0)];
     const tail = (x, rot, len) => `<g transform="translate(${x} 0) rotate(${rot})">
         <path d="M-4.2 0 L4.2 0 L4.6 ${len} L-3.8 ${len} Z" fill="#2a1d14" opacity=".2" transform="translate(.8 1.4)" filter="url(#b1${id})"/>
         <path d="M-4.2 0 L4.2 0 L4.6 ${len} L-3.8 ${len} Z" ${FILL(col)} filter="url(#acZ${id})"/>
@@ -415,39 +431,37 @@
     L.front.push(ring + (tailsHidden ? '' : D.svg));
   }
 
-  // 三角領巾：細帶子繞脖子，前面垂一片有白點點的三角巾；背面看得到小結
+  // 三角領巾：細帶子繞脖子，前面垂一片有白點點的三角巾（包到脖子兩側，側面看也是一片布，不是一條線）；
+  // 背面才看得到貼在後頸的小結
   function bandana(B, L, ctx, col) {
-    const id = ctx.id, R = neckRing(81, 2, 30.6, 25.2);
-    const strap = ringRuns(B, R.pts, R.ns, { off: 2 }).map((r) => `<path d="${pathOpen(r.xy)}" fill="none" ${STROKE(col)} stroke-width="3.6" filter="url(#acZ${id})"/><path d="${pathOpen(r.xy)}" fill="none" stroke="#2a1d14" stroke-width="1.2" opacity=".16" transform="translate(0 1.4)"/>`).join('');
-    // 三角巾：頂邊沿著環的前段、尖端垂到胸前（直接用 3D 點，側面時自然變窄）
+    const id = ctx.id, R = neckRing(82, 2, 32.4, 29.4);
+    const strap = ringRuns(B, R.pts, R.ns, { off: 2 }).map((r) => `<path d="${pathOpen(r.xy)}" fill="none" ${STROKE(col)} stroke-width="3.8" filter="url(#acZ${id})"/><path d="${pathOpen(r.xy)}" fill="none" stroke="#2a1d14" stroke-width="1.2" opacity=".16" transform="translate(0 1.4)"/>`).join('');
+    // 三角巾：頂邊沿著環的前 3/4 圈、尖端垂到胸前並略往前鼓（直接用 3D 點）
     const edge = [];
-    for (let a = -58; a <= 58; a += 8) { const t = rad(a); edge.push([31.6 * Math.sin(t), 81 + 2 * Math.cos(t) - .5, -3 + 26.4 * Math.cos(t)]); }
-    const tip = [0, 104, 22.5], cen = [0, 89, 25];
-    const sideL = [edge[0], [-13, 94, 22.4], tip], sideR = [tip, [13, 94, 22.4], edge[edge.length - 1]];
-    const poly = edge.concat(sideR.slice(1, 2), [tip], sideL.slice(1, 2));
-    const xy = poly.map(B.xy);
-    const d = 'M' + xy.map((p) => f1(p[0]) + ' ' + f1(p[1])).join(' L') + ' Z';
-    const dots = [[-12, 86.5, 25.5], [0, 86, 27.2], [12, 86.5, 25.5], [-6, 93, 25.2], [6, 93, 25.2], [0, 99.5, 24]].map((p) => {
-      const D = decal(B, p, [0, .2, 1], () => '<circle r="1.25" fill="#fbf3e4" opacity=".9"/>', {});
-      return D.svg;
+    for (let a = -84; a <= 84; a += 8) { const t = rad(a); edge.push([33.4 * Math.sin(t), 82 + 2 * Math.cos(t) - .5, NZ + 30.6 * Math.cos(t)]); }
+    const tip = [0, 107, 29], cen = [0, 91, 29];
+    const poly = edge.concat([[19, 93, 22], [9, 101, 27.5], tip, [-9, 101, 27.5], [-19, 93, 22]]);
+    const d = cr(hull(poly.map(B.xy)));
+    const dots = [[-13, 88, 26.5], [0, 87.5, 30], [13, 88, 26.5], [-6.5, 95, 28.5], [6.5, 95, 28.5], [0, 102, 29.5], [-23, 86, 17], [23, 86, 17]].map((p) => {
+      const nn = norm([p[0] / 30, .15, 1]);
+      return B.face(nn) > .15 ? decal(B, p, nn, () => '<circle r="1.35" fill="#fbf3e4" opacity=".9"/>', {}).svg : '';
     }).join('');
-    const vis = B.face([0, .2, 1]) > .1 && !B.hid(add(cen, [0, 0, 3]));
+    const vis = B.face([0, .2, 1]) > -.3;
     const cloth = `<path d="${d}" fill="#2a1d14" opacity=".22" transform="translate(0 2)" filter="url(#b1${id})"/>
-      <path d="${d}" ${FILL(col)} stroke-width="1.6" ${STROKE(col)} stroke-linejoin="round" filter="url(#acZ${id})"/>
-      ${dots}<path d="${d}" fill="url(#acD${id})" opacity=".9"/>
-      <path d="${pathOpen(edge.map(B.xy))}" fill="none" stroke="#2a1d14" stroke-width="2" opacity=".15" transform="translate(0 1.6)" filter="url(#acB${id})"/>`;
-    // 背後的結
-    const kc = [0, 81.5, -29.5];
-    const knot = !B.hid(add(kc, [0, 0, -2])) ? decal(B, kc, [0, 0, -1], () => `<path d="M0 0 C-2.4 -3.4 -6.6 -3.4 -6.4 0 C-6.2 2.6 -2.4 2 0 0 Z M0 0 C2.4 -3.4 6.6 -3.4 6.4 0 C6.2 2.6 2.4 2 0 0 Z M-.8 .8 L-3.6 7.4 L-1.4 7 Z M.8 .8 L3.6 7.4 L1.4 7 Z" ${FILL(col)}/><path d="M0 0 C-2.4 -3.4 -6.6 -3.4 -6.4 0 C-6.2 2.6 -2.4 2 0 0 Z M0 0 C2.4 -3.4 6.6 -3.4 6.4 0 C6.2 2.6 2.4 2 0 0 Z" fill="url(#acD${id})"/><circle r="1.7" ${FILL(col)}/><circle r="1.7" fill="#2a1d14" opacity=".2"/>`, { minW: .5 }).svg : '';
+      <path d="${d}" ${FILLSTROKE(col)} stroke-width="1.6" stroke-linejoin="round" filter="url(#acZ${id})"/>
+      ${dots}<path d="${d}" fill="url(#acD${id})" opacity=".9"/>`;
+    // 背後的結：貼在後頸上，朝向觀者才畫（側面不會多出一個飄著的小結）
+    const kc = [0, 82.5, NZ - 30.2];
+    const knot = B.face([0, 0, -1]) > .3 && !B.hid(add(kc, [0, 0, -2])) ? decal(B, kc, [0, 0, -1], () => `<path d="M0 0 C-2.4 -3.4 -6.6 -3.4 -6.4 0 C-6.2 2.6 -2.4 2 0 0 Z M0 0 C2.4 -3.4 6.6 -3.4 6.4 0 C6.2 2.6 2.4 2 0 0 Z M-.8 .8 L-3.6 7.4 L-1.4 7 Z M.8 .8 L3.6 7.4 L1.4 7 Z" ${FILL(col)}/><path d="M0 0 C-2.4 -3.4 -6.6 -3.4 -6.4 0 C-6.2 2.6 -2.4 2 0 0 Z M0 0 C2.4 -3.4 6.6 -3.4 6.4 0 C6.2 2.6 2.4 2 0 0 Z" fill="url(#acD${id})"/><circle r="1.7" ${FILL(col)}/><circle r="1.7" fill="#2a1d14" opacity=".2"/>`, { minW: .5, s: 1.15 }).svg : '';
     if (vis) L.front.push(strap + cloth + knot); else { L.back.push(cloth); L.front.push(strap + knot); }
   }
 
   // 鈴鐺項圈：皮革細項圈，前面掛一顆金色小鈴鐺
   function collar(B, L, ctx, col) {
-    const id = ctx.id, R = neckRing(84, 1.6, 30.4, 25);
+    const id = ctx.id, R = neckRing(85, 1.6, 32, 29);
     const strap = ringRuns(B, R.pts, R.ns, { off: 2 }).map((r) => { const p = pathOpen(r.xy); return `<path d="${p}" fill="none" stroke="#2a1d14" stroke-width="5.6" opacity=".2" transform="translate(0 1.4)" filter="url(#b1${id})"/><path d="${p}" fill="none" ${STROKE(col)} stroke-width="4.6"/><path d="${p}" fill="none" stroke="#ffffff" stroke-width=".6" stroke-dasharray="1.6 1.6" opacity=".6"/><path d="${p}" fill="none" stroke="#ffffff" stroke-width="1.4" opacity=".2" transform="translate(0 -1.2)" filter="url(#acB${id})"/>`; }).join('');
-    const bc = [0, 91.5, 26.8], q = B.P(bc), r = 4.8;
-    const ring = B.P([0, 86.4, 25.4]);
+    const bc = [0, 92.5, 28.6], q = B.P(bc), r = 5.2;
+    const ring = B.P([0, 87.4, 27.4]);
     const bell = `<ellipse cx="${f1(ring.X)}" cy="${f1(ring.Y)}" rx="1.6" ry="1.4" fill="none" stroke="#c49a3a" stroke-width="1"/>
       <circle cx="${f1(q.X + .8)}" cy="${f1(q.Y + 1.4)}" r="${r}" fill="#2a1d14" opacity=".22" filter="url(#b1${id})"/>
       <circle cx="${f1(q.X)}" cy="${f1(q.Y)}" r="${r}" fill="url(#acG${id})"/>
@@ -460,7 +474,7 @@
   // 葉子花冠：細枝繞頭一圈，綴著銀灰綠的細葉與幾朵小花
   function wreath(H, L, ctx, col) {
     const id = ctx.id, N = 72, pts = [], ns = [];
-    const at = (a) => { const y = 22.5 + 2.8 * Math.cos(a), k = Math.sqrt(Math.max(0, 1 - ((y - 45) / 30) ** 2)); return [31 * k * 1.05 * Math.sin(a), y, -2 + 25 * k * 1.05 * Math.cos(a)]; };
+    const at = (a) => { const y = 22.5 + 2.8 * Math.cos(a), k = Math.sqrt(Math.max(0, 1 - ((y - 45) / 30) ** 2)); return [HE[3] * k * 1.05 * Math.sin(a), y, HE[2] + HE[5] * k * 1.05 * Math.cos(a)]; };
     for (let i = 0; i < N; i++) { const a = i / N * Math.PI * 2, p = at(a); pts.push(p); ns.push(radialN(p)); }
     const twig = ringRuns(H, pts, ns, { faceOnly: true }).map((r) => `<path d="${pathOpen(r.xy)}" fill="none" stroke="#2a1d14" stroke-width="2.4" opacity=".16" transform="translate(0 1.2)" filter="url(#acB${id})"/><path d="${pathOpen(r.xy)}" fill="none" stroke="#8a7a5c" stroke-width="1.5"/>`).join('');
     const items = [];
@@ -487,7 +501,7 @@
 
   // 工地安全帽：小小一頂戴在兩耳之間，三道稜線、前面有帽舌（給建築師主人的工地夥伴）
   function hardhat(H, L, ctx, col) {
-    const id = ctx.id, C = child(H, place([0, 21.5, -3], -4, 0, 0)), rx = 21, ry = 15.5, rz = 19.5;
+    const id = ctx.id, C = child(H, place([0, 21.5, 2], -4, 0, 0)), rx = 21, ry = 15.5, rz = 19.5;
     const sp = (a, e, k = 1) => [rx * k * Math.cos(e) * Math.sin(a), -ry * k * Math.sin(e), rz * k * Math.cos(e) * Math.cos(a)];
     const shell = [];
     for (let i = 0; i < 32; i++) for (let j = 0; j <= 7; j++) shell.push(sp(i / 32 * Math.PI * 2, j / 7 * Math.PI / 2));
@@ -519,7 +533,7 @@
 
   // 貝雷帽：扁圓、往右歪戴，頂上一根小短梗
   function beret(H, L, ctx, col) {
-    const id = ctx.id, C = child(H, place([3.5, 15, -3], -6, 13, 0)), rx = 25, ry = 8.2, rz = 22.5;
+    const id = ctx.id, C = child(H, place([3.5, 15, 2], -6, 13, 0)), rx = 25, ry = 8.2, rz = 22.5;
     const pts = [];
     for (let i = 0; i < 36; i++) for (let j = -6; j <= 6; j++) { const a = i / 36 * Math.PI * 2, e = j / 6 * Math.PI / 2; pts.push([rx * Math.cos(e) * Math.sin(a), -ry * Math.sin(e) - (j < 0 ? 0 : 0), rz * Math.cos(e) * Math.cos(a)]); }
     const d = blob(C, pts);
@@ -559,17 +573,18 @@
 
   // ctx：{ id, th, PH(p)→{X,Y,Z}, PB(p)→{X,Y,Z}, head: 頭部橢球 [[cx,cy,cz,rx,ry,rz]…], body: 身體橢球, hs }
   function draw(list, ctx) {
-    const L = { back: [], ear: [], front: [], top: [], earsOver: false };
+    const L = { back: [], ear: [], front: [], overEars: [], top: [], earsOver: false };
+    if (ctx.head && ctx.head[0]) HE = ctx.head[0];
     if (!list || !list.length) return L;
     const H = space(ctx.PH, ctx.head), B = space(ctx.PB, ctx.body);
     const c2 = { hs: 1, ...ctx };
     // 帽子類先畫、頸部再畫；同一層內依清單順序
     list.forEach((a) => {
       const def = TYPES[a.type], col = def.color;
-      const sub = { back: [], ear: [], front: [], top: [], earsOver: false };
+      const sub = { back: [], ear: [], front: [], overEars: [], top: [], earsOver: false };
       DRAW[a.type](BODY_TYPES.has(a.type) ? B : H, sub, c2, col);
       const wrap = (s) => (a.color ? `<g style="--acc:${a.color}">${s}</g>` : s);
-      ['back', 'front', 'top'].forEach((k) => { const s = sub[k].join(''); if (s.trim()) L[k].push(wrap(s)); });
+      ['back', 'front', 'overEars', 'top'].forEach((k) => { const s = sub[k].join(''); if (s.trim()) L[k].push(wrap(s)); });
       sub.ear.forEach((e) => L.ear.push({ z: e.z, svg: wrap(e.svg) }));
       if (sub.earsOver) L.earsOver = true;
     });

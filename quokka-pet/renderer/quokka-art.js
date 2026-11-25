@@ -56,25 +56,35 @@ function armPath(sx, sy, wx, wy, w1, w2, bend) {
   return { d: `M${f(a1)} Q${f(a2)} ${f(a3)} Q${wx + dx / L * w2 * .55} ${wy + dy / L * w2 * .55} ${f(b3)} Q${f(b2)} ${f(b1)} Z`,
     hi: `M${f(p(sx, sy, 1, w1 * .28))} Q${f(p(mx, my, 1, wm * .3))} ${f(p(wx, wy, 1, w2 * .25))}`, nx, ny };
 }
-// 前爪：以腕部 (x,y) 為原點、ang＝指尖方向（0＝朝下），s＝大小
+// 前爪：以腕部 (x,y) 為原點、ang＝指尖方向（0＝朝下），s＝大小。
+// 小而圓的掌＋三根短指，不描邊；o.detail＝大圖才畫短爪尖；o.palm＝手伸向觀者時改畫掌心肉墊
 function paw(id, x, y, ang, s = 1, o = {}) {
-  const fingers = [-3, -1, 1, 3].map((fx, i) => {
-    const fy = 9.6 + (i === 0 || i === 3 ? -.8 : 0);
-    return `<ellipse cx="${fx}" cy="${fy}" rx="1.3" ry="1.75" fill="url(#pw${id})"/>
-      <path d="M${fx - .85} ${fy + 1.1} Q${fx - .3} ${fy + 3} ${(fx + fx * .12).toFixed(2)} ${fy + 4.2} Q${fx + .75} ${fy + 2.8} ${fx + .85} ${fy + 1.1} Z" fill="#f6eddf" stroke="#6e5844" stroke-width=".35"/>`;
+  if (o.palm) {
+    return `<g transform="translate(${x} ${y}) rotate(${ang}) scale(${s})">
+    <ellipse cx="0" cy="2.2" rx="5" ry="4.8" fill="#4a3a2e" opacity=".22" transform="translate(.5 .9)" filter="url(#b1${id})"/>
+    ${[-3.1, 0, 3.1].map((fx, i) => `<ellipse cx="${fx}" cy="${i === 1 ? 6.3 : 5.4}" rx="1.55" ry="1.9" fill="#7a5c40"/>`).join('')}
+    <ellipse cx="0" cy="2" rx="4.5" ry="4.3" fill="url(#pw${id})"/>
+    <ellipse cx="0" cy="1.6" rx="2.5" ry="2.1" fill="#c9988a" opacity=".85"/>
+    ${[-3, 0, 3].map((fx, i) => `<circle cx="${fx}" cy="${i === 1 ? 5.9 : 5.1}" r=".95" fill="#c9988a" opacity=".85"/>`).join('')}
+    <ellipse cx="-.8" cy=".9" rx="1.1" ry=".7" fill="#fff" opacity=".28"/>
+  </g>`;
+  }
+  const fingers = [-2.4, 0, 2.4].map((fx, i) => {
+    const fy = i === 1 ? 7.1 : 6.4;
+    return `<ellipse cx="${fx}" cy="${fy}" rx="1.35" ry="2.1" fill="url(#pw${id})"/>` +
+      (o.detail ? `<path d="M${fx - .55} ${fy + 1.5} Q${fx} ${fy + 3.3} ${fx + .55} ${fy + 1.5} Z" fill="#efe4d2" opacity=".9"/>` : '');
   }).join('');
   return `<g transform="translate(${x} ${y}) rotate(${ang}) scale(${s})">
-    <path d="M-4.2 -1.5 C-5.2 2.5 -5 6.8 -4.2 9.2 L4.2 9.2 C5 6.8 5.2 2.5 4.2 -1.5 C2 -2.8 -2 -2.8 -4.2 -1.5 Z" fill="url(#pw${id})" filter="url(#pf${id})"/>
+    <ellipse cx="0" cy="3.4" rx="4.2" ry="4.4" fill="#4a3a2e" opacity=".2" transform="translate(.5 .9)" filter="url(#b1${id})"/>
+    ${o.thumb ? `<ellipse cx="${o.thumb * 3.5}" cy="3.4" rx="1.2" ry="1.7" fill="#5e4632"/>` : ``}
+    <ellipse cx="0" cy="3" rx="3.7" ry="3.9" fill="url(#pw${id})"/>
     ${fingers}
-    <path d="M-2.8 7.4 Q0 6.4 2.8 7.4" fill="none" stroke="#a08066" stroke-width=".7" opacity=".55"/>
-    <path d="M-2.2 1.6 Q0 .6 2.2 1.6" fill="none" stroke="#a08066" stroke-width=".6" opacity=".35"/>
-    ${o.thumb ? `<ellipse cx="${o.thumb * 4.2}" cy="4.6" rx="1.3" ry="1.9" fill="url(#pw${id})"/>` : ``}
+    <ellipse cx="-.9" cy="2" rx="1.6" ry="1.1" fill="#d8bd98" opacity=".3" filter="url(#b1${id})"/>
   </g>`;
 }
 function handDefs(id) {
-  return `<linearGradient id="pw${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6e4f37"/><stop offset=".6" stop-color="#523826"/><stop offset="1" stop-color="#3d291b"/></linearGradient>
-  <linearGradient id="am${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#88633f"/><stop offset=".45" stop-color="#ad8455"/><stop offset="1" stop-color="#7a5838"/></linearGradient>
-  <filter id="pf${id}" x="-20%" y="-20%" width="140%" height="140%"><feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="1" seed="9"/><feDisplacementMap in="SourceGraphic" scale="1.2" xChannelSelector="R" yChannelSelector="G"/></filter>`;
+  return `<linearGradient id="pw${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#88633f"/><stop offset=".55" stop-color="#7a5c40"/><stop offset="1" stop-color="#5e4632"/></linearGradient>
+  <linearGradient id="am${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#88633f"/><stop offset=".45" stop-color="#ad8455"/><stop offset="1" stop-color="#7a5838"/></linearGradient>`;
 }
 // 彎曲的手臂：沿三次貝茲曲線（肩→外推的手肘→往內收的手腕）取樣，寬度在手肘處略鼓，再接前爪
 function bez(p, t) { const u = 1 - t; return [0, 1].map((k) => u * u * u * p[0][k] + 3 * u * u * t * p[1][k] + 3 * u * t * t * p[2][k] + t * t * t * p[3][k]); }
@@ -92,17 +102,21 @@ function tube(P, w1, w2, bulge) {
     hi: 'M' + H.slice(1, N - 2).map(f).join(' L'), shade: 'M' + R.slice(2, N).map(f).join(' L') };
 }
 let _arm = 0;
+// 手臂：P＝四個控制點（肩、手肘外側、手肘內側、手腕）。顏色沿手臂由身體色漸漸變深到手腕，肩膀不再用遮罩淡出
+// （o.fade>0 才淡出，只給預設合手姿勢用很短的一段）；o.palm＝手伸向觀者，畫掌心
 function arm(id, P, pawAng, o = {}) {
-  const T = tube(P, o.w1 || 10, o.w2 || 7, o.bulge == null ? 1 : o.bulge), side = o.side || 1, k = id + 'a' + (_arm++);
-  const fadeTo = o.fadeTo || .38;
-  return `<defs><linearGradient id="fd${k}" gradientUnits="userSpaceOnUse" x1="${P[0][0]}" y1="${P[0][1]}" x2="${P[3][0]}" y2="${P[3][1]}"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="${fadeTo}" stop-color="#fff" stop-opacity="1"/></linearGradient>
-   <mask id="mk${k}" maskUnits="userSpaceOnUse" x="-20" y="-20" width="200" height="240"><rect x="-20" y="-20" width="200" height="240" fill="url(#fd${k})"/></mask></defs>
-   <g mask="url(#mk${k})">
-   <path d="${T.d}" fill="#4a3a2e" opacity=".25" transform="translate(${1.4 * side} 2)" filter="url(#b1${id})"/>
-   <path d="${T.d}" fill="url(#am${id})" filter="url(#fz${id})"/>
-   <path d="${T.hi}" fill="none" stroke="#d8bd98" stroke-width="1.4" stroke-linecap="round" opacity=".45" filter="url(#b1${id})"/>
-   <path d="${T.shade}" fill="none" stroke="#5a4232" stroke-width="1.4" stroke-linecap="round" opacity=".35" filter="url(#b1${id})"/></g>
-   ${paw(id, P[3][0], P[3][1] - 1, pawAng, o.ps || .92, o)}`;
+  const T = tube(P, o.w1 || 12, o.w2 || 8, o.bulge == null ? 1 : o.bulge), side = o.side || 1, k = id + 'a' + (_arm++);
+  const fade = o.fade == null ? (o.fadeTo == null ? .38 : o.fadeTo) : o.fade;
+  const g = `<linearGradient id="ag${k}" gradientUnits="userSpaceOnUse" x1="${(+P[0][0]).toFixed(1)}" y1="${(+P[0][1]).toFixed(1)}" x2="${(+P[3][0]).toFixed(1)}" y2="${(+P[3][1]).toFixed(1)}"><stop offset="0" stop-color="${o.far ? '#93704c' : '#a37a52'}"/><stop offset=".55" stop-color="${o.far ? '#88633f' : '#93704c'}"/><stop offset="1" stop-color="#7a5c40"/></linearGradient>`;
+  const m = fade > 0 ? `<linearGradient id="fd${k}" gradientUnits="userSpaceOnUse" x1="${P[0][0]}" y1="${P[0][1]}" x2="${P[3][0]}" y2="${P[3][1]}"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="${fade}" stop-color="#fff" stop-opacity="1"/></linearGradient>
+   <mask id="mk${k}" maskUnits="userSpaceOnUse" x="-80" y="-80" width="320" height="360"><rect x="-80" y="-80" width="320" height="360" fill="url(#fd${k})"/></mask>` : '';
+  return `<defs>${g}${m}</defs>
+   <g${fade > 0 ? ` mask="url(#mk${k})"` : ''}>
+   <path d="${T.d}" fill="#4a3a2e" opacity=".22" transform="translate(${1.2 * side} 1.8)" filter="url(#b1${id})"/>
+   <path d="${T.d}" fill="url(#ag${k})" filter="url(#fz${id})"/>
+   <path d="${T.hi}" fill="none" stroke="#d8bd98" stroke-width="1.8" stroke-linecap="round" opacity=".3" filter="url(#b1${id})"/>
+   <path d="${T.shade}" fill="none" stroke="#5a4232" stroke-width="1.6" stroke-linecap="round" opacity=".22" filter="url(#b1${id})"/></g>
+   ${paw(id, (+P[3][0]).toFixed(1), (+P[3][1] - (o.palm ? 2 : 1)).toFixed(1), pawAng, o.ps || .92, o)}`;
 }
 const mir = (P) => P.map(([x, y]) => [160 - x, y]);
 const REST_L = [[64.5, 103], [64, 113], [68, 122], [75, 127.5]];
@@ -114,7 +128,8 @@ const HANDS = {
 };
 
 const DEFS = (id) => `<defs>
-  <filter id="fz${id}" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4"/><feDisplacementMap in="SourceGraphic" scale="3.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+  <filter id="fz${id}" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.3" numOctaves="1" seed="4"/><feDisplacementMap in="SourceGraphic" scale="3.4" xChannelSelector="R" yChannelSelector="G"/><feGaussianBlur stdDeviation=".4"/></filter>
+  <filter id="b6${id}" filterUnits="userSpaceOnUse" x="-120" y="-120" width="440" height="480"><feGaussianBlur stdDeviation="6"/></filter>
   <filter id="b3${id}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3"/></filter><filter id="b1${id}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="1.2"/></filter>
   <linearGradient id="bg${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9a7650"/><stop offset=".33" stop-color="#b0855a"/><stop offset=".55" stop-color="#b0936c"/><stop offset="1" stop-color="#cbb08a"/></linearGradient>
   <linearGradient id="bk${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#93704c"/><stop offset=".3" stop-color="#a37a52"/><stop offset=".6" stop-color="#a38a6a"/><stop offset="1" stop-color="#b9a283"/></linearGradient>
@@ -122,7 +137,7 @@ const DEFS = (id) => `<defs>
   <linearGradient id="tl${id}" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stop-color="#94734f"/><stop offset=".6" stop-color="#7a5c40"/><stop offset="1" stop-color="#5e4632"/></linearGradient>
   ${handDefs(id)}
 </defs>`;
-const PAW = '#4a3b30', FOOT = '#5a4a3d', BAND = 'var(--band, #e5533d)';
+const PAW = '#4a3b30', FOOT = '#6b5847', BAND = 'var(--band, #e5533d)';
 const ER = 4.1;
 function eye(x, y, id, o = {}) {
   const r = ER * (o.scale || 1);
@@ -300,32 +315,36 @@ function b34(id) {
 // 座標：x 右、y 下（同 SVG）、z 朝觀者（正面時）。θ＝轉向角：0 正面、90 右側（口鼻朝右）、180 背面、-90 左側。
 // 尺寸依參考照片（正面量測）與 iNaturalist 開放授權照片（斜角、側面）校正：梨形身材、圓臉頰、口鼻斜角時突出。
 // ===========================================================================
+// 側面是一顆「蛋」：頭大而前後徑深、脖子短、背部拱起（駝背）、臀部往後坐；口鼻短而鈍、有下顎。
 const Q3_BASE = [
   // [名稱, cx, cy, cz, rx, ry, rz]
-  ['thighL', -30, 148, -6, 17, 21, 25], ['thighR', 30, 148, -6, 17, 21, 25],
-  ['hips', 0, 140, -1, 46, 34, 34],
-  ['rump', 0, 158, -5, 41, 16, 30],
-  ['chest', 0, 106, -1, 32, 28, 28],
-  ['neck', 0, 84, -3, 30, 20, 24],
-  ['head', 0, 45, -2, 31, 30, 25],
-  ['cheekL', -21, 62, 5, 15, 13.5, 15], ['cheekR', 21, 62, 5, 15, 13.5, 15],
-  ['snout', 0, 56.5, 21, 11, 9, 18],
-  ['snoutTip', 0, 55, 34, 7, 6.5, 7]
+  ['thighL', -30, 148, -9, 17, 21, 26], ['thighR', 30, 148, -9, 17, 21, 26],
+  ['hips', 0, 140, -8, 46, 34, 37],
+  ['rump', 0, 158, -13, 41, 16, 33],
+  ['back', 0, 108, -13, 29, 34, 27],
+  ['chest', 0, 106, -1, 32, 28, 27],
+  ['neck', 0, 82, 0, 31, 20, 25],
+  ['head', 0, 45, 3, 31, 30, 28],
+  ['cheekL', -21, 62, 8, 15, 13.5, 15], ['cheekR', 21, 62, 8, 15, 13.5, 15],
+  ['snout', 0, 57, 21, 12.5, 10.5, 14],
+  ['snoutTip', 0, 56, 31.5, 8.5, 8, 6.5],
+  ['jaw', 0, 65, 15, 12, 8, 13]
 ];
 let _views = null;
-let Q3 = Q3_BASE, TAILK = 1, EARK = 1, TRAITS = null;
+let Q3 = Q3_BASE, TAILK = 1, EARK = 1, TRAITS = null, JUV = false;
 const TR = () => (typeof window !== 'undefined' && window.QuokkaTraits) ? window.QuokkaTraits
   : (typeof require === 'function' ? require('./traits.js') : null);
 // 套用個體特徵（體型胖瘦、臉頰、耳朵、尾長、毛色）；之後產生的所有圖都會用這組特徵
 function configure(traits) {
   TRAITS = traits || null; _views = null;
   const sh = traits && TR() ? TR().shape(traits) : null;
+  JUV = !!(sh && sh.juvenile);
   if (!sh) { Q3 = Q3_BASE; TAILK = 1; EARK = 1; return; }
   const w = sh.widthK, c = sh.cheekK, k = (f) => 1 + (w - 1) * f;
   Q3 = Q3_BASE.map(([n, x, y, z, rx, ry, rz]) => {
     if (n === 'hips' || n === 'rump') return [n, x, y, z, rx * w, ry, rz * w];
     if (n.startsWith('thigh')) return [n, x * k(.8), y, z, rx * w, ry, rz * w];
-    if (n === 'chest') return [n, x, y, z, rx * k(.6), ry, rz * k(.6)];
+    if (n === 'chest' || n === 'back') return [n, x, y, z, rx * k(.6), ry, rz * k(.6)];
     if (n === 'neck') return [n, x, y, z, rx * k(.3), ry, rz * k(.3)];
     if (n.startsWith('cheek')) return [n, x * (1 + (c - 1) * .5), y, z, rx * c, ry * c, rz * c];
     return [n, x, y, z, rx, ry, rz];
@@ -336,7 +355,7 @@ const paint = (svg) => (TRAITS && TR() ? TR().recolor(svg, TRAITS) : svg);
 // 飾品（quokka-acc.js）：靜態方位圖與分層正面也畫同一件飾品；模組沒載入時退回舊的頭帶
 const ACCM = () => (typeof window !== 'undefined' && window.QuokkaAcc) ? window.QuokkaAcc
   : (typeof require === 'function' ? require('./quokka-acc.js') : null);
-const HEAD_PARTS = new Set(['head', 'cheekL', 'cheekR', 'snout', 'snoutTip']);
+const HEAD_PARTS = new Set(['head', 'cheekL', 'cheekR', 'snout', 'snoutTip', 'jaw']);
 function accLayers(th, id) {
   const M = ACCM();
   if (!M) return null;
@@ -378,7 +397,12 @@ function q3outline(th) {
   return cr(pts);
 }
 // 依角度畫出完整的庫卡（靜態方位用）。opts.front＝只回傳身體層（給分層正面用）
+const POSEM = () => (typeof window !== 'undefined' && window.QuokkaPose) ? window.QuokkaPose
+  : (typeof require === 'function' ? require('./quokka-pose.js') : null);
 function q3render(th, id, opts = {}) {
+  // 姿勢模組已載入：十六方位直接用同一套 3D 繪製（造型、五官、手腳與動態畫面完全一致）；下面的舊畫法只當後備
+  const PM = opts.front ? null : POSEM();
+  if (PM && PM.render) return `<svg viewBox="0 0 160 196" class="view-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${PM.render(th, id, { raw: true }).svg}</svg>`;
   const c = Math.cos(rad(th)), s = Math.sin(rad(th)), P = (p) => q3proj(p, th), f1 = (v) => v.toFixed(1);
   const outline = q3outline(th);
   // 尾巴：由粗到細，從臀部往後沿地面拖；正背面時只看到朝觀者的一小截
@@ -618,7 +642,7 @@ const ANGLES = [22.5, 45, 67.5, 90, 112.5, 135, 157.5, 180];
 const akey = (a) => 'a' + String(a).replace('.', '_');
 function views() {
   if (_views) return _views;
-  _views = { front: paint(frontLayered('qf')) };
+  _views = { front: paint(POSEM() ? q3render(0, 'qf') : frontLayered('qf')) };
   for (const a of ANGLES) _views[akey(a)] = paint(q3render(a, 'q' + akey(a)));
   return _views;
 }
@@ -633,7 +657,7 @@ for (const a of ANGLES) {
 }
 const TURN_ORDER = Object.keys(VIEW_MAP).sort((x, y) => ((VIEW_MAP[x][2] + 360) % 360) - ((VIEW_MAP[y][2] + 360) % 360));
 // 給姿勢模組（quokka-pose.js）用的內部元件
-const internals = { q3: () => Q3, tailK: () => TAILK, earK: () => EARK, proj: q3proj, facing: q3facing, cr, fur, eye, arm, paw, CLAW, DEFS, paint, FOOT, PAW };
+const internals = { q3: () => Q3, tailK: () => TAILK, earK: () => EARK, juvenile: () => JUV, proj: q3proj, facing: q3facing, cr, fur, eye, arm, paw, CLAW, DEFS, paint, FOOT, PAW };
 const api = { internals, views, frontLayered, VIEW_MAP, TURN_ORDER, render3d: (a, id) => paint(q3render(a, id)), configure, traits: () => TRAITS, __arm: arm, __DEFS: DEFS, __fur: fur, __eye: eye, __claw: CLAW };
 if (typeof window !== 'undefined') window.QuokkaArt = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

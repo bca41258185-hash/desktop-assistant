@@ -63,7 +63,11 @@ function start() {
   // ---- 舞台與面板 ---------------------------------------------------------------
   const stage = createStageManager({ BrowserWindow, screen, ipcMain, path, dir: ROOT });
   const toStage = (ch, payload) => stage.send(ch, payload);
-  const stageQ = (q) => ({ id: q.id, name: q.name, traits: q.traits, pos: q.home || null, stage: q.stage || 'adult' });
+  const stageQ = (q) => ({ id: q.id, name: q.name, traits: q.traits, pos: q.home || null, stage: q.stage || 'adult', mom: q.mom || null, dad: q.dad || null,
+    growScale: (q.traits && q.traits.growScale) || null, pregnant: !!q.pregnancy, hasJoey: q.joey ? q.joey.id : null, partner: partnerId(q.id) });
+  function partnerId(qid) { try { return romance.partnerOf(qid) || null; } catch (e) { return null; } }
+  let away = false;
+  const digest = {};                    // 離開期間各隻的待報告事項：{ qid: ['文字', …] }，回來時由各隻報告
   // ---- 戀愛與家族（RomanceDirector）、社交（SocialDirector） --------------------------
   const romance = createRomance({ data, now: () => Date.now(), random: Math.random, TR });
   const layers = {}, positions = {};
@@ -139,7 +143,16 @@ function start() {
     toPanel('store:changed', snapshot());
     if (quokkas) toStage('stage:quokkas', data.quokkas.map(stageQ));
   }
-  const event = (qid, kind, payload) => { if (qById(qid)) toStage('q:event', { qid, kind, payload, prio: 2 }); };
+  const DIGEST_TEXT = {
+    'task-added': (p) => `收到新的事：「${p.text}」`, 'task-done': (p) => `「${p.text}」完成了`,
+    stock: (p) => `${p.name} ${p.pct >= 0 ? '▲' : '▼'}${Math.abs(p.pct).toFixed(1)}%${p.limit === 'up' ? '（漲停）' : p.limit === 'down' ? '（跌停）' : ''}`,
+    folder: (p) => `「${p.name}」資料夾有 ${p.count} 個檔案變了`, missed: (p) => `錯過的提醒：${(p.items || []).join('、')}`, birth: (p) => `${p.name} 出生了！`
+  };
+  const event = (qid, kind, payload) => {
+    if (!qById(qid)) return;
+    if (away && DIGEST_TEXT[kind]) { const list = (digest[qid] = digest[qid] || []); if (list.length < 8) list.push(DIGEST_TEXT[kind](payload || {})); return; }
+    toStage('q:event', { qid, kind, payload, prio: 2 });
+  };
 
   // ---- 提醒（ReminderClock） ------------------------------------------------------
   const clock = R.createScheduler({
@@ -264,8 +277,6 @@ function start() {
   function unwatchFolder(id) { const st = watchers.get(id); if (st) { st.w.close(); clearTimeout(st.timer); watchers.delete(id); } }
 
   // ---- 離開偵測（PresenceWatch） --------------------------------------------------
-  let away = false;
-  const digest = {};                    // 離開期間各隻的待報告事項（給回來時報告）
   setInterval(() => {
     const mins = Number(data.settings.awayMinutes) || 0;
     const idle = powerMonitor.getSystemIdleTime();
@@ -273,7 +284,7 @@ function start() {
     if (nowAway === away) return;
     away = nowAway;
     stage.pause(away);
-    toStage('presence', { away, digest: away ? null : digest });
+    toStage('presence', { away, digest: away ? null : { ...digest } });
     if (!away) for (const k of Object.keys(digest)) delete digest[k];
   }, 5000);
   powerMonitor.on('lock-screen', () => { stage.pause(true); toStage('presence', { away: true, locked: true }); });

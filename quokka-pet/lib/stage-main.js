@@ -31,6 +31,8 @@
       if (st.ignoring === ignore || st.win.isDestroyed()) return;
       st.ignoring = ignore;
       st.win.setIgnoreMouseEvents(ignore, { forward: true });
+      // 游標離開庫卡、舞台恢復穿透時，把鍵盤焦點放掉，不搶使用者正在打字的視窗（拖曳中不會走到這裡）
+      if (ignore && st.win.isFocused()) st.win.blur();
     }
     // 游標判斷：碰到任一隻就讓舞台可點；拖曳中（舞台自己回報）維持可點
     function poll() {
