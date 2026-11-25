@@ -44,6 +44,21 @@
     return { B, H, sq, k, yaw: h.yaw || 0 };
   }
 
+  // ---- 手臂：固定長度的上臂＋前臂（兩段骨架反向運動學），手肘自然往外下方彎；目標太遠就伸直，不會拉長
+  const UPPER = 16, FORE = 19;
+  const v3 = { sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], mul: (a, k) => [a[0] * k, a[1] * k, a[2] * k], dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], len: (a) => Math.hypot(a[0], a[1], a[2]) };
+  function ik(S, T, hint) {
+    let d = v3.sub(T, S), dist = v3.len(d);
+    const max = UPPER + FORE - 0.8, min = Math.abs(FORE - UPPER) + 4;
+    if (dist < 1e-3) { d = [0, 1, 0]; dist = 1; }
+    const dir = v3.mul(d, 1 / dist), D = Math.max(min, Math.min(max, dist));
+    const hand = v3.add(S, v3.mul(dir, D));
+    const a = (UPPER * UPPER - FORE * FORE + D * D) / (2 * D), h = Math.sqrt(Math.max(0, UPPER * UPPER - a * a));
+    let perp = v3.sub(hint, v3.mul(dir, v3.dot(hint, dir)));
+    const pl = v3.len(perp); perp = pl < 1e-3 ? [0, 1, 0] : v3.mul(perp, 1 / pl);
+    return { elbow: v3.add(v3.add(S, v3.mul(dir, a)), v3.mul(perp, h)), hand };
+  }
+
   // ---- 輪廓：逐列取橢圓聯集、平滑 -------------------------------------------
   function union(E) {
     let y0 = Infinity, y1 = -Infinity;
@@ -95,9 +110,21 @@
   const bball = (id, x, y, rot = 0, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
       <circle r="12" fill="url(#bb${id})"/>
       <path d="M-12 0 H12 M0 -12 V12 M-8.6 -8.3 Q-2 0 -8.6 8.3 M8.6 -8.3 Q2 0 8.6 8.3" fill="none" stroke="#5a2a0d" stroke-width="1.15"/></g>`;
-  const leaf = (id, x, y, rot = 0, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
-      <path d="M0 0 C-8 -8 -18 -14 -28 -13 C-24 -5 -14 1 0 0 Z" fill="url(#lf${id})" stroke="#3f7a2f" stroke-width=".8"/>
-      <path d="M0 0 C-10 -5 -18 -9 -26 -11.5" fill="none" stroke="#e9f3dc" stroke-width=".7" opacity=".8"/></g>`;
+  // 葉子：短尾矮袋鼠在羅特尼斯島最偏好的食物 Guichenotia ledifolia（錦葵科）
+  // 特徵：葉片細長（約 1.5–6 cm × 2–5 mm）、邊緣反捲、兩面密生白色星狀毛 → 銀灰綠；花為下垂的粉紫色鐘形小花（7–11 月）
+  // 畫法：一小段枝條，上面幾片細長銀灰葉（淺色中線表現反捲的邊），枝頭一朵下垂小花
+  const leaf = (id, x, y, rot = 0, s = 1, flower = true) => {
+    const L = (ax, ay, ang, len) => `<g transform="translate(${ax} ${ay}) rotate(${ang})">
+        <path d="M0 0 C${len * .25} -1.5 ${len * .8} -1.3 ${len} 0 C${len * .8} 1.3 ${len * .25} 1.5 0 0 Z" fill="#a3b198" stroke="#7d8c74" stroke-width=".4"/>
+        <path d="M.8 0 L${len - 1.4} 0" stroke="#eef2e8" stroke-width=".55" stroke-linecap="round" opacity=".9"/></g>`;
+    return `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
+      <path d="M0 0 C-8 -1 -16 -2 -27 -5" fill="none" stroke="#8a7a62" stroke-width="1.3" stroke-linecap="round"/>
+      ${L(-5, -.6, -150, 13)}${L(-9, -1.2, 155, 15)}${L(-14, -1.9, -140, 14)}${L(-18, -2.6, 150, 15)}${L(-23, -3.8, -160, 12)}${L(-27, -5, 175, 10)}
+      ${flower ? `<g transform="translate(-21 -3.3) rotate(${f1(-rot)})"><path d="M0 0 Q.6 3 0 5" fill="none" stroke="#8a7a62" stroke-width=".6"/>
+        <path d="M-2.6 5 Q-3 9.4 0 10 Q3 9.4 2.6 5 Q0 3.6 -2.6 5 Z" fill="#c98bbd" stroke="#9d5f93" stroke-width=".5"/>
+        <path d="M-1.2 9.6 L-1.6 11 M1.2 9.6 L1.6 11 M0 10 V11.4" stroke="#7a4a72" stroke-width=".5"/></g>` : ''}
+    </g>`;
+  };
   const hoop = (x, y, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) scale(${s})">
       <line x1="20" y1="6" x2="20" y2="130" stroke="#8a8f98" stroke-width="3" stroke-linecap="round"/>
       <rect x="15" y="-26" width="6" height="40" rx="1.5" fill="#fbfbf8" stroke="#9aa0a8" stroke-width="1.2"/>
@@ -244,21 +271,24 @@
     const armsSvg = { back: [], front: [] };
     [['L', -1], ['R', 1]].forEach(([key, k]) => {
       const spec = (pose.arms && pose.arms[key]) || null;
-      const handL = spec ? spec.hand : [k * 6, 127, 30];
+      const handT = spec ? spec.hand : [k * 6, 127, 30];
       // 手舉過肩：肩關節改用身體側面（手才會從頭旁邊舉上去，不會擋臉）；手越高越往側面移
-      const lift = Math.max(0, Math.min(1, (100 - handL[1]) / 40));
+      const lift = Math.max(0, Math.min(1, (100 - handT[1]) / 40));
       const shL = [k * (15 + 6 * lift), 103 - 4 * lift, 20 - 16 * lift];
-      const elL = spec && spec.elbow ? spec.elbow : spec
-        ? [(shL[0] + handL[0]) / 2 + k * 7, (shL[1] + handL[1]) / 2 + 3, (shL[2] + handL[2]) / 2 - 2]
-        : [k * 17, 114, 25];
+      // 手肘方向：平常往外下方；手舉高時往外側
+      const sol = ik(shL, handT, spec && spec.elbow ? spec.elbow : [k * 1, 0.7 - 0.6 * lift, -0.25]);
+      const handL = sol.hand, elL = spec ? sol.elbow : [k * 17, 114, 25];
       const sh = PB(shL), el = PB(elL), wr = PB(handL);
       const vx = wr.X - el.X, vy = wr.Y - el.Y;
       const ang = spec && spec.paw != null ? spec.paw : Math.atan2(-vx, vy) * 180 / Math.PI;
       const behind = (sh.Z + wr.Z) / 2 < -3;
       if (!spec && I.facing([k * .5, 0, .85], th) < 0.3) { hands[key] = { X: wr.X, Y: wr.Y, Z: wr.Z, behind: true }; return; }
-      const raised = spec && handL[1] < 100;
+      const raised = spec && handT[1] < 100;
       const shoulder = raised ? `<ellipse cx="${f1(sh.X)}" cy="${f1(sh.Y - 2)}" rx="8" ry="9" fill="#a9845c" filter="url(#fz${id})"/>` : '';
-      const svg = shoulder + I.arm(id, [[sh.X, sh.Y], [el.X, el.Y], [(el.X + wr.X) / 2, (el.Y + wr.Y) / 2], [wr.X, wr.Y]], f1(ang), { thumb: k, side: k, fadeTo: raised ? .06 : spec ? .2 : .38, w1: spec ? 11.5 : 10, w2: raised ? 7.6 : 7 });
+      // 曲線經過手肘附近：控制點放在手肘兩側，彎曲看得出來但不會折角
+      const c1 = [sh.X + (el.X - sh.X) * 1.25, sh.Y + (el.Y - sh.Y) * 1.25], c2 = [el.X + (wr.X - el.X) * .25, el.Y + (wr.Y - el.Y) * .25];
+      const pts = spec ? [[sh.X, sh.Y], c1, c2, [wr.X, wr.Y]] : [[sh.X, sh.Y], [el.X, el.Y], [(el.X + wr.X) / 2, (el.Y + wr.Y) / 2], [wr.X, wr.Y]];
+      const svg = shoulder + I.arm(id, pts, f1(ang), { thumb: k, side: k, fadeTo: raised ? .06 : spec ? .2 : .38, w1: spec ? 11 : 10, w2: 7.2, bulge: spec ? .6 : 1 });
       (behind ? armsSvg.back : armsSvg.front).push(svg);
       hands[key] = { X: wr.X, Y: wr.Y + 6, Z: wr.Z, behind, ang };
     });
@@ -268,7 +298,12 @@
     (pose.props || []).forEach((p) => {
       let svg = '';
       if (p.t === 'racket') { const h = hands[p.hand || 'R']; if (h) { svg = racket(id, h.X, h.Y, p.ang || 0, p.len || 1, p.hit, p.swoosh); (h.behind ? props.back : props.front).push(svg); } return; }
-      const [x, y] = p.at || [0, 0];
+      // 道具可以黏在手上：hand＝'L'／'R'／'both'（兩手中間），off＝相對位移
+      let [x, y] = p.at || [0, 0];
+      if (p.hand) {
+        const hs = p.hand === 'both' ? [hands.L, hands.R].filter(Boolean) : [hands[p.hand]].filter(Boolean);
+        if (hs.length) { x = hs.reduce((a, h) => a + h.X, 0) / hs.length + ((p.off || [])[0] || 0); y = hs.reduce((a, h) => a + h.Y, 0) / hs.length + ((p.off || [])[1] || 0); }
+      }
       if (p.t === 'shuttle') svg = shuttle(x, y, p.rot, p.s);
       else if (p.t === 'vball') svg = vball(id, x, y, p.rot, p.s);
       else if (p.t === 'bball') svg = bball(id, x, y, p.rot, p.s);
