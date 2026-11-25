@@ -47,6 +47,7 @@
     const dpr = window.devicePixelRatio || 1;
     svg = svg.replace(/var\(--band,\s*#[0-9a-fA-F]{6}\)/g, a.traits.band || '#e5533d')
       .replace('<svg ', `<svg width="${Math.round(a.w * (wide ? S.VBW.w / S.VB.w : 1) * dpr)}" height="${Math.round(a.h * dpr)}" `);
+    svg = fixDupStyle(svg);
     const blob = new Blob([svg], { type: 'image/svg+xml' });
     const entry = { url: URL.createObjectURL(blob), bytes: blob.size, key: k };
     cache.set(k, entry);
@@ -58,6 +59,17 @@
     }
     return entry.url;
   };
+  // 圖片（獨立 SVG 文件）用嚴格 XML 解析：同一個標籤有兩個 style 屬性會整張讀不出來（某些飾品會這樣）→ 合併成一個
+  function fixDupStyle(svg) {
+    return svg.replace(/<[a-zA-Z][^>]*>/g, (tag) => {
+      const m = tag.match(/\sstyle="[^"]*"/g);
+      if (!m || m.length < 2) return tag;
+      const merged = ' style="' + m.map((x) => x.slice(8, -1)).join(';') + '"';
+      let first = true;
+      return tag.replace(/\sstyle="[^"]*"/g, () => (first ? ((first = false), merged) : ''));
+    });
+  }
+  S.fixDupStyle = fixDupStyle;
   // 某隻的外觀變了或被刪掉：丟掉牠的所有畫格
   S.purgeFrames = function (id) {
     for (const [k, v] of cache) if (k.startsWith(id + '|')) { URL.revokeObjectURL(v.url); cacheBytes -= v.bytes; cache.delete(k); }
