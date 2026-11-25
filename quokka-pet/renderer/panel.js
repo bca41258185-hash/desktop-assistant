@@ -269,6 +269,7 @@ const setModel = document.getElementById('setModel');
 const setApiKey = document.getElementById('setApiKey');
 const setReminder = document.getElementById('setReminder');
 const setQuoteInterval = document.getElementById('setQuoteInterval');
+const setAway = document.getElementById('setAway');
 const envHint = document.getElementById('envHint');
 const saveStatus = document.getElementById('saveStatus');
 const charPicker = document.getElementById('charPicker');
@@ -339,6 +340,7 @@ async function loadSettings() {
   setApiKey.value = s.apiKey;
   setReminder.value = s.reminderIntervalMinutes;
   if (setQuoteInterval) setQuoteInterval.value = s.quoteIntervalMinutes;
+  if (setAway) setAway.value = s.awayMinutes;
   selectedCharId = s.characterId || selectedCharId;
   renderCharPicker();
 
@@ -359,6 +361,7 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
     apiKey: setApiKey.value,
     reminderIntervalMinutes: Number(setReminder.value) || 0,
     quoteIntervalMinutes: Number(setQuoteInterval && setQuoteInterval.value),
+    awayMinutes: Number(setAway && setAway.value),
     characterId: selectedCharId
   });
   saveStatus.textContent = '已儲存 ✓';

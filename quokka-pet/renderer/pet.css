@@ -1,6 +1,7 @@
 /* 桌寵視窗：透明背景，角色置中偏下，氣泡在上方。
    動畫全由 #pet 的 data-pose 驅動：
-   idle / think / happy、球類 badminton / volleyball / basketball、招牌動作 eat / hop / selfie / nap。
+   idle / think / happy、球類 badminton / volleyball / basketball、招牌動作 eat / hop / selfie / nap，
+   互動 pat1 / pat2 / pet / lifted / dizzy / wave / sniff / sleep；方位由 data-view 決定（八方位，左邊鏡射）。
    整隻身體的位移（呼吸、跳、打盹、自拍）放在外層 HTML 的 #petArt 上，由合成器處理，
    不必每格重畫帶毛絨濾鏡的 SVG；只有手、球、五官等局部動作才在 SVG 內動。 */
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -37,15 +38,36 @@ html, body {
 .pet:active { cursor: grabbing; }
 #petArt { position: relative; width: 100%; height: 100%; transform-origin: 50% 96%; will-change: transform; }
 #petArt svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+/* --- 八方位：五張圖疊放，依 data-view 只顯示一張；左邊三個方位水平鏡射 --- */
+.view { position: absolute; inset: 0; display: none; }
+#pet[data-view="front"] .view-front,
+#pet[data-view="f34r"] .view-f34, #pet[data-view="f34l"] .view-f34,
+#pet[data-view="sider"] .view-side, #pet[data-view="sidel"] .view-side,
+#pet[data-view="b34r"] .view-b34, #pet[data-view="b34l"] .view-b34,
+#pet[data-view="back"] .view-back { display: block; }
+#pet[data-view="f34l"] .view-f34, #pet[data-view="sidel"] .view-side, #pet[data-view="b34l"] .view-b34 { transform: scaleX(-1); }
+/* 轉身時每一格配一個小跳步 */
+#pet.turning #petArt { animation: none; }
+#pet.turn-step #petArt { animation: turnHop 0.11s ease-out; }
+@keyframes turnHop {
+  0%   { transform: translateY(0) scale(1, 1); }
+  45%  { transform: translateY(-4px) scale(0.99, 1.02); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
 .pet-shadow {
   position: absolute; left: 50%; bottom: 2px;
   width: 84px; height: 9px; margin-left: -42px; border-radius: 50%;
   background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.24), rgba(0, 0, 0, 0) 70%);
 }
 
-/* 預設隱藏：只在特定姿勢出現的部件 */
-.eyes-closed, .mouth-open, .mouth-chew, .arms-eat, .arms-bump, .arm-r, .racket,
-.hoop, .ball, .think-dots, .zzz, .sparkles, .flash { display: none; }
+/* 預設隱藏：只在特定姿勢出現的部件（SVG 內也帶 display="none"，面板縮圖不會露出） */
+.eyes-closed, .eyes-happy, .eyes-wide, .eyes-dizzy, .mouth-open, .mouth-o, .mouth-chew,
+.arms-eat, .arms-bump, .arm-r, .racket, .arm-wave-r, .arm-cheek-r, .arm-up-l, .arm-up-r, .feet-dangle,
+.hoop, .ball, .think-dots, .zzz, .sparkles, .flash, .hearts, .stars, .ear-sparks, .motion, .wave-lines, .sniff-lines { display: none; }
+.blush { opacity: 0.3; transition: opacity 0.3s ease; }
+/* 眼睛跟著游標：由 pet.js 設定 --look-x / --look-y */
+.eyes-look { transform: translate(var(--look-x, 0), var(--look-y, 0)); transition: transform 0.15s ease-out; }
 
 .ball .spin { transform-box: fill-box; transform-origin: center; }
 .arm-r { transform-box: view-box; transform-origin: 108px 98px; }
@@ -97,6 +119,85 @@ html, body {
 #pet[data-pose="badminton"] .mouth, #pet[data-pose="volleyball"] .mouth, #pet[data-pose="basketball"] .mouth { display: none; }
 #pet[data-pose="happy"] .mouth-open, #pet[data-pose="hop"] .mouth-open, #pet[data-pose="selfie"] .mouth-open,
 #pet[data-pose="badminton"] .mouth-open, #pet[data-pose="volleyball"] .mouth-open, #pet[data-pose="basketball"] .mouth-open { display: block; }
+
+/* ==========================================================================
+   互動（第一批）
+   ========================================================================== */
+
+/* 共用：哪些姿勢換哪種眼睛、嘴巴 */
+#pet[data-pose="pat1"] .eyes-open, #pet[data-pose="wave"] .eyes-open, #pet[data-pose="pet"] .eyes-open,
+#pet[data-pose="lifted"] .eyes-open, #pet[data-pose="dizzy"] .eyes-open { display: none; }
+#pet[data-pose="pat1"] .eyes-happy, #pet[data-pose="wave"] .eyes-happy { display: block; }
+#pet[data-pose="pet"] .eyes-closed { display: block; }
+#pet[data-pose="lifted"] .eyes-wide { display: block; }
+#pet[data-pose="dizzy"] .eyes-dizzy { display: block; }
+#pet[data-pose="pat1"] .mouth, #pet[data-pose="wave"] .mouth,
+#pet[data-pose="lifted"] .mouth, #pet[data-pose="dizzy"] .mouth { display: none; }
+#pet[data-pose="pat1"] .mouth-open, #pet[data-pose="wave"] .mouth-open { display: block; }
+#pet[data-pose="lifted"] .mouth-o, #pet[data-pose="dizzy"] .mouth-o { display: block; }
+
+/* --- 單擊摸頭 ①：瞇眼咧嘴、耳朵往外倒、小蹦一下（1.6s） --- */
+#pet[data-pose="pat1"] #petArt { animation: hop 0.5s ease-in-out 1; }
+#pet[data-pose="pat1"] .blush { opacity: 0.55; }
+#pet[data-pose="pat1"] .ear-l { animation: none; transform: rotate(-14deg); transition: transform 0.15s; }
+#pet[data-pose="pat1"] .ear-r { animation: none; transform: rotate(14deg); transition: transform 0.15s; }
+
+/* --- 單擊摸頭 ②：耳朵快速抖動（1.3s） --- */
+#pet[data-pose="pat2"] .ear-l { animation: earFlickL 0.32s ease-in-out 4; }
+#pet[data-pose="pat2"] .ear-r { animation: earFlickR 0.32s ease-in-out 4 0.08s; }
+#pet[data-pose="pat2"] .ear-sparks { display: block; animation: thinkDots 0.32s ease-in-out 4; }
+@keyframes earFlickL { 0%, 100% { transform: rotate(0deg); } 40% { transform: rotate(-24deg); } 70% { transform: rotate(6deg); } }
+@keyframes earFlickR { 0%, 100% { transform: rotate(0deg); } 40% { transform: rotate(18deg); } 70% { transform: rotate(-6deg); } }
+
+/* --- 長摸：閉眼歪頭、一手摸臉、冒愛心（持續到不摸為止） --- */
+#pet[data-pose="pet"] #petArt { animation: petSway 1.6s ease-in-out infinite; }
+#pet[data-pose="pet"] .blush { opacity: 0.65; }
+#pet[data-pose="pet"] .arm-rest-r { display: none; }
+#pet[data-pose="pet"] .arm-cheek-r, #pet[data-pose="pet"] .hearts { display: block; }
+#pet[data-pose="pet"] .ear-l { animation: none; transform: rotate(-14deg); }
+#pet[data-pose="pet"] .ear-r { animation: none; transform: rotate(14deg); }
+#pet[data-pose="pet"] .hearts path { transform-box: fill-box; transform-origin: center; animation: heartFloat 1.6s ease-out infinite; }
+#pet[data-pose="pet"] .hearts .h2 { animation-delay: 0.5s; }
+#pet[data-pose="pet"] .hearts .h3 { animation-delay: 1s; }
+@keyframes petSway { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(-3deg); } }
+@keyframes heartFloat { 0% { transform: translateY(4px) scale(0.6); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-8px) scale(1); opacity: 0; } }
+
+/* --- 被拎起來：嚇一跳、雙手舉高、腳懸空亂踢（拖曳期間持續） --- */
+#pet[data-pose="lifted"] #petArt { animation: liftSwing 0.6s ease-in-out infinite; transform-origin: 50% 0%; }
+#pet[data-pose="lifted"] .pet-shadow { transform: scale(0.55); opacity: 0.45; transition: transform 0.2s, opacity 0.2s; }
+#pet[data-pose="lifted"] .arm-rest-l, #pet[data-pose="lifted"] .arm-rest-r, #pet[data-pose="lifted"] .feet-stand { display: none; }
+#pet[data-pose="lifted"] .arm-up-l, #pet[data-pose="lifted"] .arm-up-r,
+#pet[data-pose="lifted"] .feet-dangle, #pet[data-pose="lifted"] .motion { display: block; }
+#pet[data-pose="lifted"] .foot-l { transform-box: view-box; transform-origin: 64px 166px; animation: kickL 0.36s ease-in-out infinite; }
+#pet[data-pose="lifted"] .foot-r { transform-box: view-box; transform-origin: 96px 166px; animation: kickR 0.36s ease-in-out infinite; }
+#pet[data-pose="lifted"] .motion { animation: thinkDots 0.36s ease-in-out infinite; }
+@keyframes liftSwing { 0%, 100% { transform: translateY(-6px) rotate(-3deg); } 50% { transform: translateY(-6px) rotate(3deg); } }
+@keyframes kickL { 0%, 100% { transform: rotate(14deg); } 50% { transform: rotate(-10deg); } }
+@keyframes kickR { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(14deg); } }
+
+/* --- 被甩出去落地：眼冒金星、搖搖晃晃（2.6s） --- */
+#pet[data-pose="dizzy"] #petArt { animation: dizzyWobble 0.7s ease-in-out infinite; }
+#pet[data-pose="dizzy"] .stars { display: block; transform-box: view-box; transform-origin: 80px 14px; animation: starOrbit 1.2s linear infinite; }
+#pet[data-pose="dizzy"] .spiral { transform-box: fill-box; transform-origin: center; animation: ballSpin 0.9s linear infinite; }
+@keyframes dizzyWobble { 0%, 100% { transform: rotate(-4deg) scale(1.03, 0.97); } 50% { transform: rotate(4deg) scale(1.03, 0.97); } }
+@keyframes starOrbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* --- 你回到電腦前：醒來揮手（2.6s） --- */
+#pet[data-pose="wave"] .arm-rest-r { display: none; }
+#pet[data-pose="wave"] .arm-wave-r, #pet[data-pose="wave"] .wave-lines { display: block; }
+#pet[data-pose="wave"] .arm-wave-r { transform-box: view-box; transform-origin: 96px 104px; animation: waveArm 0.45s ease-in-out infinite; }
+#pet[data-pose="wave"] .wave-lines { animation: thinkDots 0.45s ease-in-out infinite; }
+@keyframes waveArm { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(10deg); } }
+
+/* --- 游標停很久：轉向游標、身體前傾、鼻子嗅嗅（3s；方位由 pet.js 轉成前斜） --- */
+#pet[data-pose="sniff"] #petArt { animation: sniffLean 3s ease-in-out 1 both; }
+#pet[data-pose="sniff"] .sniff-lines { display: block; animation: thinkDots 0.4s ease-in-out infinite; }
+@keyframes sniffLean {
+  0%, 100% { transform: rotate(0deg); }
+  15%, 85% { transform: rotate(8deg); }
+  30%, 50%, 70% { transform: rotate(9.5deg) translateY(-1px); }
+  40%, 60% { transform: rotate(8deg); }
+}
 
 /* ==========================================================================
    招牌動作（依真實習性設計）
@@ -155,14 +256,23 @@ html, body {
 
 /* --- 坐著打盹：身體往下坐、頭低垂、閉眼、Zzz（9.6s） --- */
 #pet[data-pose="nap"] #petArt { animation: napBody 3.2s ease-in-out 3 both; }
+#pet[data-pose="sleep"] #petArt { animation: napBody 3.2s ease-in-out infinite; }
 #pet[data-pose="nap"] .eyes-open { display: none; }
-#pet[data-pose="nap"] .eyes-closed, #pet[data-pose="nap"] .zzz { display: block; }
+#pet[data-pose="sleep"] .eyes-open { display: none; }
+#pet[data-pose="nap"] .eyes-closed, #pet[data-pose="nap"] .zzz,
+#pet[data-pose="sleep"] .eyes-closed, #pet[data-pose="sleep"] .zzz { display: block; }
 #pet[data-pose="nap"] .face { transform: translateY(3px); transition: transform 0.8s ease; }
+#pet[data-pose="sleep"] .face { transform: translateY(3px); transition: transform 0.8s ease; }
 #pet[data-pose="nap"] .ear-l { animation: none; transform: rotate(-10deg); }
+#pet[data-pose="sleep"] .ear-l { animation: none; transform: rotate(-10deg); }
 #pet[data-pose="nap"] .ear-r { animation: none; transform: rotate(10deg); }
+#pet[data-pose="sleep"] .ear-r { animation: none; transform: rotate(10deg); }
 #pet[data-pose="nap"] .zzz text { transform-box: fill-box; animation: zFloat 2.4s ease-in-out infinite; opacity: 0; }
+#pet[data-pose="sleep"] .zzz text { transform-box: fill-box; animation: zFloat 2.4s ease-in-out infinite; opacity: 0; }
 #pet[data-pose="nap"] .zzz .z2 { animation-delay: 0.8s; }
+#pet[data-pose="sleep"] .zzz .z2 { animation-delay: 0.8s; }
 #pet[data-pose="nap"] .zzz .z3 { animation-delay: 1.6s; }
+#pet[data-pose="sleep"] .zzz .z3 { animation-delay: 1.6s; }
 @keyframes napBody {
   0%, 100% { transform: translateY(5px) scale(1.03, 0.93); }
   50%      { transform: translateY(5px) scale(1.04, 0.91); }
@@ -343,5 +453,5 @@ html, body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #petArt, .eye, .ear, .face { animation: none !important; }
+  #petArt, .eye, .ear, .face, .eyes-look { animation: none !important; transition: none !important; }
 }

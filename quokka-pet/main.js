@@ -1,7 +1,7 @@
 // 主行程：負責視窗、IPC、資料夾監看、設定讀寫、提醒、AI 呼叫。
 // Main process: windows, IPC, folder watching, config I/O, reminders, AI calls.
 
-const { app, BrowserWindow, ipcMain, dialog, screen, Menu, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, Menu, shell, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
@@ -47,6 +47,7 @@ const CONFIG_DEFAULTS = {
     model: '',
     reminderIntervalMinutes: 30,
     quoteIntervalMinutes: 20,      // 名言氣泡間隔（0＝關閉）
+    awayMinutes: 5,                // 多久沒碰鍵盤滑鼠就打盹（0＝關閉）
     characterId: DEFAULT_ID        // 目前選用的造型（目前只有 'quokka'）
   }
 };
@@ -93,8 +94,16 @@ function effectiveSettings() {
     reminderIntervalMinutes: Number(s.reminderIntervalMinutes) || 30,
     quoteIntervalMinutes: (s.quoteIntervalMinutes === 0 || s.quoteIntervalMinutes === '0')
       ? 0
-      : (Number(s.quoteIntervalMinutes) || 20)
+      : (Number(s.quoteIntervalMinutes) || 20),
+    awayMinutes: minutesOr(s.awayMinutes, 5)
   };
+}
+
+// 0 代表關閉；空值或非數字用預設
+function minutesOr(v, dflt) {
+  if (v === 0 || v === '0') return 0;
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : dflt;
 }
 
 // ---------------------------------------------------------------------------
@@ -312,14 +321,68 @@ function setupQuoteTimer() {
 }
 
 // ---------------------------------------------------------------------------
+// 游標跟隨：每 120ms 讀一次游標位置，只在靠近桌寵時把「相對位置」送給桌寵
+// （不記錄、不保存任何游標軌跡；離開範圍時送最後一次讓牠轉回正面）
+// ---------------------------------------------------------------------------
+let cursorTimer = null;
+let cursorNear = false;
+let lastCursorSent = '';
+let lastCursorAt = 0;
+function setupCursorWatch() {
+  if (cursorTimer) clearInterval(cursorTimer);
+  cursorTimer = setInterval(() => {
+    if (!petWindow || petWindow.isDestroyed() || !petWindow.isVisible()) return;
+    let p;
+    try { p = screen.getCursorScreenPoint(); } catch (e) { return; }
+    const b = petWindow.getBounds();
+    // 桌寵頭部大約在視窗底部往上 160px、水平置中
+    const dx = p.x - (b.x + b.width / 2), dy = p.y - (b.y + b.height - 160);
+    const near = Math.hypot(dx, dy) < 600;
+    if (!near && !cursorNear) return;
+    cursorNear = near;
+    const key = `${dx},${dy}`;
+    // 游標沒動時每秒仍送一次，讓桌寵能判斷「游標停很久」
+    if (key === lastCursorSent && near && Date.now() - lastCursorAt < 1000) return;
+    lastCursorSent = key;
+    lastCursorAt = Date.now();
+    petWindow.webContents.send('pet:cursor', { dx, dy });
+  }, 120);
+}
+
+// ---------------------------------------------------------------------------
+// 離開偵測：用作業系統的「多久沒有鍵盤滑鼠輸入」，不讀取輸入內容
+// ---------------------------------------------------------------------------
+let awayTimer = null;
+let isAway = false;
+function setupAwayWatch() {
+  if (awayTimer) clearInterval(awayTimer);
+  awayTimer = setInterval(() => {
+    const mins = effectiveSettings().awayMinutes;
+    let idle = 0;
+    try { idle = powerMonitor.getSystemIdleTime(); } catch (e) { return; }
+    const nowAway = mins > 0 && idle >= mins * 60;
+    // 回來的判斷要有新的輸入（閒置秒數歸零附近）
+    const back = isAway && idle < 3;
+    if ((nowAway && !isAway) || back) {
+      isAway = nowAway && !back;
+      if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet:away', isAway);
+    }
+  }, 2000);
+}
+
+// ---------------------------------------------------------------------------
 // IPC
 // ---------------------------------------------------------------------------
 function registerIpc() {
-  // 桌寵拖曳：依位移移動視窗
+  // 桌寵拖曳／甩出：依位移移動視窗，並限制在所在螢幕的工作區內（甩出去不會飛出螢幕）
   ipcMain.on('pet:move-by', (e, { dx, dy }) => {
-    if (!petWindow) return;
-    const [x, y] = petWindow.getPosition();
-    petWindow.setPosition(Math.round(x + dx), Math.round(y + dy));
+    if (!petWindow || petWindow.isDestroyed()) return;
+    const b = petWindow.getBounds();
+    const nx = Math.round(b.x + (Number(dx) || 0)), ny = Math.round(b.y + (Number(dy) || 0));
+    const wa = screen.getDisplayNearestPoint({ x: nx + b.width / 2, y: ny + b.height / 2 }).workArea;
+    const cx = Math.min(Math.max(nx, wa.x - b.width * 0.3), wa.x + wa.width - b.width * 0.7);
+    const cy = Math.min(Math.max(ny, wa.y - b.height * 0.5), wa.y + wa.height - b.height);
+    petWindow.setPosition(Math.round(cx), Math.round(cy));
   });
 
   // 點擊桌寵 → 開/關面板
@@ -366,6 +429,7 @@ function registerIpc() {
       quoteIntervalMinutes: (s.quoteIntervalMinutes === 0 || s.quoteIntervalMinutes === '0')
         ? 0
         : (Number(s.quoteIntervalMinutes) || 20),
+      awayMinutes: minutesOr(s.awayMinutes, 5),
       characterId: currentCharacterId(),
       // 提示 UI：哪些值被環境變數覆蓋
       env: {
@@ -391,6 +455,7 @@ function registerIpc() {
       quoteIntervalMinutes: (incoming.quoteIntervalMinutes === 0 || incoming.quoteIntervalMinutes === '0')
         ? 0
         : (Number(incoming.quoteIntervalMinutes) || 20),
+      awayMinutes: minutesOr(incoming.awayMinutes, 5),
       characterId: nextCharacter
     };
     saveConfig();
@@ -539,6 +604,8 @@ app.whenReady().then(() => {
   for (const folder of config.folders) watchFolder(folder);
   setupReminder();
   setupQuoteTimer();
+  setupCursorWatch();
+  setupAwayWatch();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createPetWindow();
@@ -550,6 +617,8 @@ app.on('before-quit', () => {
   for (const w of watchers.values()) w.close();
   if (reminderTimer) clearInterval(reminderTimer);
   if (quoteTimer) clearInterval(quoteTimer);
+  if (cursorTimer) clearInterval(cursorTimer);
+  if (awayTimer) clearInterval(awayTimer);
 });
 
 // 桌寵常駐，不因關閉面板而退出；全部視窗關閉才退出（Windows/Linux）。

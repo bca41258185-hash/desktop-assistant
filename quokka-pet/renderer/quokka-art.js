@@ -1,0 +1,425 @@
+// 短尾矮袋鼠「庫卡」的繪圖模組：八方位與分層正面，全部是 inline SVG（無外部圖檔）。
+// 比例依使用者提供的照片量測（照片 y112–1055 → SVG y14–173，中心 x372 → 80），
+// 造型為「萌化 A」：大眼雙反光、暖色高彩度毛色、毛流減量、從胸毛伸出的短前臂與小爪子。
+// 同時供 renderer（window.QuokkaArt）與 Node（module.exports）使用。
+(function () {
+function cr(pts) {
+  const n = pts.length, f = (v) => v.toFixed(1);
+  let d = `M${f(pts[0][0])} ${f(pts[0][1])}`;
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
+    d += ` C${f(p1[0] + (p2[0] - p0[0]) / 6)} ${f(p1[1] + (p2[1] - p0[1]) / 6)} ${f(p2[0] - (p3[0] - p1[0]) / 6)} ${f(p2[1] - (p3[1] - p1[1]) / 6)} ${f(p2[0])} ${f(p2[1])}`;
+  }
+  return d + ' Z';
+}
+
+const mirror = (R) => [...R, [80, 173.6], ...R.slice(1).reverse().map(([x, y]) => [160 - x, y])];
+
+const RIGHT = [[80, 15], [95, 15.5], [104, 18.5], [109, 25], [110.6, 32], [112.2, 45.7], [114.4, 58], [115, 66], [115.4, 74], [116.2, 84], [117.2, 96], [118.8, 123], [118.8, 150], [116.7, 163.5], [108.5, 171], [95, 173.2]];
+
+const FRONT = cr(mirror(RIGHT));
+
+const SIDE = cr([[92, 16], [104, 19], [111, 27], [114, 37], [118, 45], [123.5, 50], [125, 55], [121, 59.5], [114, 63], [112, 70],
+  [112.5, 82], [114.5, 98], [118, 118], [119, 138], [115, 156], [108, 168], [92, 173], [70, 173], [56, 166], [52, 150],
+  [54, 126], [60, 100], [64, 76], [66, 52], [70, 32], [79, 20]]);
+
+const BACK = FRONT;
+const F34 = cr([[84, 15], [98, 16], [107, 20], [112, 28], [114, 38], [117, 45], [120, 50], [119.5, 56], [115.5, 61], [114.5, 70],
+  [116.5, 90], [119, 116], [119, 142], [115, 160], [104, 171], [88, 173.6], [70, 173.4], [56, 168], [49, 154], [46.5, 128],
+  [48.5, 100], [47.5, 82], [45, 64], [46, 46], [51, 29], [63, 18.5]]);
+
+function fur(n, x0, x1, seed0) {
+  let seed = seed0 || 11; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647); let o = '';
+  n = Math.round(n * 0.38);
+  for (let i = 0; i < n; i++) {
+    const x = x0 + rnd() * (x1 - x0), y = 16 + rnd() * 158, len = 1.8 + rnd() * 2.4;
+    const a = (90 + (x - (x0 + x1) / 2) * 1.1 + (rnd() - 0.5) * 36) * Math.PI / 180, lt = rnd() < 0.55;
+    o += `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${(x + Math.cos(a) * len).toFixed(1)}" y2="${(y + Math.sin(a) * len).toFixed(1)}" stroke="${lt ? '#e6ddd0' : '#4f4439'}" stroke-opacity="${lt ? .24 : .2}" stroke-width="${(0.45 + rnd() * 0.35).toFixed(2)}" stroke-linecap="round"/>`;
+  }
+  return o;
+}
+
+// 手部元件：毛茸茸、粗細漸變的短前肢＋像小手的前爪（指頭、半藏在毛裡的爪尖、立體明暗）。
+function armPath(sx, sy, wx, wy, w1, w2, bend) {
+  const dx = wx - sx, dy = wy - sy, L = Math.hypot(dx, dy), nx = -dy / L, ny = dx / L;
+  const mx = (sx + wx) / 2 + nx * bend, my = (sy + wy) / 2 + ny * bend, wm = (w1 + w2) / 2 + .6;
+  const p = (x, y, s, w) => [x + nx * w * s, y + ny * w * s];
+  const a1 = p(sx, sy, 1, w1 / 2), a2 = p(mx, my, 1, wm / 2), a3 = p(wx, wy, 1, w2 / 2);
+  const b3 = p(wx, wy, -1, w2 / 2), b2 = p(mx, my, -1, wm / 2), b1 = p(sx, sy, -1, w1 / 2);
+  const f = (q) => q.map((v) => v.toFixed(1)).join(' ');
+  return { d: `M${f(a1)} Q${f(a2)} ${f(a3)} Q${wx + dx / L * w2 * .55} ${wy + dy / L * w2 * .55} ${f(b3)} Q${f(b2)} ${f(b1)} Z`,
+    hi: `M${f(p(sx, sy, 1, w1 * .28))} Q${f(p(mx, my, 1, wm * .3))} ${f(p(wx, wy, 1, w2 * .25))}`, nx, ny };
+}
+// 前爪：以腕部 (x,y) 為原點、ang＝指尖方向（0＝朝下），s＝大小
+function paw(id, x, y, ang, s = 1, o = {}) {
+  const fingers = [-3, -1, 1, 3].map((fx, i) => {
+    const fy = 9.6 + (i === 0 || i === 3 ? -.8 : 0);
+    return `<ellipse cx="${fx}" cy="${fy}" rx="1.3" ry="1.75" fill="url(#pw${id})"/>
+      <path d="M${fx - .85} ${fy + 1.1} Q${fx - .3} ${fy + 3} ${(fx + fx * .12).toFixed(2)} ${fy + 4.2} Q${fx + .75} ${fy + 2.8} ${fx + .85} ${fy + 1.1} Z" fill="#f6eddf" stroke="#6e5844" stroke-width=".35"/>`;
+  }).join('');
+  return `<g transform="translate(${x} ${y}) rotate(${ang}) scale(${s})">
+    <path d="M-4.2 -1.5 C-5.2 2.5 -5 6.8 -4.2 9.2 L4.2 9.2 C5 6.8 5.2 2.5 4.2 -1.5 C2 -2.8 -2 -2.8 -4.2 -1.5 Z" fill="url(#pw${id})" filter="url(#pf${id})"/>
+    ${fingers}
+    <path d="M-2.8 7.4 Q0 6.4 2.8 7.4" fill="none" stroke="#a08066" stroke-width=".7" opacity=".55"/>
+    <path d="M-2.2 1.6 Q0 .6 2.2 1.6" fill="none" stroke="#a08066" stroke-width=".6" opacity=".35"/>
+    ${o.thumb ? `<ellipse cx="${o.thumb * 4.2}" cy="4.6" rx="1.3" ry="1.9" fill="url(#pw${id})"/>` : ``}
+  </g>`;
+}
+function handDefs(id) {
+  return `<linearGradient id="pw${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6e4f37"/><stop offset=".6" stop-color="#523826"/><stop offset="1" stop-color="#3d291b"/></linearGradient>
+  <linearGradient id="am${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#88633f"/><stop offset=".45" stop-color="#ad8455"/><stop offset="1" stop-color="#7a5838"/></linearGradient>
+  <filter id="pf${id}" x="-20%" y="-20%" width="140%" height="140%"><feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="1" seed="9"/><feDisplacementMap in="SourceGraphic" scale="1.2" xChannelSelector="R" yChannelSelector="G"/></filter>`;
+}
+// 彎曲的手臂：沿三次貝茲曲線（肩→外推的手肘→往內收的手腕）取樣，寬度在手肘處略鼓，再接前爪
+function bez(p, t) { const u = 1 - t; return [0, 1].map((k) => u * u * u * p[0][k] + 3 * u * u * t * p[1][k] + 3 * u * t * t * p[2][k] + t * t * t * p[3][k]); }
+function tube(P, w1, w2, bulge) {
+  const N = 16, L = [], R = [], H = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N, c = bez(P, t), d0 = bez(P, Math.max(0, t - .02)), d1 = bez(P, Math.min(1, t + .02));
+    let tx = d1[0] - d0[0], ty = d1[1] - d0[1]; const l = Math.hypot(tx, ty); tx /= l; ty /= l;
+    const w = (w1 + (w2 - w1) * t + bulge * Math.sin(Math.PI * Math.min(1, t * 1.25))) / 2;
+    L.push([c[0] - ty * w, c[1] + tx * w]); R.push([c[0] + ty * w, c[1] - tx * w]); H.push([c[0] - ty * w * .45, c[1] + tx * w * .45]);
+  }
+  const f = (q) => q[0].toFixed(1) + ' ' + q[1].toFixed(1), end = P[3], dir = [P[3][0] - P[2][0], P[3][1] - P[2][1]], dl = Math.hypot(...dir);
+  const tip = [end[0] + dir[0] / dl * w2 * .5, end[1] + dir[1] / dl * w2 * .5];
+  return { d: 'M' + L.map(f).join(' L') + ` Q${f(tip)} ${f(R[N])} L` + R.slice().reverse().map(f).join(' L') + ' Z',
+    hi: 'M' + H.slice(1, N - 2).map(f).join(' L'), shade: 'M' + R.slice(2, N).map(f).join(' L') };
+}
+let _arm = 0;
+function arm(id, P, pawAng, o = {}) {
+  const T = tube(P, o.w1 || 10, o.w2 || 7, o.bulge == null ? 1 : o.bulge), side = o.side || 1, k = id + 'a' + (_arm++);
+  const fadeTo = o.fadeTo || .38;
+  return `<defs><linearGradient id="fd${k}" gradientUnits="userSpaceOnUse" x1="${P[0][0]}" y1="${P[0][1]}" x2="${P[3][0]}" y2="${P[3][1]}"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="${fadeTo}" stop-color="#fff" stop-opacity="1"/></linearGradient>
+   <mask id="mk${k}" maskUnits="userSpaceOnUse" x="-20" y="-20" width="200" height="240"><rect x="-20" y="-20" width="200" height="240" fill="url(#fd${k})"/></mask></defs>
+   <g mask="url(#mk${k})">
+   <path d="${T.d}" fill="#4a3a2e" opacity=".25" transform="translate(${1.4 * side} 2)" filter="url(#b1${id})"/>
+   <path d="${T.d}" fill="url(#am${id})" filter="url(#fz${id})"/>
+   <path d="${T.hi}" fill="none" stroke="#d8bd98" stroke-width="1.4" stroke-linecap="round" opacity=".45" filter="url(#b1${id})"/>
+   <path d="${T.shade}" fill="none" stroke="#5a4232" stroke-width="1.4" stroke-linecap="round" opacity=".35" filter="url(#b1${id})"/></g>
+   ${paw(id, P[3][0], P[3][1] - 1, pawAng, o.ps || .92, o)}`;
+}
+const mir = (P) => P.map(([x, y]) => [160 - x, y]);
+const REST_L = [[64.5, 103], [64, 113], [68, 122], [75, 127.5]];
+const HANDS = {
+  rest: (id) => arm(id, REST_L, 10, { thumb: 1, side: -1 }) + arm(id, mir(REST_L), -10, { thumb: -1, side: 1 }),
+  wave: (id) => arm(id, REST_L, 10, { thumb: 1, side: -1 }) + arm(id, [[94, 104], [110, 103], [120, 90], [117, 76]], 196, { thumb: -1, side: 1, fadeTo: .25, w1: 11 }),
+  up: (id) => arm(id, [[66, 104], [50, 101], [42, 88], [45, 75]], 164, { thumb: 1, side: -1, fadeTo: .25, w1: 11 }) + arm(id, [[94, 104], [110, 101], [118, 88], [115, 75]], 196, { thumb: -1, side: 1, fadeTo: .25, w1: 11 }),
+  cheek: (id) => arm(id, REST_L, 10, { thumb: 1, side: -1 }) + arm(id, [[94, 106], [108, 102], [109, 84], [101, 74]], 160, { thumb: -1, side: 1, fadeTo: .25, w1: 11 })
+};
+
+const DEFS = (id) => `<defs>
+  <filter id="fz${id}" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4"/><feDisplacementMap in="SourceGraphic" scale="3.4" xChannelSelector="R" yChannelSelector="G"/></filter>
+  <filter id="b3${id}"><feGaussianBlur stdDeviation="3"/></filter><filter id="b1${id}"><feGaussianBlur stdDeviation="1.2"/></filter>
+  <linearGradient id="bg${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9a7650"/><stop offset=".33" stop-color="#b0855a"/><stop offset=".55" stop-color="#b0936c"/><stop offset="1" stop-color="#cbb08a"/></linearGradient>
+  <linearGradient id="bk${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#93704c"/><stop offset=".3" stop-color="#a37a52"/><stop offset=".6" stop-color="#a38a6a"/><stop offset="1" stop-color="#b9a283"/></linearGradient>
+  <radialGradient id="ns${id}" cx="40%" cy="28%" r="75%"><stop offset="0" stop-color="#6f7580"/><stop offset=".35" stop-color="#2e3138"/><stop offset="1" stop-color="#121316"/></radialGradient>
+  <linearGradient id="tl${id}" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stop-color="#5d4f43"/><stop offset="1" stop-color="#3f352d"/></linearGradient>
+  ${handDefs(id)}
+</defs>`;
+const PAW = '#4a3b30', FOOT = '#5a4a3d', BAND = 'var(--band, #e5533d)';
+const ER = 4.1;
+function eye(x, y, id, o = {}) {
+  const r = ER * (o.scale || 1);
+  return `<ellipse cx="${x}" cy="${y}" rx="${r + 1}" ry="${r * .95 + .9}" fill="#3e3127" opacity=".45" filter="url(#b1${id})"/>
+   <g class="eye"><ellipse cx="${x}" cy="${y}" rx="${r}" ry="${r * .92}" fill="#121014"/>
+   <path d="M${x - r * .62} ${y - r * .05} Q${x} ${y - r * .85} ${x + r * .62} ${y - r * .12}" fill="none" stroke="#8fbbe8" stroke-width="${r * .32}" stroke-linecap="round"/>
+   <circle cx="${x + r * .32}" cy="${y - r * .32}" r="${r * .28}" fill="#fff"/><circle cx="${x - r * .38}" cy="${y + r * .38}" r="${r * .13}" fill="#fff" opacity=".85"/></g>`;
+}
+const CLAW = (x, y, ang, len = 3.6) => `<path transform="translate(${x} ${y}) rotate(${ang})" d="M-1 0 Q-.35 ${len * .62} .35 ${len} Q.85 ${len * .55} 1 0 Z" fill="#f6eddf" stroke="#6e5844" stroke-width=".35"/>`;
+const SIDEARMS = (id) => arm(id, [[103, 102], [106, 112], [110, 119], [115.5, 124]], -18, { thumb: -1, side: 1, fadeTo: .3 });
+const F34ARMS = (id) => arm(id, [[74, 103], [73, 113], [77, 122], [84, 127.5]], 10, { thumb: 1, side: -1 }) + arm(id, [[103, 104], [103, 114], [100, 122], [94.5, 127]], -8, { thumb: -1, side: 1, w2: 6.4 });
+const SIDECLAWS = () => [[119.5, 167.6, -80], [121.5, 170.3, -84], [121.6, 173, -90]].map(([x, y, a]) => CLAW(x, y, a, 3.2)).join('');
+const F34CLAWS = () => [[111.5, 180.4, -30], [115.2, 179.6, -45], [118.3, 177.4, -62]].map(([x, y, a]) => CLAW(x, y, a, 3.2)).join('');
+
+const SHADE = (id, cx) => `
+    <ellipse cx="${cx}" cy="19" rx="26" ry="9" fill="#7c6244" opacity=".5" filter="url(#b3${id})"/>
+    <ellipse cx="46" cy="62" rx="7" ry="22" fill="#76604a" opacity=".5" filter="url(#b3${id})"/>
+    <ellipse cx="${cx}" cy="80" rx="32" ry="6" fill="#6a5c4e" opacity=".35" filter="url(#b3${id})"/>`;
+
+
+function side(id) {
+  return `<svg viewBox="0 0 160 196" xmlns="http://www.w3.org/2000/svg">${DEFS(id)}<clipPath id="c${id}"><path d="${SIDE}"/></clipPath>
+  <!-- 細長、幾乎無毛的尾巴，沿地面往後拖（約頭身長 60%） -->
+  <path d="M60 160 C44 166 26 170 6 170.5 C3 170.6 2 172.4 5 173 C26 174.5 46 173.5 64 170 Z" fill="url(#tl${id})"/>
+  <!-- 遠側（另一隻）後腳，略偏前、較暗 -->
+  <path d="M86 167 C98 166.5 112 167 126 169.5 C129 170.5 128 173 125 173.2 L84 173.4 Z" fill="#43372d" filter="url(#fz${id})"/>
+  <!-- 遠側耳朵 -->
+  <ellipse cx="93" cy="19" rx="5" ry="6.5" fill="#8a6a4b" filter="url(#fz${id})"/>
+  <path d="${SIDE}" fill="url(#bg${id})" filter="url(#fz${id})"/>
+  <g clip-path="url(#c${id})">
+    <!-- 背部較深、頭頸偏暖褐、腹部較淺 -->
+    <ellipse cx="58" cy="100" rx="10" ry="70" fill="#76604a" opacity=".5" filter="url(#b3${id})"/>
+    <ellipse cx="96" cy="44" rx="22" ry="22" fill="#b38a5e" opacity=".55" filter="url(#b3${id})"/>
+    <ellipse cx="113" cy="58" rx="11" ry="8" fill="#dfa65e" opacity=".8" filter="url(#b3${id})"/>
+    <ellipse cx="110" cy="68" rx="7" ry="4" fill="#f3e2c4" opacity=".8" filter="url(#b3${id})"/>
+    <ellipse cx="112" cy="132" rx="10" ry="30" fill="#f0dcb9" opacity=".85" filter="url(#b3${id})"/>
+    <!-- 粗壯的大腿 -->
+    <ellipse cx="80" cy="148" rx="25" ry="22" fill="#9a8063" opacity=".7" filter="url(#b3${id})"/>
+    <path d="M58 140 C64 124 92 122 102 140" fill="none" stroke="#5f5246" stroke-width="1.4" opacity=".5" filter="url(#b1${id})"/>
+    ${fur(1000, 52, 124, 23)}
+  </g>
+  <!-- 近側耳朵：短而圓 -->
+  <g filter="url(#fz${id})"><ellipse cx="82" cy="22" rx="7" ry="8.5" fill="#b38a5e"/><ellipse cx="83" cy="23" rx="4.4" ry="5.8" fill="#f2c38c"/><ellipse cx="83.6" cy="24.4" rx="2.4" ry="3.4" fill="#8a7460"/></g>
+  <!-- 頭帶繞過額頭到後腦 -->
+  <path d="M68 37 Q90 26 112 30 L110 24 Q88 20 69 31 Z" fill="${BAND}"/>
+  ${eye(106, 41.5, id)}
+  <!-- 鼻子在口鼻最前端，嘴角往後上揚 -->
+  <path d="M118 47.5 C122 46.5 126 49 126 53 C126 56.5 123 58.5 120 58 C117.6 57.2 116.6 52.5 118 47.5 Z" fill="url(#ns${id})"/>
+  <ellipse cx="121.5" cy="49.5" rx="1.8" ry="1" fill="#c9d6e6" opacity=".5"/>
+  <path d="M123.4 54.6 Q124.6 54 125.2 55.2" fill="none" stroke="#000" stroke-width=".7" opacity=".6"/>
+  <path d="M120 58.2 Q117 62 112.5 61.6 Q110.4 61.3 109.6 59.4" fill="none" stroke="#2a211b" stroke-width="1.4" stroke-linecap="round"/>
+  <!-- 近側後腳：長而平貼地面 -->
+  <path d="M66 163 C82 161 102 162 117 166 C123 167.6 123 174 118 174.4 L70 174.6 C62 174.6 60 165 66 163 Z" fill="${FOOT}" filter="url(#fz${id})"/>
+  ${SIDECLAWS()}
+  <path d="M72 165 C86 164 102 165 114 167.6" fill="none" stroke="#8a7663" stroke-width="1.6" opacity=".6"/>
+  <path d="M110 171 L119 171.6 M108 173 L118.5 173.2" stroke="#2f2620" stroke-width=".6" opacity=".6"/>
+  ${SIDEARMS(id)}
+  </svg>`;
+}
+
+
+function back(id) {
+  return `<svg viewBox="0 0 160 196" xmlns="http://www.w3.org/2000/svg">${DEFS(id)}<clipPath id="c${id}"><path d="${BACK}"/></clipPath>
+  <!-- 腳跟：從背後看是兩個腳跟，腳掌往前延伸看不到 -->
+  <g filter="url(#fz${id})"><ellipse cx="60" cy="172" rx="10" ry="5" fill="#43372d"/><ellipse cx="100" cy="172" rx="10" ry="5" fill="#43372d"/></g>
+  <!-- 耳背：沒有淺色內耳 -->
+  <g filter="url(#fz${id})"><ellipse cx="56.2" cy="22" rx="7" ry="8" fill="#93744f"/><ellipse cx="103.8" cy="22" rx="7" ry="8" fill="#93744f"/></g>
+  <path d="${BACK}" fill="url(#bk${id})" filter="url(#fz${id})"/>
+  <g clip-path="url(#c${id})">
+    <!-- 頭頸背面帶紅褐、背中線較深、兩側臀部隆起 -->
+    <ellipse cx="80" cy="50" rx="30" ry="26" fill="#b07f52" opacity=".45" filter="url(#b3${id})"/>
+    <ellipse cx="80" cy="84" rx="26" ry="8" fill="#68533e" opacity=".35" filter="url(#b3${id})"/>
+    <ellipse cx="80" cy="120" rx="6" ry="45" fill="#68533e" opacity=".35" filter="url(#b3${id})"/>
+    <ellipse cx="58" cy="148" rx="18" ry="22" fill="#ad9878" opacity=".6" filter="url(#b3${id})"/><ellipse cx="102" cy="148" rx="18" ry="22" fill="#ad9878" opacity=".6" filter="url(#b3${id})"/>
+    <ellipse cx="40" cy="120" rx="6" ry="40" fill="#78614a" opacity=".45" filter="url(#b3${id})"/><ellipse cx="120" cy="120" rx="6" ry="40" fill="#78614a" opacity=".45" filter="url(#b3${id})"/>
+    ${fur(1100, 40, 120, 37)}
+  </g>
+  <!-- 頭帶背面：打結、兩條帶尾垂下 -->
+  <path d="M49.5 34 Q80 41 110.5 34 L110 28 Q80 35 50 28 Z" fill="${BAND}"/>
+  <path d="M77 37 Q74 46 70 52 L73 53 Q77 47 80 38 Z M83 37 Q86 46 90 52 L87 53 Q83 47 80 38 Z" fill="#c9432f"/>
+  <ellipse cx="80" cy="36.5" rx="3.6" ry="3" fill="#d24a35"/>
+  <!-- 尾巴：從臀部中央垂下，貼地往後（朝觀者）延伸，前縮變短 -->
+  <path d="M77 150 C76 160 76 170 78 180 C79 183.5 82 183.5 82.5 180 C84 170 84 160 83 150 Z" fill="url(#tl${id})"/>
+  </svg>`;
+}
+
+
+function f34(id) {
+  return `<svg viewBox="0 0 160 196" xmlns="http://www.w3.org/2000/svg">${DEFS(id)}<clipPath id="c${id}"><path d="${F34}"/></clipPath>
+  <path d="M56 160 C42 164 28 166 16 166.5 C13 166.6 12.6 168.6 15.5 169 C30 170 44 169.6 58 167 Z" fill="url(#tl${id})"/>
+  <g filter="url(#fz${id})"><ellipse cx="62" cy="21.5" rx="6.5" ry="7.8" fill="#9a7a55"/><ellipse cx="62.6" cy="22.6" rx="4" ry="5.2" fill="#e5bb87"/></g>
+  <g filter="url(#fz${id})"><path d="M56 167 C52 174 55 180 64 180.5 C71 181 74 177 73 169 Z" fill="${FOOT}"/></g>
+  <path d="${F34}" fill="url(#bg${id})" filter="url(#fz${id})"/>
+  <g clip-path="url(#c${id})">${SHADE(id, 84)}
+    <ellipse cx="97" cy="60" rx="24" ry="14" fill="#dfa65e" opacity=".8" filter="url(#b3${id})"/>
+    <ellipse cx="101" cy="67" rx="11" ry="5.5" fill="#f3e2c4" opacity=".85" filter="url(#b3${id})"/>
+    <ellipse cx="90" cy="150" rx="27" ry="25" fill="#f0dcb9" opacity=".85" filter="url(#b3${id})"/>
+    <ellipse cx="54" cy="148" rx="12" ry="22" fill="#8a7258" opacity=".55" filter="url(#b3${id})"/>
+    ${fur(1050, 44, 122, 51)}
+  </g>
+  <g filter="url(#fz${id})"><ellipse cx="102" cy="20.5" rx="7" ry="8.2" fill="#b38a5e"/><ellipse cx="102" cy="21.6" rx="4.5" ry="5.6" fill="#f2c38c"/><ellipse cx="102.2" cy="22.8" rx="2.5" ry="3.4" fill="#8a7460"/></g>
+  <ellipse cx="84" cy="56" rx="7" ry="4" fill="#f0907c" opacity=".3" filter="url(#b1${id})"/><ellipse cx="108" cy="56" rx="5" ry="4" fill="#f0907c" opacity=".3" filter="url(#b1${id})"/>
+  <path d="M51 35 Q84 23.5 114 34.5 L113.5 28.5 Q84 17.5 51.5 29 Z" fill="${BAND}"/>
+  ${eye(79, 42, id)}
+  <g transform="translate(100.5 41.6) scale(.8 1) translate(-100.5 -41.6)">${eye(100.5, 41.6, id)}</g>
+  <ellipse cx="105" cy="54" rx="9" ry="7.4" fill="#3b2f26" opacity=".45" filter="url(#b1${id})"/>
+  <path d="M97.4 50.6 C97.6 45.8 112 46.4 112.6 50.8 C113 55.6 109.4 58.6 106.4 59.2 L105.6 59.6 L104.6 59.2 C101.2 58.6 97.2 55.4 97.4 50.6 Z" fill="url(#ns${id})"/>
+  <ellipse cx="101.6" cy="49" rx="2.8" ry="1.3" fill="#c9d6e6" opacity=".45"/>
+  <path d="M100.6 55.2 Q101.8 54 103 55.4 M107.6 55.4 Q108.8 54.2 110 55.2" fill="none" stroke="#000" stroke-width=".8" opacity=".65"/>
+  <path d="M105.4 59.6 V62 M95.5 58.6 Q99 65 102.8 64.2 Q104.6 63.6 105.4 62 Q106.2 63.6 107.6 64 Q110.4 64.6 112.6 59.2" fill="none" stroke="#2a211b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  ${F34ARMS(id)}
+  <g filter="url(#fz${id})"><path d="M88 167 C96 166 110 168 118 174 C121 177 118 181.5 112 181 C100 180.4 90 178 86 174 Z" fill="${FOOT}"/></g>
+  ${F34CLAWS()}
+  <path class="sniff-lines" display="none" d="M124 44 Q128 42 130 45 M125 50 Q130 49 132 52 M124 56 Q128 57 130 60" fill="none" stroke="#9aa0a8" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M110 179.8 Q112.4 181.4 114.4 179.6 M114.8 179 Q117 180 118.4 177.6" fill="none" stroke="#2f2620" stroke-width=".7"/>
+  </svg>`;
+}
+
+
+function b34(id) {
+  return `<svg viewBox="0 0 160 196" xmlns="http://www.w3.org/2000/svg">${DEFS(id)}<clipPath id="c${id}"><path d="${F34}"/></clipPath>
+  <path d="M119 50.5 C121.6 50.4 122.6 54.4 120.4 56 C119 56.8 117.6 55 118 52.5 Z" fill="#1a1a1d"/>
+  <g filter="url(#fz${id})"><ellipse cx="62" cy="21.5" rx="7" ry="8" fill="#93744f"/><ellipse cx="102" cy="20.5" rx="6.6" ry="7.8" fill="#8d6f4f"/></g>
+  <g filter="url(#fz${id})"><ellipse cx="98" cy="172" rx="12" ry="5" fill="#43372d"/></g>
+  <path d="${F34}" fill="url(#bk${id})" filter="url(#fz${id})"/>
+  <g clip-path="url(#c${id})">
+    <ellipse cx="74" cy="50" rx="28" ry="26" fill="#b07f52" opacity=".45" filter="url(#b3${id})"/>
+    <ellipse cx="72" cy="120" rx="6" ry="45" fill="#68533e" opacity=".35" filter="url(#b3${id})"/>
+    <ellipse cx="112" cy="70" rx="7" ry="16" fill="#c49a68" opacity=".55" filter="url(#b3${id})"/>
+    <ellipse cx="108" cy="140" rx="10" ry="30" fill="#d2bf9e" opacity=".6" filter="url(#b3${id})"/>
+    <ellipse cx="56" cy="148" rx="16" ry="22" fill="#ad9878" opacity=".6" filter="url(#b3${id})"/><ellipse cx="94" cy="150" rx="17" ry="22" fill="#ad9878" opacity=".55" filter="url(#b3${id})"/>
+    <ellipse cx="47" cy="120" rx="6" ry="40" fill="#78614a" opacity=".45" filter="url(#b3${id})"/>
+    ${fur(1050, 44, 122, 63)}
+  </g>
+  <path d="M51 30 Q74 36 114 30 L113.5 24.5 Q74 30 51.5 24.5 Z" fill="${BAND}"/>
+  <path d="M66 33 Q63 42 59 48 L62 49 Q66 43 69 34 Z M72 33 Q75 42 79 48 L76 49 Q72 43 69 34 Z" fill="#c9432f"/>
+  <ellipse cx="69" cy="32.6" rx="3.4" ry="2.8" fill="#d24a35"/>
+  <g filter="url(#fz${id})"><ellipse cx="62" cy="173" rx="11" ry="5" fill="#43372d"/></g>
+  <path d="M68 150 C66 160 62 170 54 179 C51.6 181.6 54 184 57 182 C66 174 71 162 73 151 Z" fill="url(#tl${id})"/>
+  </svg>`;
+}
+
+
+// ---------------------------------------------------------------------------
+// 正面（分層）：所有可切換的部件都在同一張 SVG，預設隱藏者帶 display="none"，
+// 由 pet.css 依 #pet 的 data-pose 打開。手臂肩軸、球拍握點與舊版一致，運動關鍵影格可沿用。
+// ---------------------------------------------------------------------------
+function frontLayered(id) {
+  const ey = 43, ns = .9, nx = (v) => 80 + (v - 80) * ns, ny = (v) => 53.5 + (v - 53.5) * ns, my = ny(60);
+  const H = 'display="none"';
+  const NOSE = `M${nx(72.6)} ${ny(51.2)} C${nx(72.4)} ${ny(46.4)} ${nx(87.6)} ${ny(46.4)} ${nx(87.4)} ${ny(51.2)} C${nx(87.4)} ${ny(56.2)} ${nx(83.8)} ${ny(59)} ${nx(80.9)} ${ny(59.6)} L80 ${ny(60)} L${nx(79.1)} ${ny(59.6)} C${nx(76.2)} ${ny(59)} ${nx(72.6)} ${ny(56.2)} ${nx(72.6)} ${ny(51.2)} Z`;
+  const ear = (cls, cx, rot) => `<g class="ear ${cls}"><g filter="url(#fz${id})"><ellipse cx="${cx}" cy="22" rx="7" ry="8" fill="#b38a5e"/><ellipse cx="${cx + (cx < 80 ? .3 : -.3)}" cy="23" rx="4.6" ry="5.6" fill="#f2c38c"/><ellipse cx="${cx + (cx < 80 ? .8 : -.8)}" cy="24.2" rx="2.6" ry="3.4" fill="#8a7460"/></g></g>`;
+  const toeClaws = [54.5, 58.6, 62.8, 67, 93, 97.2, 101.4, 105.5].map((x, i) => {
+    const y = (i % 4 === 0 || i % 4 === 3) ? 182.4 : 183.6, k = x < 80 ? -.25 : .25;
+    return `<path d="M${x - 1.05} ${y - .8} Q${x + k} ${y + 2} ${x + k * 3} ${y + 3.8} Q${x + .9} ${y + 1.6} ${x + 1.05} ${y - .8} Z" fill="#f6eddf" stroke="#6e5844" stroke-width=".35"/>`;
+  }).join('');
+  const REST_L = [[64.5, 103], [64, 113], [68, 122], [75, 127.5]];
+  const mir = (P) => P.map(([x, y]) => [160 - x, y]);
+  return `<svg viewBox="0 0 160 196" class="char-svg view-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${DEFS(id)}
+  <defs>
+    <clipPath id="c${id}"><path d="${FRONT}"/></clipPath>
+    <radialGradient id="vb${id}" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset=".7" stop-color="#eceae3"/><stop offset="1" stop-color="#bdb9ae"/></radialGradient>
+    <radialGradient id="bb${id}" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#f6a35a"/><stop offset=".65" stop-color="#e27a2c"/><stop offset="1" stop-color="#a94e16"/></radialGradient>
+    <linearGradient id="lf${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8cc06b"/><stop offset="1" stop-color="#4d8a3a"/></linearGradient>
+    <radialGradient id="fl${id}"><stop offset="0" stop-color="#fff" stop-opacity="1"/><stop offset=".55" stop-color="#fff" stop-opacity=".6"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+  </defs>
+
+  <!-- 籃框（籃球） -->
+  <g class="hoop" ${H}>
+    <line x1="190" y1="58" x2="190" y2="182" stroke="#8a8f98" stroke-width="3" stroke-linecap="round"/>
+    <rect x="186" y="24" width="5" height="40" rx="1.5" fill="#fbfbf8" stroke="#9aa0a8" stroke-width="1.2"/>
+    <path d="M162 51 L165 68 M168 53 L169.5 69 M176 53 L174.5 69 M182 51 L179 68 M164.5 60 H179.5" stroke="#cfd2d6" stroke-width="1" fill="none"/>
+    <ellipse cx="172" cy="50.5" rx="11" ry="3.2" fill="none" stroke="#d9572a" stroke-width="2.4"/>
+  </g>
+
+  <g class="pet-body">
+    <!-- 腳：站立（含小爪子）／被拎起來時懸空 -->
+    <g class="feet-stand">
+      <g filter="url(#fz${id})"><path d="M52 164 C46 172 48 182 60 183.5 C70 184.5 76 180 75 168 Z" fill="${FOOT}"/><path d="M108 164 C114 172 112 182 100 183.5 C90 184.5 84 180 85 168 Z" fill="${FOOT}"/></g>
+      ${toeClaws}
+    </g>
+    <g class="feet-dangle" ${H}>
+      <g class="foot-l"><path d="M56 162 C50 172 52 190 59 194 C66 196 71 184 73 167 Z" fill="${FOOT}" filter="url(#fz${id})"/>${[55.5, 59, 62.5].map((x) => CLAW(x, 193.4, 4, 3)).join('')}</g>
+      <g class="foot-r"><path d="M104 162 C110 172 108 190 101 194 C94 196 89 184 87 167 Z" fill="${FOOT}" filter="url(#fz${id})"/>${[97.5, 101, 104.5].map((x) => CLAW(x, 193.4, -4, 3)).join('')}</g>
+    </g>
+    ${ear('ear-l', 56.2)}${ear('ear-r', 103.8)}
+    <!-- 頭身一體的毛皮 -->
+    <path d="${FRONT}" fill="url(#bg${id})" filter="url(#fz${id})"/>
+    <g clip-path="url(#c${id})">
+      <ellipse cx="80" cy="19" rx="28" ry="9" fill="#7c6244" opacity=".4" filter="url(#b3${id})"/>
+      <ellipse cx="44" cy="60" rx="7" ry="22" fill="#71573e" opacity=".35" filter="url(#b3${id})"/><ellipse cx="116" cy="60" rx="7" ry="22" fill="#71573e" opacity=".35" filter="url(#b3${id})"/>
+      <ellipse cx="80" cy="62" rx="31" ry="16" fill="#dfa65e" opacity=".85" filter="url(#b3${id})"/><ellipse cx="80" cy="68" rx="14" ry="6.5" fill="#f3e2c4" opacity=".9" filter="url(#b3${id})"/>
+      <ellipse cx="80" cy="152" rx="31" ry="27" fill="#f0dcb9" opacity=".9" filter="url(#b3${id})"/><ellipse cx="80" cy="108" rx="15" ry="12" fill="#f0dcb9" opacity=".5" filter="url(#b3${id})"/>
+      <path d="${FRONT}" fill="none" stroke="#fff6e6" stroke-width="3" opacity=".35" filter="url(#b1${id})"/>
+      ${fur(1100, 40, 120)}
+    </g>
+    <path class="band" d="M49.5 34 Q80 25 110.5 34 L110 28 Q80 19 50 28 Z" style="fill: var(--band, #e5533d)"/>
+
+    <g class="face">
+      <g class="blush"><ellipse cx="60" cy="56" rx="7" ry="4" fill="#f0907c" filter="url(#b1${id})"/><ellipse cx="100" cy="56" rx="7" ry="4" fill="#f0907c" filter="url(#b1${id})"/></g>
+      <g class="eyes-open"><g class="eyes-look">${eye(67, ey, id)}${eye(93, ey, id)}</g></g>
+      <g class="eyes-wide" ${H}>${eye(67, ey - .5, id, { scale: 1.18 })}${eye(93, ey - .5, id, { scale: 1.18 })}</g>
+      <g class="eyes-happy" ${H}><path d="M62.5 ${ey + 1.2} Q67 ${ey - 3.6} 71.5 ${ey + 1.2} M88.5 ${ey + 1.2} Q93 ${ey - 3.6} 97.5 ${ey + 1.2}" fill="none" stroke="#1f1814" stroke-width="1.8" stroke-linecap="round"/></g>
+      <g class="eyes-closed" ${H}><path d="M62.5 ${ey} Q67 ${ey + 3} 71.5 ${ey} M88.5 ${ey} Q93 ${ey + 3} 97.5 ${ey}" fill="none" stroke="#1f1814" stroke-width="1.6" stroke-linecap="round"/></g>
+      <g class="eyes-dizzy" ${H}>${[67, 93].map((x) => `<path class="spiral" d="M${x} ${ey} m-3.6 0 a3.6 3.6 0 1 1 3.6 3.6 a2.4 2.4 0 1 1 -2.4 -2.4 a1.2 1.2 0 1 1 1.2 1.2" fill="none" stroke="#1f1814" stroke-width="1.2" stroke-linecap="round"/>`).join('')}</g>
+      <ellipse cx="80" cy="${ny(54.5)}" rx="8.1" ry="6.75" fill="#3b2f26" opacity=".4" filter="url(#b1${id})"/>
+      <path d="${NOSE}" fill="url(#ns${id})"/><ellipse cx="${nx(76.6)}" cy="${ny(49.6)}" rx="2.7" ry="1.26" fill="#d4dfec" opacity=".55"/>
+      <g class="mouth"><path d="M80 ${my} V${my + 2.5} M71 ${my - 1} Q74.6 ${my + 5.5} 77.75 ${my + 4.6} Q80 ${my + 4} 80 ${my + 2.5} Q80 ${my + 4} 82.25 ${my + 4.6} Q85.4 ${my + 5.5} 89 ${my - 1}" fill="none" stroke="#2a211b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <g class="mouth-open" ${H}><path d="M80 ${my} V${my + 1.6}" stroke="#2a211b" stroke-width="1.3"/><path d="M70.5 ${my - .5} Q80 ${my + 3} 89.5 ${my - .5} Q88 ${my + 9} 80 ${my + 9.5} Q72 ${my + 9} 70.5 ${my - .5} Z" fill="#4a2622" stroke="#2a211b" stroke-width="1.2"/><path d="M75 ${my + 6.5} Q80 ${my + 4} 85 ${my + 6.5} Q83 ${my + 9} 80 ${my + 9} Q77 ${my + 9} 75 ${my + 6.5} Z" fill="#e58a8a"/></g>
+      <g class="mouth-o" ${H}><path d="M80 ${my} V${my + 1.6}" stroke="#2a211b" stroke-width="1.3"/><ellipse cx="80" cy="${my + 5}" rx="3" ry="3.6" fill="#4a2622" stroke="#2a211b" stroke-width="1.1"/></g>
+      <g class="mouth-chew" ${H}><path d="M80 ${my} V${my + 2}" stroke="#2a211b" stroke-width="1.3"/><ellipse class="chew" cx="80" cy="${my + 4.6}" rx="3.4" ry="2.2" fill="#4a2622" stroke="#2a211b" stroke-width="1"/></g>
+    </g>
+
+    <!-- 手：平時合在胸前／揮手／摸臉／舉高／捧葉子／墊球／右手運動 -->
+    <g class="arm-rest-l">${arm(id, REST_L, 10, { thumb: 1, side: -1 })}</g>
+    <g class="arm-rest-r">${arm(id, mir(REST_L), -10, { thumb: -1, side: 1 })}</g>
+    <g class="arm-wave-r" ${H}>${arm(id, [[94, 104], [110, 103], [120, 90], [117, 76]], 196, { thumb: -1, side: 1, fadeTo: .25, w1: 11 })}</g>
+    <g class="arm-cheek-r" ${H}>${arm(id, [[94, 106], [108, 102], [109, 84], [101, 74]], 160, { thumb: -1, side: 1, fadeTo: .25, w1: 11 })}</g>
+    <g class="arm-up-l" ${H}>${arm(id, [[66, 104], [50, 101], [42, 88], [45, 75]], 164, { thumb: 1, side: -1, fadeTo: .25, w1: 11 })}</g>
+    <g class="arm-up-r" ${H}>${arm(id, [[94, 104], [110, 101], [118, 88], [115, 75]], 196, { thumb: -1, side: 1, fadeTo: .25, w1: 11 })}</g>
+    <g class="arms-eat" ${H}>
+      <g class="leaf">
+        <path d="M78 66 C70 58 60 52 50 53 C54 61 64 67 78 66 Z" fill="url(#lf${id})" stroke="#3f7a2f" stroke-width=".8"/>
+        <path d="M78 66 C68 61 60 57 52 54.5" fill="none" stroke="#e9f3dc" stroke-width=".7" opacity=".8"/>
+      </g>
+      ${arm(id, [[66, 104], [63, 92], [68, 80], [75.5, 74]], 172, { thumb: 1, side: -1, fadeTo: .25 })}
+      ${arm(id, [[94, 104], [97, 92], [92, 80], [84.5, 74]], -172, { thumb: -1, side: 1, fadeTo: .25 })}
+    </g>
+    <g class="arms-bump" ${H}>
+      ${arm(id, [[66, 104], [58, 114], [53, 124], [50, 131]], 28, { thumb: 1, side: -1, fadeTo: .2 })}
+      ${arm(id, [[94, 104], [84, 116], [66, 127], [55.5, 132.5]], 50, { thumb: -1, side: 1, fadeTo: .2, w1: 11 })}
+    </g>
+    <g class="arm-r" ${H}>
+      <g class="racket" ${H}>
+        <line x1="114" y1="132" x2="117.5" y2="145.5" stroke="#2f3540" stroke-width="2.6" stroke-linecap="round"/>
+        <line x1="114.4" y1="133.6" x2="116" y2="140" stroke="#d9d3c4" stroke-width="3" stroke-linecap="round"/>
+        <g transform="rotate(-12.1 119.6 155.5)">
+          <ellipse cx="119.6" cy="155.5" rx="8" ry="10.5" fill="#ffffff" fill-opacity=".45" stroke="#2b5f9a" stroke-width="2"/>
+          <path d="M114.8 148 V163 M119.6 145.2 V165.8 M124.4 148 V163 M112.2 151.5 H127 M111.7 155.5 H127.5 M112.2 159.5 H127" stroke="#a7bdd1" stroke-width=".6" fill="none"/>
+        </g>
+      </g>
+      ${arm(id, [[106, 97], [109, 107], [112, 118], [114, 128]], -4, { thumb: -1, side: 1, fadeTo: .12, w1: 9.5 })}
+    </g>
+
+    <!-- 特效 -->
+    <g class="think-dots" ${H}><circle cx="118" cy="20" r="3" fill="#8a8f98"/><circle cx="127" cy="14" r="2.3" fill="#8a8f98"/><circle cx="134" cy="9" r="1.7" fill="#8a8f98"/></g>
+    <g class="zzz" ${H} font-family="Arial, sans-serif" font-weight="700" fill="#7c8696">
+      <text class="z1" x="112" y="30" font-size="9">Z</text><text class="z2" x="121" y="20" font-size="11">Z</text><text class="z3" x="132" y="8" font-size="13">Z</text>
+    </g>
+    <g class="sparkles" ${H} fill="#ffd34d">
+      <path class="sp1" d="M30 40 L32 46 L38 48 L32 50 L30 56 L28 50 L22 48 L28 46 Z"/>
+      <path class="sp2" d="M128 34 L129.5 38.5 L134 40 L129.5 41.5 L128 46 L126.5 41.5 L122 40 L126.5 38.5 Z"/>
+      <path class="sp3" d="M134 92 L135.2 95.8 L139 97 L135.2 98.2 L134 102 L132.8 98.2 L129 97 L132.8 95.8 Z"/>
+    </g>
+    <g class="hearts" ${H} fill="#ef6f7c">
+      <path class="h1" d="M122 40 c0-3 4-4 5-1 c1-3 5-2 5 1 c0 3-5 6-5 6 s-5-3-5-6Z"/>
+      <path class="h2" d="M130 22 c0-2.2 3-3 3.7-.7 c.7-2.3 3.7-1.5 3.7.7 c0 2.2-3.7 4.4-3.7 4.4 s-3.7-2.2-3.7-4.4Z" opacity=".75"/>
+      <path class="h3" d="M28 34 c0-2 2.6-2.6 3.2-.6 c.6-2 3.2-1.4 3.2.6 c0 2-3.2 3.8-3.2 3.8 s-3.2-1.8-3.2-3.8Z" opacity=".6"/>
+    </g>
+    <g class="ear-sparks" ${H}><path d="M44 20 L38 14 M40 28 L32 26 M116 20 L122 14 M120 28 L128 26" stroke="#9aa0a8" stroke-width="1.4" stroke-linecap="round"/></g>
+    <g class="motion" ${H}><path d="M30 150 Q22 140 30 128 M24 158 Q14 144 24 124 M130 150 Q138 140 130 128 M136 158 Q146 144 136 124" fill="none" stroke="#9aa0a8" stroke-width="1.3" stroke-linecap="round"/></g>
+    <g class="wave-lines" ${H}><path d="M126 66 Q130 70 128 75 M129 62 Q135 68 132 76" fill="none" stroke="#9aa0a8" stroke-width="1.2" stroke-linecap="round"/></g>
+  </g>
+  <g class="stars" ${H} fill="#ffcf3d" stroke="#d9a520" stroke-width=".6">
+    <path d="M48 14 l1.6 3.6 3.9.4-2.9 2.6.8 3.8-3.4-2-3.4 2 .8-3.8-2.9-2.6 3.9-.4Z"/><path d="M110 10 l1.3 2.9 3.1.3-2.3 2.1.6 3-2.7-1.6-2.7 1.6.6-3-2.3-2.1 3.1-.3Z"/><path d="M80 2 l1.1 2.5 2.7.3-2 1.8.6 2.7-2.4-1.4-2.4 1.4.6-2.7-2-1.8 2.7-.3Z"/>
+  </g>
+
+  <!-- 球：外層 .bx 走 X、內層 .by 走 Y；圖形以 (0,0) 為中心 -->
+  <g class="ball ball-vb" ${H}><g class="bx"><g class="by"><g class="spin">
+    <circle r="9.5" fill="url(#vb${id})" stroke="#9aa0a8" stroke-width=".8"/>
+    <path d="M-9.5 0 Q0 -5 9.5 0 M-6 -7.3 Q2 -2 2.6 9.1 M6 -7.3 Q4.2 1.8 -5.2 7.8" fill="none" stroke="#3f6fb5" stroke-width="1.2"/>
+    <path d="M-8 4.8 Q-1 6 4.5 8.3" fill="none" stroke="#e2b53b" stroke-width="1.2"/>
+  </g></g></g></g>
+  <g class="ball ball-bb" ${H}><g class="bx"><g class="by"><g class="spin">
+    <circle r="9.5" fill="url(#bb${id})"/>
+    <path d="M-9.5 0 H9.5 M0 -9.5 V9.5 M-6.8 -6.6 Q-1.6 0 -6.8 6.6 M6.8 -6.6 Q1.6 0 6.8 6.6" fill="none" stroke="#5a2a0d" stroke-width="1"/>
+  </g></g></g></g>
+  <g class="ball shuttle" ${H}><g class="bx"><g class="by"><g class="spin">
+    <path d="M-1.6 1.6 L9 -3.5 L3.5 -9 Z" fill="#ffffff" stroke="#b9bec5" stroke-width=".8" stroke-linejoin="round"/>
+    <path d="M-1.6 1.6 L6.2 -6.2 M1 -1.2 L7.4 -4.6 M-0.4 -0.4 L4.8 -7.6" stroke="#d6dade" stroke-width=".5"/>
+    <circle cx="-3" cy="3" r="3" fill="#fff8ec" stroke="#c9483a" stroke-width="1.3"/>
+  </g></g></g></g>
+  <ellipse class="flash" ${H} cx="80" cy="80" rx="110" ry="120" fill="url(#fl${id})"/>
+</svg>`;
+}
+
+// ---------------------------------------------------------------------------
+// 匯出：五個實際繪製的視角（左邊三個由 CSS 鏡射）
+// ---------------------------------------------------------------------------
+let _views = null;
+function views() {
+  if (_views) return _views;
+  const tag = (svg) => svg.replace('<svg viewBox="0 0 160 196" xmlns="http://www.w3.org/2000/svg">', '<svg viewBox="0 0 160 196" class="view-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">');
+  _views = { front: frontLayered('qf'), f34: tag(f34('q34')), side: tag(side('qs')), b34: tag(b34('qb34')), back: tag(back('qbk')) };
+  return _views;
+}
+// 八方位對照：哪個方位用哪張圖、是否鏡射
+const VIEW_MAP = {
+  front: ['front', false], f34r: ['f34', false], sider: ['side', false], b34r: ['b34', false],
+  back: ['back', false], b34l: ['b34', true], sidel: ['side', true], f34l: ['f34', true]
+};
+const TURN_ORDER = ['front', 'f34r', 'sider', 'b34r', 'back', 'b34l', 'sidel', 'f34l'];
+const api = { views, frontLayered, VIEW_MAP, TURN_ORDER };
+if (typeof window !== 'undefined') window.QuokkaArt = api;
+if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})();

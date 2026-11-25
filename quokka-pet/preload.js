@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld('api', {
   // 角色與姿勢
   onCharacter: (cb) => ipcRenderer.on('pet:character', (_e, payload) => cb(payload)),
   onPose: (cb) => ipcRenderer.on('pet:pose', (_e, pose) => cb(pose)),
+  // 游標相對桌寵的位置（只在靠近時送）、使用者是否離開電腦
+  onCursor: (cb) => ipcRenderer.on('pet:cursor', (_e, p) => cb(p)),
+  onAway: (cb) => ipcRenderer.on('pet:away', (_e, isAway) => cb(isAway)),
   playAction: (action) => ipcRenderer.invoke('pet:play-action', action),
   setCharacter: (id) => ipcRenderer.invoke('character:set', id),
   onCharacterChanged: (cb) => ipcRenderer.on('character:changed', (_e, id) => cb(id)),
