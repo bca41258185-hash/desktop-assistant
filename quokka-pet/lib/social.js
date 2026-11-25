@@ -24,6 +24,8 @@
     leaf: { name: '分享葉子' },
     chase: { name: '追逐' },
     badminton: { name: '一起打羽球' },
+    volleyball: { name: '一起打排球' },
+    basketball: { name: '一起打籃球' },
     sunbathe: { name: '並排曬太陽' },
     cuddle: { name: '依偎', couple: true },
     groom: { name: '幫對方理毛', couple: true },
@@ -110,6 +112,9 @@
         { type: 'nose', w: 0.2 + 1.6 * outgoing },
         { type: 'paw', w: 0.1 + 1.4 * outgoing },
         { type: 'badminton', w: (0.05 + 1.2 * outgoing) * (act > 0.4 ? 1 : 0.3) * (likes('badminton') ? 2 : 1) },
+        // 一起打排球（互相墊球）、打籃球（傳球、投籃）：其中一隻最愛那種球時更常出現
+        { type: 'volleyball', w: (0.05 + 1.0 * outgoing) * (act > 0.4 ? 1 : 0.3) * (likes('volleyball') ? 2.2 : 1) },
+        { type: 'basketball', w: (0.05 + 1.0 * outgoing) * (act > 0.4 ? 1 : 0.3) * (likes('basketball') ? 2.2 : 1) },
         { type: 'chase', w: (0.05 + outgoing) * clamp((act - 0.35) * 2.5, 0, 1.2) },
         { type: 'sunbathe', w: 0.1 + 2.5 * lazy }
       ];
