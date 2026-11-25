@@ -72,6 +72,8 @@
       this.job = null; this.queue = []; this.alerts = []; this.ball = null;
       this.attach = { pregnant: false, carryingJoey: false, hasFollower: false, coupled: false, stage: 'adult' };   // 附加狀態（之後戀愛／育兒用）
       this.lastLayer = 8; this.lastReportEnd = 0; this.fetchCount = 0;
+      this.depth = 0; this.zBoost = 0; this.hs = 1; this.faceDir = -1;      // depth＝往畫面裡退幾 px（讓路時用）；zBoost＝暫時畫在前面
+      this.seed = (this.uid * 7919) % 1000 + Math.random() * 50;
       this.el = document.createElement('div');
       this.el.className = 'actor';
       this.img = document.createElement('img'); this.img.draggable = false;
@@ -87,10 +89,12 @@
       this.y = q.pos && isFinite(q.pos.y) ? Math.min(innerHeight - 4, q.pos.y) : innerHeight - 6;
       this.home = this.x; this.dy = 0;
       this.th = -15;
-      this.nextAt = performance.now() + 2000 + Math.random() * 4000;
+      this.nextAt = performance.now() + 2500 + Math.random() * 6000;
+      this.img.style.animationDelay = (-Math.random() * 3.2).toFixed(2) + 's';   // 每隻的呼吸錯開
       this.bindInput();
       this.showRest();
       this.place();
+      this.startLife();
     }
     // 名字、特徵（外觀、個性）；外觀變了就丟掉舊畫格
     applyData(q, first) {
@@ -99,19 +103,32 @@
       if (q.traits) this.traits = q.traits;
       if (!this.traits) this.traits = {};
       const sh = (S.TR.shape(this.traits)) || { sizeK: 1 };
-      // 跟隨期的小袋鼠：先當一般 actor，但縮小
-      const grow = q.stage === 'follow' || this.traits.stage === 'follow' ? (Number(this.traits.growScale) || 0.55) : 1;
-      if (q.stage) this.attach.stage = q.stage;
-      if (q.mom) this.attach.mom = q.mom;
+      const A = this.attach, oldStage = A.stage, oldK = this.k, oldDeco = this.decoKey;
+      if (q.stage) A.stage = q.stage; else if (first && this.traits.stage === 'follow') A.stage = 'follow';
+      if ('mom' in q) A.mom = q.mom || null;
+      if ('dad' in q) A.dad = q.dad || null;
+      if ('partner' in q) A.partner = q.partner || null;
+      if ('pregnant' in q) A.pregnant = !!q.pregnant;
+      if ('hasJoey' in q) A.hasJoey = q.hasJoey || null;
+      A.coupled = !!A.partner;
+      // 跟隨期的小袋鼠：頭大身小
+      this.isFollow = A.stage === 'follow';
+      const grow = this.isFollow ? S.clamp(Number(q.growScale) || Number(this.traits.growScale) || 0.55, 0.42, 0.68) : 1;
+      this.hs = this.isFollow ? 1.3 : 1;
       this.k = S.SCALE * sh.sizeK * grow;
       this.w = S.VB.w * this.k; this.h = S.VB.h * this.k;
       this.el.style.width = this.w + 'px'; this.el.style.height = this.h + 'px';
       this.el.style.setProperty('--band', this.traits.band || '#e5533d');
+      this.el.classList.toggle('joey', this.isFollow);
       this.beh = S.TR.behavior(this.traits) || null;
       this.act = this.traits.personality ? this.traits.personality.activity : .5;
       this.img.alt = this.name; this.tag.textContent = this.name;
       this.el.setAttribute('aria-label', this.name);
-      if (traitsChanged) { S.purgeFrames(this.id); this.lookBucket = null; if (!this.job) this.showRest(); this.place(); }
+      if (S.family) S.family.refresh(this);
+      const sizeChanged = !first && Math.abs(this.k - oldK) > 1e-4;
+      // 跟隨期滿（變成亞成體）：播「長大」小動畫
+      if (!first && oldStage === 'follow' && !this.isFollow && S.family) { S.family.grow(this, oldK); return; }
+      if (traitsChanged || sizeChanged || (!first && oldDeco !== this.decoKey)) { if (traitsChanged || sizeChanged) S.purgeFrames(this.id); if (!this.job) this.showRest(); this.place(); }
     }
     get layer() { return this.job ? this.job.layer : 8; }
     get state() { return this.job ? this.job.name : (this.mode === 'asleep' ? 'sleep' : 'idle'); }
@@ -119,11 +136,11 @@
 
     // ---- 位置與畫格 ----
     place() {
-      const left = this.x - (S.FOOT.x - S.VB.x) * this.k, top = this.y - (S.FOOT.y - S.VB.y) * this.k;
+      const left = this.x - (S.FOOT.x - S.VB.x) * this.k, top = this.y - (S.FOOT.y - S.VB.y) * this.k - this.depth;
       this.el.style.transform = `translate3d(${left.toFixed(1)}px, ${top.toFixed(1)}px, 0)`;
-      const z = Math.round(this.y) + (this.dragging ? 10000 : 0);
+      const z = Math.round(this.y - this.depth) + this.zBoost + (this.dragging ? 10000 : 0);
       if (z !== this.z) { this.z = z; this.el.style.zIndex = z; }          // 腳底越下面畫越前面
-      this.rect = { id: this.id, x: Math.round(left + this.w * .2), y: Math.round(top + this.h * .1), w: Math.round(this.w * .6), h: Math.round(this.h * .85) };
+      this.rect = this.inPouch ? null : { id: this.id, x: Math.round(left + this.w * .2), y: Math.round(top + this.h * .1), w: Math.round(this.w * .6), h: Math.round(this.h * .85) };
       this.bubble.place();
     }
     // SVG 座標 → 舞台座標（腳底 (80,183) 對到 (x, y)）
@@ -136,24 +153,51 @@
     }
     // 依時間取第幾格（快取用），回傳 [格號, 取樣點]
     static q(u, n) { const f = Math.min(n - 1, Math.floor(u * n)); return [f, (f + .5) / n]; }
-    // 待機時的樣子：睡覺／響鈴／待機（含看游標）
+    // 待機時的樣子：睡覺／待機（含看游標，量化成 8 個方向）→ { key, th, pose }
+    restSpec() {
+      if (this.isSleeping()) return { key: 'sleep', th: -10, pose: ANIM.STILL.sleep, sleep: true };
+      const b = this.lookBucket, th = Math.round(this.th);
+      if (b && LOOK[b]) { const [dx, dy] = LOOK[b]; return { key: 'look' + b + th, th: th + dx * 9, pose: { look: [dx * 2, dy * 1.5], head: { yaw: dx * 13, pitch: dy * 9 } } }; }
+      return { key: 'idle' + th, th, pose: {} };
+    }
     showRest() {
-      this.el.classList.toggle('asleep', this.isSleeping());
-      if (this.isSleeping()) { this.setFrame('sleep', -10, ANIM.STILL.sleep); return; }
-      if (this.lookBucket) { this.showLook(this.lookBucket); return; }
-      this.setFrame('idle' + Math.round(this.th), this.th, {});
+      const r = this.restSpec();
+      this.el.classList.toggle('asleep', !!r.sleep);
+      this.setFrame(r.key, r.th, r.pose);
     }
     isSleeping() { return this.mode === 'asleep' && !this.alerts.length && (!this.job || this.job.layer > 1); }
-    showLook(b) {
-      const L = { L: [-35, { look: [-2, .5], head: { yaw: -14 } }], R: [15, { look: [2, .5], head: { yaw: 14 } }], U: [-10, { look: [0, -2], head: { pitch: -10 } }] }[b];
-      if (L) this.setFrame('look' + b, L[0], L[1]);
+    showLook(b) { this.lookBucket = b; this.showRest(); }
+    // ---- 常駐的小生命感：眨眼、耳朵抖（只換快取畫格，用計時器排程，不跑動畫迴圈；呼吸是 CSS）----
+    canLife() { return !this.job && this.mode === 'awake' && !S.paused && !this.liveOn && !this.inPouch && S.mode === 'awake' && !this.duetOn; }
+    lifeFrame(tag, extra, ms, then) {
+      const r = this.restSpec();
+      this.setFrame(r.key + tag, r.th, { ...r.pose, ...extra });
+      this.lifeT2 = setTimeout(() => { if (this.canLife()) { if (then) then(); else this.showRest(); } }, ms);
+    }
+    startLife() {
+      const blink = () => {
+        this.blinkT = setTimeout(blink, 3000 + Math.random() * 3000);
+        if (!this.canLife()) return;
+        const twice = Math.random() < .15;
+        this.lifeFrame('|b', { blink: 1 }, 120, twice ? () => { this.showRest(); this.lifeT2 = setTimeout(() => { if (this.canLife()) this.lifeFrame('|b', { blink: 1 }, 120); }, 120); } : null);
+      };
+      const ear = () => {
+        this.earT = setTimeout(ear, 9000 + Math.random() * 9000);
+        if (!this.canLife() || S.reduceMotion) return;
+        const side = Math.random() < .5 ? 'L' : 'R';
+        this.lifeFrame('|e' + side, { earFlop: { [side]: 14, [side === 'L' ? 'R' : 'L']: 0 } }, 110, () => this.lifeFrame('|f' + side, { earFlop: { [side]: -6, [side === 'L' ? 'R' : 'L']: 0 } }, 120));
+      };
+      this.blinkT = setTimeout(blink, 1500 + Math.random() * 4000);
+      this.earT = setTimeout(ear, 5000 + Math.random() * 9000);
+      // 先把眨眼的畫格準備好
+      setTimeout(() => { if (this.canLife()) { const r = this.restSpec(); S.warm(this, r.key + '|b', r.th, { ...r.pose, blink: 1 }); } }, 600 + Math.random() * 600);
     }
     // 即時 SVG（只有播放動作的這隻、只在播的時候）
     drawLive(th, pose) {
       if (!this.liveOn) { this.liveOn = true; this.el.classList.add('live-on'); }
-      S.ART.configure(this.traits);
-      this.live.innerHTML = POSE.svg(th, 'L' + this.uid, pose, S.VB_STR);
-      S.ART.configure(null);
+      // 常駐層（呼吸、眨眼、耳朵抖）也疊到即時繪製的動作上
+      if (ANIM.ambient && !pose.noAmbient) { const am = ANIM.ambient(performance.now() / 1000, this.seed, { still: false }); pose = ANIM.applyAmbient(pose, { ...am, look: [0, 0], head: { yaw: 0, pitch: 0 } }); }
+      this.live.innerHTML = S.svgFor(this, th, 'L' + this.uid, pose, S.VB_STR);
     }
     hideLive() { if (!this.liveOn) return; this.liveOn = false; this.live.innerHTML = ''; this.el.classList.remove('live-on'); }
     say(text, opts) { this.bubble.say(text, opts); }
@@ -167,6 +211,8 @@
     // 要求做一件活動：高層搶佔低層；L2 進佇列；L4–L7 受名額限制
     requestActivity(layer, job, reason) {
       job.layer = layer;
+      if (this.inPouch) return false;
+      if (this.isFollow && !(layer === 0 || layer === 5 || job.joeyOk)) return false;      // 跟隨期：只有拖曳、家族互動、跟隨與牠自己的小動作
       if (this.mode === 'hidden' || (this.mode === 'asleep' && layer > 1)) {
         if (layer === 2 && job.item) this.enqueue(job.item);              // 只記錄不演出
         return false;
@@ -218,12 +264,16 @@
         return !!(this.job && this.job.ticks);
       }
       if (this.mode !== 'awake' || S.paused) return false;
+      if (this.isFollow) return S.family ? S.family.tick(this, now) : false;
       // 球停了在等主人（名額滿時排隊，L4 優先）
       if (this.ball && this.ball.stopped && !this.ball.picked) { this.startFetch(); return !!(this.job && this.job.ticks); }
       if (now >= this.nextAt) {
         if (this.queue.length || this.alerts.length) { this.nextAt = now + 3000; return false; }
         const nearCursor = Math.abs(S.cursor.x - this.x) < 200 && Math.abs(S.cursor.y - (this.y - this.h / 2)) < 260;
         if (nearCursor || S.reduceMotion || S.settings.walk === 'off' || S.fetchWaiting() || this.bubble.kind) { this.nextAt = now + 3000; return false; }
+        if (S.family && S.family.coupleIdle(this, now)) return !!(this.job && this.job.ticks);
+        // 偶爾不走路，改成原地做個小動作（張望、抓臉、打哈欠…）
+        if (ANIM.IDLE && Math.random() < .3 && this.idleAct()) { this.nextAt = now + this.restGap() * .5; return true; }
         if (!this.requestActivity(7, this.walkJob())) this.nextAt = now + 3000;
         return !!(this.job && this.job.ticks);
       }
@@ -233,6 +283,7 @@
     wakeAt() {
       if (this.job) return this.job.ticks ? performance.now() : Infinity;
       if (this.mode !== 'awake') return Infinity;
+      if (this.isFollow) return S.family ? S.family.wakeAt(this) : Infinity;
       if (this.ball && this.ball.stopped) return performance.now() + 500;
       return this.nextAt;
     }
@@ -268,6 +319,7 @@
     }
     // q:event 進來
     event(kind, payload, prio) {
+      if (this.isFollow) return;                                         // 跟隨期不能交辦事情
       const item = { kind, list: [payload || {}], prio: Number(prio) || 2 };
       if (this.mode !== 'awake') { this.enqueue(item); return; }
       // 剛報完不到 1.2 秒、或佇列裡還有：排隊

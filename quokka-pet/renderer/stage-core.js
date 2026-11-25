@@ -7,6 +7,7 @@
 (function () {
   const S = window.Stage = {};
   S.POSE = window.QuokkaPose; S.ART = window.QuokkaArt; S.TR = window.QuokkaTraits; S.ANIM = window.QuokkaAnim;
+  S.SOC = window.QuokkaSocial;
   S.api = window.stageApi;
   S.stageEl = document.getElementById('stage');
   S.fxEl = document.getElementById('fx');
@@ -37,12 +38,10 @@
   let cacheBytes = 0;
   const CACHE_LIMIT = 200 * 1024 * 1024;
   S.frameURL = function (a, key, th, pose, wide) {
-    const k = a.id + '|' + key + (wide ? '|w' : '');
+    const k = a.id + '|' + key + (wide ? '|w' : '') + (a.decoKey || '');
     const hit = cache.get(k);
     if (hit) { cache.delete(k); cache.set(k, hit); return hit.url; }   // 最近使用的移到最後
-    S.ART.configure(a.traits);
-    let svg = S.POSE.svg(th, 'f' + a.uid, pose, wide ? S.VBW_STR : S.VB_STR);
-    S.ART.configure(null);
+    let svg = S.svgFor(a, th, 'f' + a.uid, pose, wide ? S.VBW_STR : S.VB_STR);
     // 圖片是獨立文件，讀不到 CSS 變數 → 把頭帶等顏色直接寫進去
     const dpr = window.devicePixelRatio || 1;
     svg = svg.replace(/var\(--band,\s*#[0-9a-fA-F]{6}\)/g, a.traits.band || '#e5533d')
@@ -59,6 +58,19 @@
     }
     return entry.url;
   };
+  // 畫一隻（含個體特徵、小袋鼠的大頭、媽媽肚子上的育兒袋與探頭的小袋鼠）→ 分層與手掌位置
+  S.poseFor = (a, pose) => (a.hs && a.hs !== 1 && pose.headScale == null ? { ...pose, headScale: a.hs } : pose);
+  S.renderActor = function (a, th, id, pose) {
+    pose = S.poseFor(a, pose);
+    S.ART.configure(a.traits);
+    const r = S.POSE.render(th, id, pose);
+    S.ART.configure(null);
+    const L = r.layers, deco = S.deco ? S.deco(a, th, pose, id) : '';
+    return { hands: r.hands, layers: L, inner: L.defs + L.shadow + L.back + L.body + deco + L.front };
+  };
+  S.svgFor = (a, th, id, pose, vb) => `<svg viewBox="${vb}" class="view-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="overflow:visible">${S.renderActor(a, th, id, pose).inner}</svg>`;
+  // 先把某一格畫好放進快取（眨眼、耳朵抖這種只出現 0.1 秒的畫格，要用的時候才不會來不及）
+  S.warm = (a, key, th, pose, wide) => { S.frameURL(a, key, th, pose, wide); };
   // 圖片（獨立 SVG 文件）用嚴格 XML 解析：同一個標籤有兩個 style 屬性會整張讀不出來（某些飾品會這樣）→ 合併成一個
   function fixDupStyle(svg) {
     return svg.replace(/<[a-zA-Z][^>]*>/g, (tag) => {
