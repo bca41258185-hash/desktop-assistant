@@ -42,7 +42,7 @@
     const H = (p) => {
       let q = hs === 1 ? p : [NECK[0] + (p[0] - NECK[0]) * hs, NECK[1] + (p[1] - NECK[1]) * hs, NECK[2] + (p[2] - NECK[2]) * hs];
       if (h.roll) q = rotZ(q, h.roll, NECK);
-      if (h.pitch) q = rotX(q, -h.pitch, NECK);
+      if (h.pitch) q = rotX(q, h.pitch, NECK);          // 正＝低頭（口鼻往下）
       if (h.yaw) q = rotY(q, h.yaw, NECK);
       return B(q);
     };

@@ -2,7 +2,8 @@
 // 一段動畫 = { dur, keys:[{t, th, pose}], props(t, st), events:[{t, name}] }
 //   keys   關鍵姿勢；數值欄位（含巢狀的手、頭）會內插，文字欄位（眼睛、嘴巴）在中點切換
 //   props  依時間回傳道具（球的飛行軌跡等）；st 是這一次播放的狀態（例如球已經丟出去了）
-//   events 時間到了通知桌寵（例如「放手丟球」），由 pet.js 接手做真正的物理與撿球
+//   events 時間到了通知桌寵（例如「放手丟球」），由舞台（stage-ball.js）或舊版 pet.js 接手做真正的物理與撿球
+//   頭部 pitch：正＝低頭、負＝抬頭（打球時抬頭看球用負值，撿球彎腰用正值）
 (function () {
   const lerp = (a, b, t) => a + (b - a) * t;
   const EASE = {
@@ -123,7 +124,186 @@
     carry: (u) => ({ y: -14 * Math.sin(Math.PI * u), lean: 8, tailUp: .6 * Math.sin(Math.PI * u), eyes: 'happy', mouth: 'open', arms: { L: { hand: [-6, 108, 40] }, R: { hand: [6, 110, 40] } } })
   };
 
-  const api = { sample, mix, EASE, ANIMS, FETCH };
+  // ---------------------------------------------------------------------------
+  // 舞台用的反應與小動作（工作反應、摸頭、頭暈、吃東西、跳、打盹…）
+  // 頭部 pitch：正＝低頭、負＝抬頭（見 quokka-pose.js）
+  // loop:true 的可以重複播（例如長摸撒嬌）
+  // ---------------------------------------------------------------------------
+  const UP = { L: { hand: [-34, 72, 8] }, R: { hand: [34, 72, 8] } };            // 雙手舉高
+  const UP2 = { L: { hand: [-36, 76, 4] }, R: { hand: [36, 76, 4] } };
+  const WAVE_A = { R: { hand: [30, 70, 14] } }, WAVE_B = { R: { hand: [38, 80, 2] } };
+  const CHEEK = { L: { hand: [-19, 70, 22] }, R: { hand: [19, 70, 22] } };       // 雙手摀著臉頰（抱頭）
+  const REACT = {
+    // 點頭說「收到！」
+    nod: { dur: 1.5, keys: [
+      { t: 0, th: -10, pose: {} },
+      { t: .25, th: -10, pose: { head: { pitch: 14 }, eyes: 'happy', mouth: 'open' } },
+      { t: .5, th: -10, pose: { head: { pitch: -2 }, eyes: 'happy', mouth: 'open' } },
+      { t: .75, th: -10, pose: { head: { pitch: 12 }, eyes: 'happy', mouth: 'smile' } },
+      { t: 1.05, th: -10, pose: { head: { pitch: 0 }, eyes: 'happy', mouth: 'smile', blush: 1.2 } },
+      { t: 1.5, th: -10, pose: {} }] },
+    // 完成一件事：跳一下
+    hopJoy: { dur: 1.6, keys: [
+      { t: 0, th: -10, pose: {} },
+      { t: .25, th: -10, pose: { sq: .86, eyes: 'happy', mouth: 'smile' } },
+      { t: .55, th: 0, ease: 'out', pose: { y: -26, sq: 1.06, tailUp: .9, eyes: 'happy', mouth: 'open', head: { pitch: -6 }, arms: UP2 } },
+      { t: .85, th: 0, ease: 'in', pose: { sq: .9, eyes: 'happy', mouth: 'open', arms: UP2 } },
+      { t: 1.2, th: -10, pose: { eyes: 'happy', mouth: 'smile', blush: 1.3 } },
+      { t: 1.6, th: -10, pose: {} }],
+      props: (t) => (t > .45 && t < 1.4 ? [{ t: 'fx', kind: 'sparkle', at: [30, 40] }, { t: 'fx', kind: 'sparkle', at: [130, 30] }] : []) },
+    // 歡呼（股票漲）
+    cheer: { dur: 2.0, keys: [
+      { t: 0, th: -10, pose: {} },
+      { t: .3, th: 0, pose: { sq: .86, eyes: 'happy', mouth: 'open' } },
+      { t: .65, th: 0, ease: 'out', pose: { y: -22, sq: 1.06, tailUp: 1, eyes: 'happy', mouth: 'open', head: { pitch: -8 }, arms: UP, blush: 1.3 } },
+      { t: .95, th: 0, ease: 'in', pose: { sq: .92, eyes: 'happy', mouth: 'open', arms: UP2, blush: 1.3 } },
+      { t: 1.3, th: 0, pose: { y: -6, eyes: 'happy', mouth: 'open', arms: UP, blush: 1.3 } },
+      { t: 2.0, th: -10, pose: { eyes: 'happy' } }],
+      props: (t) => (t > .5 && t < 1.8 ? [{ t: 'fx', kind: 'star', at: [24, 26] }, { t: 'fx', kind: 'sparkle', at: [140, 44] }] : []) },
+    // 大歡呼（全部完成、漲停）：兩段大跳、轉一圈
+    bigCheer: { dur: 3.0, keys: [
+      { t: 0, th: -10, pose: {} },
+      { t: .3, th: 0, pose: { sq: .82, eyes: 'happy', mouth: 'open' } },
+      { t: .7, th: 90, ease: 'out', pose: { y: -36, sq: 1.08, tailUp: 1, eyes: 'happy', mouth: 'open', head: { pitch: -10 }, arms: UP, blush: 1.4 } },
+      { t: 1.05, th: 180, ease: 'in', pose: { sq: .86, eyes: 'happy', mouth: 'open', arms: UP2 } },
+      { t: 1.45, th: 270, ease: 'out', pose: { y: -34, sq: 1.08, tailUp: 1, eyes: 'happy', mouth: 'open', head: { pitch: -10 }, arms: UP, blush: 1.4 } },
+      { t: 1.8, th: 360, ease: 'in', pose: { sq: .88, eyes: 'happy', mouth: 'open', arms: UP2, blush: 1.4 } },
+      { t: 2.3, th: 360, pose: { eyes: 'happy', mouth: 'open', arms: UP, blush: 1.4 } },
+      { t: 3.0, th: 350, pose: { eyes: 'happy', blush: 1.2 } }],
+      props: (t) => (t > .5 && t < 2.8 ? [{ t: 'fx', kind: 'star', at: [16, 20] }, { t: 'fx', kind: 'star', at: [146, 30] }, { t: 'fx', kind: 'sparkle', at: [40, 0] }, { t: 'fx', kind: 'sparkle', at: [120, -4] }] : []) },
+    // 垂頭冒汗（股票跌）
+    droop: { dur: 2.4, keys: [
+      { t: 0, th: -10, pose: {} },
+      { t: .5, th: -10, pose: { sq: .93, head: { pitch: 18 }, eyes: 'closed', mouth: 'flat', look: [0, 1.5], arms: { L: { hand: [-10, 134, 28] }, R: { hand: [10, 134, 28] } } } },
+      { t: 1.8, th: -10, pose: { sq: .92, head: { pitch: 20, roll: -4 }, eyes: 'open', mouth: 'flat', look: [0, 2], blush: .4, arms: { L: { hand: [-10, 136, 28] }, R: { hand: [10, 136, 28] } } } },
+      { t: 2.4, th: -10, pose: { head: { pitch: 6 }, mouth: 'flat' } }],
+      props: (t) => (t > .4 ? [{ t: 'fx', kind: 'sweat', at: [116, 30], s: 1.3 }] : []) },
+    // 坐下抱頭（跌停）
+    cover: { dur: 3.0, keys: [
+      { t: 0, th: -10, pose: {} },
+      { t: .4, th: -5, pose: { sq: .8, lean: 6, head: { pitch: 16 }, eyes: 'closed', mouth: 'flat', arms: CHEEK } },
+      { t: 1.0, th: -5, pose: { sq: .78, lean: 6, head: { pitch: 18, roll: 6 }, eyes: 'closed', mouth: 'flat', arms: CHEEK } },
+      { t: 1.6, th: -5, pose: { sq: .78, lean: 6, head: { pitch: 18, roll: -6 }, eyes: 'closed', mouth: 'flat', arms: CHEEK } },
+      { t: 2.3, th: -5, pose: { sq: .8, lean: 4, head: { pitch: 14 }, eyes: 'open', mouth: 'flat', blush: .3, arms: CHEEK } },
+      { t: 3.0, th: -10, pose: { head: { pitch: 6 }, mouth: 'flat' } }],
+      props: (t) => (t > .3 ? [{ t: 'fx', kind: 'sweat', at: [118, 26], s: 1.4 }, { t: 'fx', kind: 'sweat', at: [42, 34], s: 1 }] : []) },
+    // 轉頭聞聞（資料夾變了、游標停很久）
+    sniff: { dur: 2.4, keys: [
+      { t: 0, th: -10, pose: {} },
+      { t: .4, th: -35, pose: { lean: 10, head: { pitch: 10, yaw: -10 }, eyes: 'focus', mouth: 'o', look: [-1, 1] } },
+      { t: .7, th: -35, pose: { lean: 12, head: { pitch: 6, yaw: -10 }, eyes: 'focus', mouth: 'smile', look: [-1, 1] } },
+      { t: 1.0, th: -35, pose: { lean: 12, head: { pitch: 12, yaw: -12 }, eyes: 'focus', mouth: 'o', look: [-1, 1.5] } },
+      { t: 1.3, th: -35, pose: { lean: 12, head: { pitch: 6, yaw: -10 }, eyes: 'focus', mouth: 'smile' } },
+      { t: 1.8, th: -20, pose: { head: { pitch: -4, roll: 8 }, eyes: 'open', mouth: 'o' } },
+      { t: 2.4, th: -10, pose: {} }] },
+    // 說一句（單純說話、錯過的提醒）
+    talk: { dur: 1.8, keys: [
+      { t: 0, th: -10, pose: {} },
+      { t: .3, th: -5, pose: { head: { roll: 7, pitch: -3 }, mouth: 'open' } },
+      { t: .6, th: -5, pose: { head: { roll: 5 }, mouth: 'smile' } },
+      { t: .9, th: -5, pose: { head: { roll: 8, pitch: -3 }, mouth: 'open', arms: { R: { hand: [18, 104, 36] } } } },
+      { t: 1.3, th: -8, pose: { head: { roll: 3 }, mouth: 'smile', arms: { R: { hand: [16, 108, 36] } } } },
+      { t: 1.8, th: -10, pose: {} }] },
+    // 揮手（回來時、響鈴）
+    wave: { dur: 2.2, keys: [
+      { t: 0, th: -10, pose: {} },
+      { t: .3, th: 0, pose: { eyes: 'happy', mouth: 'open', arms: WAVE_A, blush: 1.2 } },
+      { t: .6, th: 0, pose: { eyes: 'happy', mouth: 'open', head: { roll: -5 }, arms: WAVE_B, blush: 1.2 } },
+      { t: .9, th: 0, pose: { eyes: 'happy', mouth: 'open', head: { roll: 5 }, arms: WAVE_A, blush: 1.2 } },
+      { t: 1.2, th: 0, pose: { eyes: 'happy', mouth: 'open', head: { roll: -5 }, arms: WAVE_B, blush: 1.2 } },
+      { t: 1.5, th: 0, pose: { eyes: 'happy', mouth: 'smile', arms: WAVE_A, blush: 1.2 } },
+      { t: 2.2, th: -10, pose: { eyes: 'happy' } }] },
+    // 摸頭：兩種反應
+    pat1: { dur: 1.6, keys: [
+      { t: 0, th: -10, pose: {} },
+      { t: .25, th: -8, pose: { sq: .95, head: { pitch: 8, roll: 8 }, eyes: 'happy', mouth: 'smile', blush: 1.5 } },
+      { t: 1.1, th: -8, pose: { sq: .96, head: { pitch: 6, roll: 10 }, eyes: 'happy', mouth: 'open', blush: 1.5 } },
+      { t: 1.6, th: -10, pose: { blush: 1.2 } }] },
+    pat2: { dur: 1.4, keys: [
+      { t: 0, th: -10, pose: {} },
+      { t: .2, th: 0, pose: { sq: .9, head: { pitch: 10 }, eyes: 'closed', mouth: 'smile', blush: 1.4 } },
+      { t: .55, th: 0, ease: 'out', pose: { y: -10, head: { pitch: -6 }, eyes: 'happy', mouth: 'open', tailUp: .7, blush: 1.4 } },
+      { t: .9, th: 0, pose: { eyes: 'happy', mouth: 'smile', blush: 1.3 } },
+      { t: 1.4, th: -10, pose: { blush: 1.1 } }] },
+    // 轉一圈（第三種摸頭反應）
+    spin: { dur: 1.2, keys: [
+      { t: 0, th: -10, pose: {} },
+      { t: .6, th: 170, pose: { y: -8, eyes: 'happy', mouth: 'open', tailUp: .8 } },
+      { t: 1.2, th: 350, pose: { eyes: 'happy', blush: 1.3 } }] },
+    // 長摸撒嬌（重複播）
+    petting: { dur: 1.6, loop: true, keys: [
+      { t: 0, th: -5, pose: { sq: .95, head: { pitch: 8, roll: 9 }, eyes: 'happy', mouth: 'smile', blush: 1.5 } },
+      { t: .8, th: -5, pose: { sq: .96, head: { pitch: 8, roll: -9 }, eyes: 'happy', mouth: 'smile', blush: 1.5 } },
+      { t: 1.6, th: -5, pose: { sq: .95, head: { pitch: 8, roll: 9 }, eyes: 'happy', mouth: 'smile', blush: 1.5 } }],
+      props: (t) => (t % 1.6 < .9 ? [{ t: 'fx', kind: 'heart', at: [128, 22], s: 1.3 }] : []) },
+    // 頭暈（甩出去落地）
+    dizzy: { dur: 2.6, keys: [
+      { t: 0, th: 0, pose: { sq: .82, eyes: 'dizzy', mouth: 'o' } },
+      { t: .4, th: 0, pose: { roll: 6, head: { roll: 12 }, eyes: 'dizzy', mouth: 'o' } },
+      { t: .9, th: 0, pose: { roll: -6, head: { roll: -12 }, eyes: 'dizzy', mouth: 'flat' } },
+      { t: 1.4, th: 0, pose: { roll: 5, head: { roll: 10 }, eyes: 'dizzy', mouth: 'o' } },
+      { t: 1.9, th: 0, pose: { roll: -4, head: { roll: -8 }, eyes: 'dizzy', mouth: 'flat' } },
+      { t: 2.6, th: -10, pose: { eyes: 'closed' } }],
+      props: (t) => (t < 2.2 ? [{ t: 'fx', kind: 'star', at: [50 + 30 * Math.cos(t * 7), 14 + 6 * Math.sin(t * 7)] }, { t: 'fx', kind: 'star', at: [80 - 30 * Math.cos(t * 7), 14 - 6 * Math.sin(t * 7)] }] : []) },
+    // 輕輕放下：跳一下
+    land: { dur: .6, keys: [
+      { t: 0, th: -10, pose: { sq: .86, eyes: 'happy' } },
+      { t: .25, th: -10, ease: 'out', pose: { y: -10, sq: 1.04, tailUp: .6, eyes: 'happy', mouth: 'open' } },
+      { t: .45, th: -10, ease: 'in', pose: { sq: .92 } },
+      { t: .6, th: -10, pose: {} }] },
+    // 陪我玩：吃東西（抱著葉子啃）
+    eat: { dur: 4.2, keys: [
+      { t: 0, th: -10, pose: {} },
+      { t: .5, th: -10, pose: { head: { pitch: 6 }, eyes: 'happy', mouth: 'open', arms: { L: { hand: [-5, 96, 36] }, R: { hand: [5, 96, 36] } } } },
+      { t: .9, th: -10, pose: { head: { pitch: 8 }, eyes: 'happy', mouth: 'chew', arms: { L: { hand: [-5, 98, 36] }, R: { hand: [5, 98, 36] } } } },
+      { t: 1.3, th: -10, pose: { head: { pitch: 4 }, eyes: 'happy', mouth: 'smile', arms: { L: { hand: [-5, 96, 36] }, R: { hand: [5, 96, 36] } } } },
+      { t: 1.7, th: -10, pose: { head: { pitch: 8 }, eyes: 'happy', mouth: 'chew', arms: { L: { hand: [-5, 98, 36] }, R: { hand: [5, 98, 36] } } } },
+      { t: 2.1, th: -10, pose: { head: { pitch: 4 }, eyes: 'happy', mouth: 'smile', arms: { L: { hand: [-5, 96, 36] }, R: { hand: [5, 96, 36] } } } },
+      { t: 2.5, th: -10, pose: { head: { pitch: 8 }, eyes: 'happy', mouth: 'chew', arms: { L: { hand: [-5, 98, 36] }, R: { hand: [5, 98, 36] } } } },
+      { t: 3.0, th: -10, pose: { head: { pitch: 2 }, eyes: 'happy', mouth: 'smile', blush: 1.3, arms: { L: { hand: [-5, 104, 36] }, R: { hand: [5, 104, 36] } } } },
+      { t: 4.2, th: -10, pose: { eyes: 'happy', blush: 1.2 } }],
+      props: (t) => (t < 3.4 ? [{ t: 'leaf', hand: 'both', off: [2, -4], rot: 80, s: Math.max(.35, 1 - Math.max(0, t - 1) * .25) }] : []),
+      endLine: '好吃～' },
+    // 陪我玩：原地跳三下
+    hop: { dur: 2.4, keys: [
+      { t: 0, th: -10, pose: {} },
+      { t: .2, th: -10, pose: { sq: .86, eyes: 'happy' } },
+      { t: .45, th: -10, ease: 'out', pose: { y: -26, sq: 1.06, tailUp: .9, eyes: 'happy', mouth: 'open' } },
+      { t: .7, th: -10, ease: 'in', pose: { sq: .88, eyes: 'happy', mouth: 'open' } },
+      { t: .95, th: -10, ease: 'out', pose: { y: -28, sq: 1.06, tailUp: .9, eyes: 'happy', mouth: 'open' } },
+      { t: 1.2, th: -10, ease: 'in', pose: { sq: .88, eyes: 'happy', mouth: 'open' } },
+      { t: 1.5, th: 0, ease: 'out', pose: { y: -34, sq: 1.08, tailUp: 1, eyes: 'happy', mouth: 'open', arms: UP } },
+      { t: 1.8, th: 0, ease: 'in', pose: { sq: .86, eyes: 'happy', mouth: 'smile' } },
+      { t: 2.4, th: -10, pose: { eyes: 'happy', blush: 1.2 } }],
+      endLine: '跳跳跳！' },
+    // 陪我玩：打盹（坐著點頭打瞌睡）
+    nap: { dur: 6.0, keys: [
+      { t: 0, th: -10, pose: {} },
+      { t: .8, th: -10, pose: { sq: .9, head: { pitch: 10 }, eyes: 'closed', mouth: 'smile' } },
+      { t: 2.0, th: -10, pose: { sq: .9, head: { pitch: 18, roll: 5 }, eyes: 'closed', mouth: 'smile' } },
+      { t: 3.2, th: -10, pose: { sq: .91, head: { pitch: 12, roll: -3 }, eyes: 'closed', mouth: 'smile' } },
+      { t: 4.4, th: -10, pose: { sq: .9, head: { pitch: 20, roll: 6 }, eyes: 'closed', mouth: 'smile' } },
+      { t: 5.2, th: -10, ease: 'back', pose: { sq: 1.04, head: { pitch: -8 }, eyes: 'wide', mouth: 'o', arms: UP2 } },
+      { t: 6.0, th: -10, pose: { eyes: 'happy' } }],
+      props: (t) => (t > 1 && t < 5 ? [{ t: 'fx', kind: 'zzz', at: [112, 10 - (t % 1.4) * 6], s: 1.1 + (t % 1.4) * .2 }] : []),
+      endLine: '睡飽了！' },
+    // 醒來伸懶腰
+    stretch: { dur: 1.6, keys: [
+      { t: 0, th: -10, pose: { sq: .92, head: { pitch: 10 }, eyes: 'closed' } },
+      { t: .6, th: -5, pose: { sq: 1.06, head: { pitch: -8 }, eyes: 'closed', mouth: 'open', arms: UP } },
+      { t: 1.1, th: -5, pose: { sq: 1.0, eyes: 'happy', mouth: 'smile' } },
+      { t: 1.6, th: -10, pose: {} }] }
+  };
+
+  // 靜止圖（快取成點陣圖，不重畫）：待機、睡覺、看左看右、響鈴、拎起來、撿球
+  const STILL = {
+    sleep: { sq: .92, head: { pitch: 14, roll: 4 }, eyes: 'closed', mouth: 'smile', arms: { L: { hand: [-8, 130, 30] }, R: { hand: [8, 130, 30] } } },
+    ring: { eyes: 'wide', mouth: 'open', blush: 1.2, arms: { R: { hand: [32, 70, 12] } } },
+    lift: { feet: 'air', eyes: 'wide', mouth: 'o', arms: { L: { hand: [-26, 92, 20] }, R: { hand: [26, 92, 20] } } },
+    shy: { head: { pitch: 8, roll: -6 }, eyes: 'happy', mouth: 'smile', blush: 1.5 }
+  };
+
+  const api = { sample, mix, EASE, ANIMS, FETCH, REACT, STILL };
   if (typeof window !== 'undefined') window.QuokkaAnim = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

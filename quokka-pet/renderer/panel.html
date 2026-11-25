@@ -4,138 +4,63 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>庫卡的休息室</title>
   <link rel="stylesheet" href="panel.css" />
 </head>
 <body>
-  <nav class="tabs">
-    <button class="tab active" data-tab="chat">聊天</button>
-    <button class="tab" data-tab="folders">資料夾</button>
-    <button class="tab" data-tab="tasks">任務</button>
-    <button class="tab" data-tab="quotes">語錄</button>
-    <button class="tab" data-tab="settings">設定</button>
-  </nav>
+  <!-- 頭像用的圖庫：每隻畫一次，名單和清單用 <use> 引用 -->
+  <svg id="avatarSprite" class="sprite" aria-hidden="true" focusable="false"><defs id="avatarDefs"></defs></svg>
 
-  <!-- 聊天 -->
-  <section class="panel-view active" id="view-chat">
-    <div class="chat-log" id="chatLog"></div>
-    <label class="ctx-row">
-      <input type="checkbox" id="withContext" />
-      帶上近期資料夾變更作為上下文
-    </label>
-    <div class="chat-input">
-      <textarea id="chatInput" rows="2" placeholder="輸入訊息，按 Enter 送出（Shift+Enter 換行）"></textarea>
-      <button id="chatSend">送出</button>
-    </div>
-  </section>
+  <header class="topbar">
+    <h1 class="title">庫卡的休息室</h1>
+    <button type="button" class="icon-btn" id="globalGear" aria-label="全部庫卡的設定" aria-expanded="false" title="設定">⚙</button>
+  </header>
 
-  <!-- 資料夾 -->
-  <section class="panel-view" id="view-folders">
-    <div class="section-head">
-      <h2>監看中的資料夾</h2>
-      <button id="pickFolders">+ 加入資料夾</button>
-    </div>
-    <p class="hint">本版本為「唯讀監看」：只會通知變更，絕不會刪除、搬移或改名任何檔案。</p>
-    <ul class="folder-list" id="folderList"></ul>
+  <!-- 庫卡名單 -->
+  <nav class="roster" id="roster" aria-label="庫卡名單"></nav>
 
-    <h2 class="mt">近期檔案變更</h2>
-    <ul class="change-list" id="changeList"></ul>
-  </section>
+  <!-- 全域設定 -->
+  <section class="sheet" id="globalSheet" hidden aria-label="全部庫卡的設定"></section>
 
-  <!-- 任務 -->
-  <section class="panel-view" id="view-tasks">
-    <div class="section-head">
-      <h2>今日工作進度 <span id="taskProgress" class="progress-badge">0/0</span></h2>
-    </div>
-    <div class="task-add">
-      <input type="text" id="taskInput" placeholder="新增一項任務…" />
-      <button id="taskAdd">新增</button>
-    </div>
-    <ul class="task-list" id="taskList"></ul>
-  </section>
+  <main class="main" id="main">
+    <!-- 輸入框 -->
+    <section class="composer" id="composer">
+      <div class="input-wrap">
+        <input type="text" id="addInput" maxlength="200" autocomplete="off" spellcheck="false"
+               aria-describedby="addHint" />
+      </div>
+      <div class="hint-row">
+        <p class="add-hint" id="addHint" aria-live="polite"></p>
+        <button type="button" class="link-btn" id="switchType" hidden></button>
+      </div>
+    </section>
 
+    <!-- 新增庫卡、⚙（每隻）的卡片會放在這裡 -->
+    <section id="cardSlot"></section>
 
-  <!-- 語錄：原創打氣語與生態小知識（與問候語分開） -->
-  <section class="panel-view" id="view-quotes">
-    <div class="section-head">
-      <h2><span id="quoteTitle">庫卡語錄</span> <span id="quoteMaster" class="progress-badge"></span></h2>
-      <button id="quoteRandom">隨機說一句</button>
-    </div>
-    <p class="hint" id="quoteHint">以下是庫卡的原創球場打氣語與生態小知識，並非引用任何名人名言。</p>
-    <ul class="quote-list" id="quoteList"></ul>
-  </section>
+    <!-- 清單 -->
+    <section id="lists" class="lists"></section>
+  </main>
 
-  <!-- 設定 -->
-  <section class="panel-view" id="view-settings">
-    <h2>讓庫卡動一動</h2>
-    <div id="actionRows"></div>
-    <p class="hint">待機時會依個性每隔 10–40 秒自己做一個動作（越活潑越常動，最愛的動作比較常出現）；把牠拖到別處放下時會跳一下。</p>
-    <!-- 造型選擇器：只有一種造型時自動隱藏，日後新增造型才會出現 -->
-    <h2 class="mt">庫卡檔案</h2>
-    <div class="profile">
-      <div class="profile-art" id="profileArt"></div>
-      <dl class="profile-info" id="profileInfo"></dl>
-    </div>
-    <div class="profile-actions">
-      <button type="button" id="regenTraits">重新生成（換一隻）</button>
-    </div>
-    <p class="hint">體型、年齡、毛色在真實範圍內隨機產生（頭身長：公 43–54 cm、母 39–50 cm；體重：公 2.7–4.2 kg、母 1.6–3.5 kg；壽命約 10 年）。每隻的個性（活潑、親人、膽量、好奇、黏人）、社交風格與興趣也不同，會影響牠多常動、愛做什麼、怎麼回應你。第一次啟動時決定，之後固定不變。</p>
+  <footer class="footer" id="footer">
+    <div class="owner-line" id="ownerLine"></div>
+    <div class="play-row" id="playRow" role="group" aria-label="陪我玩"></div>
+    <p class="disclaimer" id="disclaimer" hidden>僅供參考，不是投資建議；資料可能延遲</p>
+  </footer>
 
-    <div id="charSection" hidden>
-      <h2 class="mt">選擇造型</h2>
-      <div class="char-picker" id="charPicker"></div>
-    </div>
-
-    <h2 class="mt">AI 供應商設定</h2>
-    <label class="field">
-      供應商
-      <select id="setProvider">
-        <option value="openai">OpenAI 相容（HTTP）</option>
-        <option value="stub">本地／Ollama（尚未實作，佔位）</option>
-      </select>
-    </label>
-    <label class="field">
-      Base URL
-      <input type="text" id="setBaseUrl" placeholder="https://api.openai.com/v1" />
-    </label>
-    <label class="field">
-      Model
-      <input type="text" id="setModel" placeholder="gpt-4o-mini" />
-    </label>
-    <label class="field">
-      API Key
-      <input type="password" id="setApiKey" placeholder="sk-..." autocomplete="off" />
-    </label>
-    <p class="hint" id="envHint"></p>
-
-    <h2 class="mt">提醒設定</h2>
-    <label class="field">
-      工作進度提醒間隔（分鐘，0 = 關閉）
-      <input type="number" id="setReminder" min="0" step="1" />
-    </label>
-    <label class="field">
-      離開多久後打盹（分鐘，0 = 關閉；預設 5）
-      <input type="number" id="setAway" min="0" step="1" />
-    </label>
-    <label class="field">
-      語錄氣泡間隔（分鐘，0 = 關閉；預設 20）
-      <input type="number" id="setQuoteInterval" min="0" step="1" />
-    </label>
-    <p class="hint">也可在桌寵上按右鍵，或到「語錄」分頁點選，立即讓庫卡說一句。</p>
-
-    <button id="saveSettings" class="primary">儲存設定</button>
-    <span id="saveStatus" class="save-status"></span>
-
-    <p class="hint mt">
-      提示：也可用環境變數設定金鑰，啟動前設定
-      <code>OPENAI_API_KEY</code>、<code>OPENAI_BASE_URL</code>、<code>OPENAI_MODEL</code>（環境變數優先於此處設定）。金鑰只存在本機，不會進入 repo。
-    </p>
-  </section>
+  <!-- 刪除後的「復原」 -->
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <!-- 右鍵選單「交給…」 -->
+  <div class="menu" id="menu" role="menu" hidden></div>
+  <!-- 響鈴念給螢幕報讀器聽 -->
+  <div class="sr-only" id="announcer" aria-live="assertive"></div>
 
   <script src="traits.js"></script>
   <script src="quokka-acc.js"></script>
   <script src="quokka-art.js"></script>
-  <script src="characters.js"></script>
+  <script src="quokka-pose.js"></script>
+  <script src="../lib/parse-input.js"></script>
   <script src="panel.js"></script>
 </body>
 </html>
