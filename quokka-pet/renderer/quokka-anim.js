@@ -118,7 +118,7 @@
   // 籃框圖本身是「框在左、籃板在右」；庫卡在右邊，所以要左右翻轉成「籃板在遠側、框朝庫卡」——
   // 目前 quokka-pose.js 沒有翻轉選項，這裡用 s 傳 'sx sy' 字串讓它水平翻轉（之後有 flip 選項再換掉）。
   const HOOP_S = 1.5, HOOP_AT = [-16, -30];
-  const HOOP_PROP = { t: 'hoop', at: HOOP_AT, s: `${-HOOP_S} ${HOOP_S}`, layer: 'back' };
+  const HOOP_PROP = { t: 'hoop', at: HOOP_AT, s: HOOP_S, flip: true, layer: 'back' };
   // 給舞台做物理用的籃框幾何（姿勢座標；舞台用 toStage 換算）：框的左右緣與高度、籃板朝庫卡那一面的 x 與上下緣
   const HOOP = {
     at: HOOP_AT, s: HOOP_S,

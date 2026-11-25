@@ -15,11 +15,13 @@
 //   eyes        open | happy | closed | wide | focus | dizzy | sad | sleepy | wink（右眼眨） ；look:[dx,dy] 眼珠方向
 //   blink       0–1 眨眼程度（0 全開、1 閉上）；只影響睜著的眼型（open／wide／focus／sad／sleepy）
 //   earFlop     { L, R } 每隻耳朵繞耳根多轉的角度（度；正＝往外倒）。抖耳朵、跑步時耳朵後甩用
+//               照原值旋轉（×1.0，不打折、不隨轉向衰減），支點在耳根；桌面大小約 10–15° 就看得出來
+//   noseTwitch  −1…1 鼻子抽動（「聞一聞」用）：正＝鼻子往上抬約 0.8 單位並放大 6%，負＝往下並縮小 6%
 //   mouth       smile | open | o | flat | chew
 //   blush       腮紅濃度 0–1.5
 //   feet        auto | stand | air（騰空時腳尖朝下）；tailUp 尾巴上揚 0–1
 //   accessory   飾品：'straw' 或 {type,color} 或陣列；省略＝用目前套用的個體特徵（traits.accessory，舊資料＝頭帶）；'none'＝不戴
-//   props       [{t:'racket', hand:'R', ang, len}, {t:'shuttle'|'vball'|'bball'|'leaf', at:[X,Y], rot, s}, {t:'hoop', at}, {t:'fx', kind, at, rot, s}]
+//   props       [{t:'racket', hand:'R', ang, len}, {t:'shuttle'|'vball'|'bball'|'leaf', at:[X,Y], rot, s}, {t:'hoop', at, s, flip}, {t:'fx', kind, at, rot, s}]
 //               道具可加 hand:'L'|'R'|'both'（黏在手上）、off:[dx,dy]、behind:true（畫在身體後面）、
 //               layer:'back'|'between'|'front'（between＝遠側手之後、近側手之前；hand:'both' 的球預設就是 between）
 //               拿在手上的球拍會畫在那隻手的下面（手掌握在握把上）
@@ -226,7 +228,8 @@
   // 籃框：原點在籃框中心偏右一點（與舊版相同的錨點）；框比舊版大（rx 17），籃板畫成 3/4 視角的平行四邊形，
   // 柱子用純色＋高光（垂直線不能用 objectBoundingBox 漸層）。
   // 幾何（乘上 s）：框 x −20…14、y 0；籃板正面 x 15…25、y −34…12；柱子 x 23、往下到 y 132
-  const hoop = (id, x, y, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) scale(${s})">
+  // flip＝水平鏡射（框在右、籃板在左），x 座標全部變號；大小仍由數字 s 決定
+  const hoop = (id, x, y, s = 1, flip = false) => `<g transform="translate(${f1(x)} ${f1(y)}) scale(${flip ? -s : s} ${s})">
       <path d="M24 10 L24 133" stroke="#4a3a2e" stroke-width="5" opacity=".14" stroke-linecap="round" filter="url(#lb${id})"/>
       <path d="M23 8 L23 132" stroke="#8f97a3" stroke-width="3.6" stroke-linecap="round"/>
       <path d="M22.2 9 L22.2 131" stroke="#dfe3e9" stroke-width="1.1" stroke-linecap="round" opacity=".85"/>
@@ -385,8 +388,9 @@
       const q0 = PH([k * 22, 19, -10]), f = facingH([k * .3, 0, 1]), w = 9 * (0.66 + 0.34 * Math.abs(f)), base = PH([k * 18, 28, -8]);
       const farE = q0.Z < headZ - 4, q = { X: q0.X, Y: q0.Y + (farE ? 2.4 * aS : 0), Z: q0.Z };
       const inner = f > 0.15 ? `<ellipse cx="${f1(q.X)}" cy="${f1(q.Y + 1.6)}" rx="${f1(w * .62)}" ry="6.8" fill="#f2c38c"/><ellipse cx="${f1(q.X)}" cy="${f1(q.Y + 2.8)}" rx="${f1(w * .35)}" ry="4" fill="#8a7460"/>` : '';
-      const tilt = Math.atan2(q.X - base.X, base.Y - q.Y) * 180 / Math.PI + k * ((k < 0 ? flop.L : flop.R) || 0) * (0.35 + 0.65 * aC);
-      return { z: q.Z, svg: `<g class="ear" filter="url(#fz${id})" transform="rotate(${f1(tilt * .6)} ${f1(base.X)} ${f1(base.Y)}) translate(${f1(q.X)} ${f1(q.Y + 8)}) scale(${(ek * T.hs).toFixed(3)}) translate(${f1(-q.X)} ${f1(-q.Y - 8)})"><ellipse cx="${f1(q.X)}" cy="${f1(q.Y)}" rx="${f1(w)}" ry="10.5" fill="${f > 0 ? '#b38a5e' : '#93744f'}"/>${inner}</g>` };
+      // 耳朵本身的外張角維持 ×0.6；earFlop 照原值（×1.0）加上去，繞耳根轉
+      const tilt = Math.atan2(q.X - base.X, base.Y - q.Y) * 180 / Math.PI * .6 + k * ((k < 0 ? flop.L : flop.R) || 0);
+      return { z: q.Z, svg: `<g class="ear" filter="url(#fz${id})" transform="rotate(${f1(tilt)} ${f1(base.X)} ${f1(base.Y)}) translate(${f1(q.X)} ${f1(q.Y + 8)}) scale(${(ek * T.hs).toFixed(3)}) translate(${f1(-q.X)} ${f1(-q.Y - 8)})"><ellipse cx="${f1(q.X)}" cy="${f1(q.Y)}" rx="${f1(w)}" ry="10.5" fill="${f > 0 ? '#b38a5e' : '#93744f'}"/>${inner}</g>` };
     });
 
     // 飾品：全部在頭部／身體的 3D 座標裡定位，前後遮擋用頭部本身的座標判斷（見 quokka-acc.js）
@@ -449,8 +453,11 @@
     if (hF > -0.25) {
       // 鼻子：正面寬、側面扁而小，貼著口鼻前端（不會像掛在臉外的球）
       const w = 6.5 * (0.5 + 0.5 * aC), nh = 5.4 * (0.84 + 0.16 * aC);
-      const n = PH([0, 54, 35.5 * (1 - aS) + (38.9 - w) * aS]);
-      face.push(`<ellipse cx="${f1(n.X)}" cy="${f1(n.Y)}" rx="${f1(w + 1)}" ry="${f1(nh + .8)}" fill="#3b2f26" opacity=".3" filter="url(#b1${id})"/><ellipse cx="${f1(n.X)}" cy="${f1(n.Y)}" rx="${f1(w)}" ry="${f1(nh)}" fill="url(#ns${id})"/><ellipse cx="${f1(n.X - w * .32)}" cy="${f1(n.Y - nh * .45)}" rx="${f1(w * .38)}" ry="1.1" fill="#d4dfec" opacity=".5"/>`);
+      const n0 = PH([0, 54, 35.5 * (1 - aS) + (38.9 - w) * aS]);
+      // 鼻子抽動：正＝往上抬（Y 減少）並放大，負＝往下並縮小；幅度 ±0.8 單位、±6%
+      const tw = clamp(pose.noseTwitch || 0, -1, 1), nk = 1 + 0.06 * tw;
+      const n = { X: n0.X, Y: n0.Y - 0.8 * tw }, wN = w * nk, nhN = nh * nk;
+      face.push(`<ellipse cx="${f1(n.X)}" cy="${f1(n.Y)}" rx="${f1(wN + 1)}" ry="${f1(nhN + .8)}" fill="#3b2f26" opacity=".3" filter="url(#b1${id})"/><ellipse cx="${f1(n.X)}" cy="${f1(n.Y)}" rx="${f1(wN)}" ry="${f1(nhN)}" fill="url(#ns${id})"/><ellipse cx="${f1(n.X - wN * .32)}" cy="${f1(n.Y - nhN * .45)}" rx="${f1(wN * .38)}" ry="${f1(1.1 * nk)}" fill="#d4dfec" opacity=".5"/>`);
       const mf = 0.3 + 0.7 * aC;
       // 嘴：各點都在口鼻表面上；張嘴類的中心隨轉頭往回收，並裁在輪廓內
       const mc0 = PH([0, 63, 29 - 3 * aS]), mc = { X: mc0.X, Y: mc0.Y };
@@ -522,7 +529,7 @@
       else if (p.t === 'vball') svg = vball(id, x, y, p.rot, p.s);
       else if (p.t === 'bball') svg = bball(id, x, y, p.rot, p.s);
       else if (p.t === 'leaf') svg = p.kind === 'big' ? bigLeaf(id, x, y, p.rot, p.s) : leaf(id, x, y, p.rot, p.s);
-      else if (p.t === 'hoop') svg = hoop(id, x, y, p.s);
+      else if (p.t === 'hoop') svg = hoop(id, x, y, p.s, !!p.flip);
       else if (p.t === 'fx') svg = fx(id, p.kind, x, y, p.rot, p.s);
       const layer = p.layer || (p.behind ? 'back' : (held && p.hand === 'both' && BALLS.has(p.t)) ? 'between' : 'front');
       if (held) chr[layer === 'back' ? 'back' : layer === 'between' ? 'between' : 'front'].push(svg);
