@@ -114,7 +114,7 @@ const HANDS = {
 
 const DEFS = (id) => `<defs>
   <filter id="fz${id}" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4"/><feDisplacementMap in="SourceGraphic" scale="3.4" xChannelSelector="R" yChannelSelector="G"/></filter>
-  <filter id="b3${id}"><feGaussianBlur stdDeviation="3"/></filter><filter id="b1${id}"><feGaussianBlur stdDeviation="1.2"/></filter>
+  <filter id="b3${id}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3"/></filter><filter id="b1${id}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="1.2"/></filter>
   <linearGradient id="bg${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9a7650"/><stop offset=".33" stop-color="#b0855a"/><stop offset=".55" stop-color="#b0936c"/><stop offset="1" stop-color="#cbb08a"/></linearGradient>
   <linearGradient id="bk${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#93704c"/><stop offset=".3" stop-color="#a37a52"/><stop offset=".6" stop-color="#a38a6a"/><stop offset="1" stop-color="#b9a283"/></linearGradient>
   <radialGradient id="ns${id}" cx="40%" cy="28%" r="75%"><stop offset="0" stop-color="#6f7580"/><stop offset=".35" stop-color="#2e3138"/><stop offset="1" stop-color="#121316"/></radialGradient>
@@ -159,14 +159,15 @@ function side(id) {
     <ellipse cx="110" cy="68" rx="7" ry="4" fill="#f3e2c4" opacity=".8" filter="url(#b3${id})"/>
     <ellipse cx="112" cy="132" rx="10" ry="30" fill="#f0dcb9" opacity=".85" filter="url(#b3${id})"/>
     <!-- 粗壯的大腿 -->
-    <ellipse cx="80" cy="148" rx="25" ry="22" fill="#9a8063" opacity=".7" filter="url(#b3${id})"/>
-    <path d="M58 140 C64 124 92 122 102 140" fill="none" stroke="#5f5246" stroke-width="1.4" opacity=".5" filter="url(#b1${id})"/>
+    <ellipse cx="78" cy="150" rx="24" ry="20" fill="#9a7a58" opacity=".35" filter="url(#b3${id})"/>
+    <ellipse cx="74" cy="140" rx="18" ry="6" fill="#d9bf98" opacity=".25" filter="url(#b3${id})"/>
     ${fur(1000, 52, 124, 23)}
   </g>
   <!-- 近側耳朵：短而圓 -->
   <g filter="url(#fz${id})"><ellipse cx="82" cy="22" rx="7" ry="8.5" fill="#b38a5e"/><ellipse cx="83" cy="23" rx="4.4" ry="5.8" fill="#f2c38c"/><ellipse cx="83.6" cy="24.4" rx="2.4" ry="3.4" fill="#8a7460"/></g>
   <!-- 頭帶繞過額頭到後腦 -->
   <path d="M68 37 Q90 26 112 30 L110 24 Q88 20 69 31 Z" fill="${BAND}"/>
+  <ellipse cx="104" cy="56.5" rx="5" ry="3.4" fill="#f0907c" opacity=".3" filter="url(#b1${id})"/>
   ${eye(106, 41.5, id)}
   <!-- 鼻子在口鼻最前端，嘴角往後上揚 -->
   <path d="M118 47.5 C122 46.5 126 49 126 53 C126 56.5 123 58.5 120 58 C117.6 57.2 116.6 52.5 118 47.5 Z" fill="url(#ns${id})"/>
@@ -193,7 +194,7 @@ function back(id) {
   <g clip-path="url(#c${id})">
     <!-- 頭頸背面帶紅褐、背中線較深、兩側臀部隆起 -->
     <ellipse cx="80" cy="50" rx="30" ry="26" fill="#b07f52" opacity=".45" filter="url(#b3${id})"/>
-    <ellipse cx="80" cy="84" rx="26" ry="8" fill="#68533e" opacity=".35" filter="url(#b3${id})"/>
+    <ellipse cx="80" cy="80" rx="20" ry="5" fill="#68533e" opacity=".15" filter="url(#b3${id})"/>
     <ellipse cx="80" cy="120" rx="6" ry="45" fill="#68533e" opacity=".35" filter="url(#b3${id})"/>
     <ellipse cx="58" cy="148" rx="18" ry="22" fill="#ad9878" opacity=".6" filter="url(#b3${id})"/><ellipse cx="102" cy="148" rx="18" ry="22" fill="#ad9878" opacity=".6" filter="url(#b3${id})"/>
     <ellipse cx="40" cy="120" rx="6" ry="40" fill="#78614a" opacity=".45" filter="url(#b3${id})"/><ellipse cx="120" cy="120" rx="6" ry="40" fill="#78614a" opacity=".45" filter="url(#b3${id})"/>
@@ -204,7 +205,9 @@ function back(id) {
   <path d="M77 37 Q74 46 70 52 L73 53 Q77 47 80 38 Z M83 37 Q86 46 90 52 L87 53 Q83 47 80 38 Z" fill="#c9432f"/>
   <ellipse cx="80" cy="36.5" rx="3.6" ry="3" fill="#d24a35"/>
   <!-- 尾巴：從臀部中央垂下，貼地往後（朝觀者）延伸，前縮變短 -->
-  <path d="M77 150 C76 160 76 170 78 180 C79 183.5 82 183.5 82.5 180 C84 170 84 160 83 150 Z" fill="url(#tl${id})"/>
+  <ellipse cx="80" cy="181.5" rx="5" ry="2" fill="#000" opacity=".12" filter="url(#b1${id})"/>
+  <path d="M75.5 163 C75 170 76.5 176 78.5 180.5 C79.4 182.4 80.8 182.4 81.6 180.5 C83.6 176 85 170 84.5 163 Z" fill="url(#tl${id})"/>
+  <path d="M78 165 C78 171 79 176 80 179" fill="none" stroke="#7a6655" stroke-width=".8" opacity=".5"/>
   </svg>`;
 }
 
