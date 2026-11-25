@@ -1,9 +1,34 @@
-// 舞台圖層的 preload：只開放舞台需要的通道
+// 舞台圖層的 preload：只開放舞台需要的通道（規格 1.5 節）
 const { contextBridge, ipcRenderer } = require('electron');
+const on = (ch) => (cb) => ipcRenderer.on(ch, (_e, p) => cb(p));
+const str = (v, n = 80) => String(v == null ? '' : v).slice(0, n);
+const num = (v) => (Number.isFinite(Number(v)) ? Math.round(Number(v)) : 0);
 contextBridge.exposeInMainWorld('stageApi', {
-  reportRects: (rects, dragging) => ipcRenderer.send('stage:rects', { rects, dragging }),
-  onCursor: (cb) => ipcRenderer.on('stage:cursor', (_e, p) => cb(p)),
-  onQuokkas: (cb) => ipcRenderer.on('stage:quokkas', (_e, list) => cb(list)),
-  savePos: (id, pos) => ipcRenderer.send('stage:save-pos', { id, pos }),
-  ready: () => ipcRenderer.send('stage:ready')
+  // 主行程 → 舞台
+  onQuokkas: on('stage:quokkas'),           // 全部名單（相容舊名稱）
+  onInit: on('stage:init'),                 // {display, actors[]}
+  onAdd: on('stage:add'),                   // {q}
+  onUpdate: on('stage:update'),             // {q}
+  onRemove: on('stage:remove'),             // {qid, reason}
+  onSettings: on('stage:settings'),         // {fetchReturn: 'carry'|'nudge'|'alternate'}
+  onEvent: on('q:event'),                   // {qid, kind, payload, prio}
+  onAlert: on('q:alert'),                   // {qid, reminderId, text}
+  onAlertClear: on('q:alert-clear'),        // {qid, reminderId}
+  onPlay: on('q:play'),                     // {qid, action}
+  onPresence: on('presence'),               // {away, locked, digest?}
+  onCursor: on('stage:cursor'),             // {x, y}
+  onPause: on('stage:pause'),
+  onResume: on('stage:resume'),
+  onHide: on('stage:hide'),                 // {until}
+  // 舞台 → 主行程
+  ready: () => ipcRenderer.send('stage:ready'),
+  reportRects: (rects, dragging) => ipcRenderer.send('stage:rects', { rects, dragging: !!dragging }),
+  savePos: (id, pos) => ipcRenderer.send('stage:save-pos', { id: str(id), pos: { x: num(pos && pos.x), y: num(pos && pos.y) } }),
+  rest: (qid, x, y) => ipcRenderer.send('q:rest', { qid: str(qid), x: num(x), y: num(y) }),
+  state: (qid, layer) => ipcRenderer.send('q:state', { qid: str(qid), layer: num(layer) }),
+  drop: (qid, screenX, screenY) => ipcRenderer.send('q:drop', { qid: str(qid), screenX: num(screenX), screenY: num(screenY) }),
+  dblclick: (qid) => ipcRenderer.send('q:dblclick', { qid: str(qid) }),
+  context: (qid) => ipcRenderer.send('q:context', { qid: str(qid) }),
+  ack: (reminderId) => ipcRenderer.send('alert:ack', { reminderId: str(reminderId) }),
+  snooze: (reminderId) => ipcRenderer.send('alert:snooze', { reminderId: str(reminderId) })
 });

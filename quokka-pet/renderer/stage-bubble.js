@@ -36,7 +36,16 @@
       this.el.className = 'bubble say show' + (tone ? ' tone-' + tone : '') + (big ? ' big' : '');
       this.el.setAttribute('role', 'status');
       this.el.setAttribute('aria-live', 'polite');
-      this.textEl.textContent = S.str(text);
+      // text 可以是字串，或 [{t, tone}] 片段（例如多檔股票各自漲紅跌綠）
+      this.textEl.textContent = '';
+      if (Array.isArray(text)) {
+        for (const seg of text.slice(0, 20)) {
+          const sp = document.createElement('span');
+          sp.textContent = S.str(seg && seg.t, 60);
+          if (seg && seg.tone) sp.className = 'tone-' + seg.tone;
+          this.textEl.appendChild(sp);
+        }
+      } else this.textEl.textContent = S.str(text);
       this.btns.textContent = '';
       this.measure(); this.place();
       this.timer = setTimeout(() => this.hide('say'), ms);

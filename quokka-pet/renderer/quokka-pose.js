@@ -38,6 +38,8 @@
       if (pose.roll) q = rotZ(q, pose.roll, [0, FEET_Y, 0]);
       return [q[0], q[1] + (pose.y || 0), q[2]];
     };
+    // 腳掌與尾巴用：只壓扁和跳，不跟著身體前傾／側傾（前傾時後腳仍貼地、尾巴仍沿地面往後）
+    const F = (p) => [p[0] * k, FEET_Y + (p[1] - FEET_Y) * sq + (pose.y || 0), p[2] * k];
     const hs = pose.headScale || 1;
     const H = (p) => {
       let q = hs === 1 ? p : [NECK[0] + (p[0] - NECK[0]) * hs, NECK[1] + (p[1] - NECK[1]) * hs, NECK[2] + (p[2] - NECK[2]) * hs];
@@ -46,7 +48,7 @@
       if (h.yaw) q = rotY(q, h.yaw, NECK);
       return B(q);
     };
-    return { B, H, sq, k, yaw: h.yaw || 0, hs };
+    return { B, H, F, sq, k, yaw: h.yaw || 0, hs };
   }
 
   // ---- 手臂：固定長度的上臂＋前臂（兩段骨架反向運動學），手肘自然往外下方彎；目標太遠就伸直，不會拉長
@@ -209,6 +211,8 @@
       case 'dust': return g(`<ellipse cx="-10" cy="0" rx="6" ry="3" fill="#d8cbb4" opacity=".7"/><ellipse cx="10" cy="0" rx="6" ry="3" fill="#d8cbb4" opacity=".7"/><ellipse cx="-17" cy="-2" rx="3" ry="2" fill="#e5dac6" opacity=".6"/><ellipse cx="17" cy="-2" rx="3" ry="2" fill="#e5dac6" opacity=".6"/>`);
       case 'zzz': return g(`<text x="0" y="0" font-family="Arial, sans-serif" font-weight="700" font-size="10" fill="#7c8696">Z</text><text x="8" y="-9" font-family="Arial, sans-serif" font-weight="700" font-size="12" fill="#7c8696">Z</text>`);
       case 'note': return g(`<path d="M0 0 V-10 L7 -12 V-2" fill="none" stroke="#8296c4" stroke-width="1.4" stroke-linecap="round"/><ellipse cx="-1.6" cy="0" rx="2.4" ry="1.8" fill="#8296c4"/><ellipse cx="5.4" cy="-2" rx="2.4" ry="1.8" fill="#8296c4"/>`);
+      case 'sniff': return g(`<path d="M0 0 q-4 -3 -8 0 M-2 6 q-5 -2 -9 1" fill="none" stroke="#9aa0a8" stroke-width="1.3" stroke-linecap="round"/>`);
+      case 'sniffR': return g(`<path d="M0 0 q4 -3 8 0 M2 6 q5 -2 9 1" fill="none" stroke="#9aa0a8" stroke-width="1.3" stroke-linecap="round"/>`);
       case 'shadow': return g(`<ellipse cx="0" cy="0" rx="24" ry="4.5" fill="#000" opacity=".12"/>`);
       default: return '';
     }
@@ -218,7 +222,7 @@
   function render(th, id, pose = {}) {
     const T = makeT(pose), c = Math.cos(rad(th)), s = Math.sin(rad(th)), dx = pose.x || 0;
     const P = (p3) => { const q = I.proj(p3, th); return { X: q.X + dx, Y: q.Y, Z: q.Z }; };
-    const PB = (p) => P(T.B(p)), PH = (p) => P(T.H(p));
+    const PB = (p) => P(T.B(p)), PH = (p) => P(T.H(p)), PF = (p) => P(T.F(p));
     const thH = th + T.yaw, cH = Math.cos(rad(thH)), sH = Math.sin(rad(thH));
     // 身體與頭各自的橢圓
     const ell = (part, head) => {
@@ -234,19 +238,21 @@
 
     // 尾巴
     const tk = I.tailK(), up = pose.tailUp || 0;
+    // 尾巴：根部跟著臀部（身體），尾巴本身沿地面往後（不跟著前傾翹起來）
+    const tRoot = [0, 158, -26], tR = PB(tRoot), tF = PF(tRoot);
     const tq = [[158, -26, 6.5], [164, -40, 5.4], [168, -54, 4.4], [170.5, -68, 3.4], [171.5, -80, 2.4]]
-      .map(([y, z, r], i) => ({ ...PB([0, y - up * i * i * 2.2, -26 + (z + 26) * tk]), r }));
+      .map(([y, z, r], i) => { const q = PF([0, y - up * i * i * 2.2, -26 + (z + 26) * tk]); return { X: tR.X + q.X - tF.X, Y: tR.Y + q.Y - tF.Y, Z: tR.Z + q.Z - tF.Z, r }; });
     if (Math.abs(tq[0].X - tq[4].X) < 6) {
       if (c < 0) { const x = tq[0].X, y0 = tq[0].Y; out.front.push(`<path d="M${f1(x - 6)} ${f1(y0 - 2)} C${f1(x - 6.4)} ${f1(y0 + 10)} ${f1(x - 5)} ${f1(y0 + 19)} ${f1(x - 3.6)} ${f1(y0 + 23.5)} C${f1(x - 2.4)} ${f1(y0 + 27.6)} ${f1(x + 2.4)} ${f1(y0 + 27.6)} ${f1(x + 3.6)} ${f1(y0 + 23.5)} C${f1(x + 5)} ${f1(y0 + 19)} ${f1(x + 6.4)} ${f1(y0 + 10)} ${f1(x + 6)} ${f1(y0 - 2)} Z" fill="url(#tl${id})" filter="url(#fz${id})"/>`); }
     } else {
       const upL = tq.map((q) => [q.X, q.Y - q.r * .85]), dn = tq.map((q) => [q.X, q.Y + q.r * .85]).reverse();
-      (PB([0, 165, -45]).Z > 0 ? out.front : out.back).push(`<path d="M${upL.concat(dn).map((p) => f1(p[0]) + ' ' + f1(p[1])).join(' L')} Z" fill="url(#tl${id})" stroke="url(#tl${id})" stroke-width="2" stroke-linejoin="round" filter="url(#fz${id})"/>`);
+      (PF([0, 165, -45]).Z > 0 ? out.front : out.back).push(`<path d="M${upL.concat(dn).map((p) => f1(p[0]) + ' ' + f1(p[1])).join(' L')} Z" fill="url(#tl${id})" stroke="url(#tl${id})" stroke-width="2" stroke-linejoin="round" filter="url(#fz${id})"/>`);
     }
 
     // 腳：站著時腳掌貼地、朝前；騰空時腳尖朝下
     const air = pose.feet === 'air' || (pose.feet !== 'stand' && (pose.y || 0) < -4);
     [-1, 1].forEach((k) => {
-      const heel = PB(air ? [k * 17, 166, -4] : [k * 18, 172, -10]), toe = PB(air ? [k * 17, 182, 12] : [k * 18, 173, 30]);
+      const heel = PF(air ? [k * 17, 166, -4] : [k * 18, 172, -10]), toe = PF(air ? [k * 17, 182, 12] : [k * 18, 173, 30]);
       const vx = toe.X - heel.X, vy = toe.Y - heel.Y, L = Math.hypot(vx, vy);
       const d = L < 4 ? `<ellipse cx="${f1(heel.X)}" cy="${f1(heel.Y + 4)}" rx="10.5" ry="8.4" fill="${I.FOOT}"/>`
         : `<path d="M${f1(heel.X)} ${f1(heel.Y)} L${f1(toe.X)} ${f1(toe.Y)}" stroke="${I.FOOT}" stroke-width="10" stroke-linecap="round"/><ellipse cx="${f1(toe.X)}" cy="${f1(toe.Y)}" rx="6.6" ry="5.4" fill="${I.FOOT}"/>`;
@@ -254,7 +260,7 @@
       const ux = L < 4 ? 0 : vx / L, uy = L < 4 ? 1 : vy / L;
       const tipX = L < 4 ? heel.X : toe.X + ux * 4, tipY = L < 4 ? heel.Y + 11 : toe.Y + uy * 4;
       const claws = (toe.Z > -6 || air) ? [-3.4, 0, 3.4].map((o) => I.CLAW(f1(tipX - uy * o), f1(tipY + ux * o), f1(ang), 3)).join('') : '';
-      (PB([k * 18, 172, 10]).Z < -2 ? out.back : out.body).push(`<g filter="url(#fz${id})">${d}</g>${claws}`);
+      (PF([k * 18, 172, 10]).Z < -2 ? out.back : out.body).push(`<g filter="url(#fz${id})">${d}</g>${claws}`);
     });
 
     // 身體（含明暗）

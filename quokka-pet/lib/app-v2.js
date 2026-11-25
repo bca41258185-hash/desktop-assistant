@@ -12,6 +12,8 @@ const R = require('./reminders');
 const { createStockService } = require('./stock-service');
 const { createStepTracker } = require('./stock-step');
 const { createStageManager } = require('./stage-main');
+const { createRomance } = require('./romance');
+const { createSocialDirector } = require('./social');
 const TR = require('../renderer/traits');
 
 const ROOT = path.join(__dirname, '..');
@@ -59,6 +61,51 @@ function start() {
   const stage = createStageManager({ BrowserWindow, screen, ipcMain, path, dir: ROOT });
   const toStage = (ch, payload) => stage.send(ch, payload);
   const stageQ = (q) => ({ id: q.id, name: q.name, traits: q.traits, pos: q.home || null, stage: q.stage || 'adult' });
+  // ---- 戀愛與家族（RomanceDirector）、社交（SocialDirector） --------------------------
+  const romance = createRomance({ data, now: () => Date.now(), random: Math.random, TR });
+  const layers = {}, positions = {};
+  let stageVisible = true;
+  const social = createSocialDirector({
+    getQuokkas: () => data.quokkas, getRelations: () => data.relations,
+    getLayer: (qid) => (layers[qid] == null ? 8 : layers[qid]),
+    getPos: (qid) => positions[qid] || null,
+    now: () => Date.now(), random: Math.random, romance,
+    isBlocked: () => away || !stageVisible,
+    onStart: (job) => toStage('social:start', job),
+    onAbort: (job) => toStage('social:abort', { pairId: job.pairId, by: job.by, reason: job.reason })
+  });
+  let socialTimer = null;
+  function scheduleSocial(ms) { clearTimeout(socialTimer); socialTimer = setTimeout(() => { let next = 240000; try { next = social.tick() || next; } catch (e) { console.error('社交排程失敗:', e.message); } changed(); scheduleSocial(next); }, ms); }
+  // 戀愛事件 → 舞台、面板、系統通知
+  function onRomanceEvents(events) {
+    if (!events || !events.length) return;
+    let quokkasChanged = false;
+    for (const ev of events) {
+      switch (ev.type) {
+        case 'friend': event(ev.a, 'note', { text: `我跟${(qById(ev.b) || {}).name || '牠'}變成好朋友了！` }); break;
+        case 'couple': quokkasChanged = true; event(ev.a, 'note', { text: '💕' }); event(ev.b, 'note', { text: '💕' }); break;
+        case 'pregnant': quokkasChanged = true; event(ev.mom, 'note', { text: '肚子裡有寶寶了！' }); break;
+        case 'birth': {
+          quokkasChanged = true;
+          event(ev.mom, 'birth', { child: ev.child, name: ev.name });
+          notify(qById(ev.mom), `🎉 生了！幫「${ev.name}」取個名字吧`, ev.child);
+          break;
+        }
+        case 'crowded': if (panel && !panel.isDestroyed()) panel.webContents.send('panel:hint', { kind: 'crowded', count: ev.count }); break;
+        default: quokkasChanged = true;          // joey-out、independent、resize、grown、adult、single、joey-to-dad、follower-gone
+      }
+    }
+    changed({ quokkas: quokkasChanged });
+  }
+  // 遊戲時鐘：只在程式開著、使用者在、舞台沒藏起來時前進（懷孕 27 分鐘、育兒 1 小時）
+  let lastTick = Date.now();
+  setInterval(() => {
+    const t = Date.now(), dt = away || !stageVisible ? 0 : Math.min(t - lastTick, 120000);
+    lastTick = t;
+    try { onRomanceEvents(romance.tickClock(dt)); } catch (e) { console.error('遊戲時鐘失敗:', e.message); }
+  }, 30000);
+  setInterval(() => { try { romance.dailyDecay(); } catch (e) {} }, 3600000);
+
   let panel = null;
   function createPanel() {
     panel = new BrowserWindow({
@@ -188,6 +235,10 @@ function start() {
     }
     let r = parseInput(text);
     if (p.forceType === 'task') r = { type: 'task', text };
+    if (p.forceType === 'reminder' && r.type !== 'reminder') {      // 強制當提醒但沒寫時間 → 1 小時後提醒一次
+      const at = new Date(Date.now() + 3600000), pad = (n) => String(n).padStart(2, '0');
+      r = { type: 'reminder', text: r.text || text, rule: { type: 'once', date: `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`, time: `${pad(at.getHours())}:${pad(at.getMinutes())}`, at: at.toISOString() } };
+    }
     if (r.type === 'none') return { ok: false, message: '請先輸入內容' };
     if (countOf(r.type, owner) >= (LIM[r.type] || 50)) return { ok: false, message: '這隻盯的東西太多了，先完成或交給別隻吧' };
     if (r.type === 'stock') {
@@ -211,7 +262,8 @@ function start() {
     return { ok: true, type: 'task', item };
   });
   function addFolder(p, owner) {
-    if (data.folders.some((f) => f.path === p)) return { ok: false, message: '這個資料夾已經在監看了' };
+    const dup = data.folders.find((f) => f.path === p);
+    if (dup) return { ok: false, message: `這個資料夾已經由「${(qById(dup.owner) || {}).name || '別隻'}」負責了` };
     const f = { id: newId('f'), owner, path: p, status: 'ok', createdAt: nowISO() };
     data.folders.push(f); watchFolder(f); changed();
     event(owner, 'note', { text: `我會幫你看著「${path.basename(p)}」` });
@@ -272,6 +324,7 @@ function start() {
   ipcMain.handle('quokka:create', (e, { name, traits } = {}) => {
     const nm = str(name, LIMITS.name);
     if (!nm) return { ok: false, message: '幫牠取個名字吧' };
+    romance.resolveNameClash(nm, null);                       // 小袋鼠的暫名讓位
     if (data.quokkas.some((q) => q.name === nm)) return { ok: false, message: '已經有同名的庫卡了' };
     // 不直接信任面板傳來的特徵：用同一個 seed 在主行程重新生成（保證格式正確）
     const seed = traits && Number.isFinite(traits.seed) ? traits.seed : undefined;
@@ -283,16 +336,18 @@ function start() {
   ipcMain.handle('quokka:rename', (e, { qid, name } = {}) => {
     const q = qById(qid), nm = str(name, LIMITS.name);
     if (!q || !nm) return { ok: false, message: '名字不能空白' };
+    romance.resolveNameClash(nm, qid);
     if (data.quokkas.some((x) => x !== q && x.name === nm)) return { ok: false, message: '已經有同名的庫卡了' };
-    q.name = nm; changed({ quokkas: true });
+    q.name = nm; q.nameTemp = false; changed({ quokkas: true });
     return { ok: true };
   });
-  const familyLock = (q) => q.mom || q.dad || q.pregnancy || q.joey || Object.entries(data.relations || {}).some(([k, v]) => v && v.couple && k.split('|').includes(q.id));
+  const REGEN_WHY = { 'has-partner': '牠有伴侶', pregnant: '牠正在懷孕', parenting: '牠正在帶小袋鼠', 'has-parents': '牠是別隻生的' };
   ipcMain.handle('quokka:regenerate', (e, { qid } = {}) => {
     const q = qById(qid); if (!q) return { ok: false };
-    if (familyLock(q)) return { ok: false, message: '牠有家人或伴侶，不能重新生成（可以換飾品）' };
+    const can = romance.canRegenerate(q);
+    if (!can.ok) return { ok: false, message: `${REGEN_WHY[can.reason] || '有家人'}，不能重新生成（可以換飾品）` };
     const t = TR.generate(); TR.ensurePersonality(t); TR.ensureAccessory(t);
-    q.traits = t; changed({ quokkas: true });
+    q.traits = t; romance.onRegenerate(qid); changed({ quokkas: true });
     return { ok: true };
   });
   ipcMain.handle('quokka:set-accessory', (e, { qid, accessory } = {}) => {
@@ -308,20 +363,22 @@ function start() {
   });
   ipcMain.handle('quokka:delete', (e, { qid, transferTo } = {}) => {
     const q = qById(qid); if (!q) return { ok: false };
-    if (data.quokkas.length <= 1) return { ok: false, message: '最後一隻不能刪除' };
-    const to = transferTo === 'delete' ? null : qById(transferTo) && transferTo !== qid ? transferTo : data.quokkas.find((x) => x.id !== qid).id;
+    const owners = data.quokkas.filter((x) => romance.canOwnTasks(x));
+    if (owners.length <= 1 && romance.canOwnTasks(q)) return { ok: false, message: '最後一隻不能刪除' };
+    const to = transferTo === 'delete' ? null : qById(transferTo) && transferTo !== qid ? transferTo : (owners.find((x) => x.id !== qid) || {}).id;
     for (const k of Object.values(KINDS)) {
       if (to) data[k].forEach((x) => { if (x.owner === qid) x.owner = to; });
       else { data[k].filter((x) => x.owner === qid && k === 'folders').forEach((f) => unwatchFolder(f.id)); data[k] = data[k].filter((x) => x.owner !== qid); }
     }
-    for (const key of Object.keys(data.relations || {})) if (key.split('|').includes(qid)) delete data.relations[key];
-    data.lineage = data.lineage || {};
-    data.lineage[qid] = { name: q.name, sex: q.traits.sex, mom: q.mom || null, dad: q.dad || null, deletedAt: nowISO() };
+    social.removeQuokka(qid);
+    const famEvents = romance.onDelete(qid);                   // 墓碑紀錄、伴侶恢復單身、小袋鼠交給爸爸
     data.quokkas = data.quokkas.filter((x) => x.id !== qid);
+    onRomanceEvents(famEvents);
     if (data.settings.defaultOwner === qid) data.settings.defaultOwner = data.quokkas[0].id;
     syncWatchlist(); clock.schedule(); changed({ quokkas: true });
     return { ok: true };
   });
+  ipcMain.handle('quokka:delete-warning', (e, { qid } = {}) => ({ warning: romance.deleteWarning(qid) }));
   ipcMain.handle('quokka:play', (e, { qid, action } = {}) => {
     const q = qById(qid) || data.quokkas[0];
     if (!ACTIONS.has(action)) return { ok: false };
@@ -337,6 +394,8 @@ function start() {
     for (const k of ['romance', 'babies']) if (k in patch) S[k] = !!patch[k];
     if ('reducedMotion' in patch && ['system', 'on', 'off'].includes(patch.reducedMotion)) S.reducedMotion = patch.reducedMotion;
     if ('panelOwner' in patch && (patch.panelOwner === 'all' || qById(patch.panelOwner))) S.panelOwner = patch.panelOwner;
+    if ('defaultOwner' in patch && qById(patch.defaultOwner) && romance.canOwnTasks(qById(patch.defaultOwner))) S.defaultOwner = patch.defaultOwner;
+    if ('fetchReturn' in patch && ['carry', 'nudge', 'alternate'].includes(patch.fetchReturn)) S.fetchReturn = patch.fetchReturn;
     changed({ quokkas: true });
     toStage('stage:settings', S);
     return { ok: true };
@@ -363,7 +422,6 @@ function start() {
   ipcMain.on('alert:ack', ack); ipcMain.on('alert:snooze', snooze);
 
   // ---- 舞台 → 主行程 ---------------------------------------------------------------
-  const layers = {};
   ipcMain.on('stage:ready', (e) => {
     e.sender.send('stage:quokkas', data.quokkas.map(stageQ));
     e.sender.send('stage:settings', data.settings);
@@ -375,7 +433,11 @@ function start() {
   };
   ipcMain.on('stage:save-pos', savePos);
   ipcMain.on('q:rest', savePos);
-  ipcMain.on('q:state', (e, { qid, layer } = {}) => { if (qById(qid)) layers[qid] = layer; });
+  ipcMain.on('q:state', (e, { qid, layer } = {}) => { if (qById(qid)) { layers[qid] = layer; social.onLayer(qid, layer); } });
+  ipcMain.on('q:pos', (e, list) => { if (Array.isArray(list)) for (const p of list.slice(0, 500)) if (p && qById(p.qid)) positions[p.qid] = { x: p.x, y: p.y, display: p.display || 'primary' }; });
+  ipcMain.on('social:done', (e, { pairId, ok, type } = {}) => { try { const r = social.done(pairId, { ok: !!ok, type }); onRomanceEvents(r && r.events); } catch (err) {} });
+  ipcMain.on('social:abort', (e, { pairId, by, reason } = {}) => { try { social.abort(pairId, by, reason); } catch (err) {} });
+  ipcMain.on('q:pass', (e, { a, b } = {}) => { if (qById(a) && qById(b)) { try { social.passBy(a, b); } catch (err) {} } });
   ipcMain.on('q:dblclick', (e, { qid } = {}) => showPanel(qById(qid) ? qid : null));
   ipcMain.on('q:context', (e, { qid } = {}) => {
     const q = qById(qid); if (!q) return;
@@ -399,8 +461,8 @@ function start() {
   ipcMain.on('perf:stats', () => {});
   function hideAll(mins) {
     for (const st of stage.stages.values()) if (!st.win.isDestroyed()) st.win.hide();
-    stage.pause(true);
-    setTimeout(() => { for (const st of stage.stages.values()) if (!st.win.isDestroyed()) st.win.showInactive(); stage.pause(false); }, mins * 60000);
+    stage.pause(true); stageVisible = false;
+    setTimeout(() => { for (const st of stage.stages.values()) if (!st.win.isDestroyed()) st.win.showInactive(); stage.pause(false); stageVisible = true; }, mins * 60000);
   }
 
   // ---- 啟動 ------------------------------------------------------------------------
@@ -409,7 +471,9 @@ function start() {
   data.folders.forEach(watchFolder);
   syncWatchlist(); stocks.start();
   clock.check();                       // 啟動時先處理錯過的提醒，再排下一個
-  app.on('before-quit', () => { app.isQuitting = true; stocks.stop(); clock.stop(); store.saveNow(); });
+  try { romance.refreshAges(); romance.dailyDecay(); } catch (e) {}
+  scheduleSocial(90000);               // 開機 1.5 分鐘後才開始安排互動
+  app.on('before-quit', () => { app.isQuitting = true; clearTimeout(socialTimer); stocks.stop(); clock.stop(); store.saveNow(); });
   return { store, stage, data, showPanel };
 }
 

@@ -125,6 +125,89 @@
   };
 
   // ---------------------------------------------------------------------------
+  // 撿球（新設計，照真實習性）：發現 → 衝刺 → 煞車 → 四腳著地聞一聞 → 撈起來 → 坐起來抱球 → 回程（抱回／用鼻子推回）→ 到家
+  // 每個函式：u（0–1）→ { th, pose }，以「球在左邊」（面向左）為準；球在右邊用 mirrorFrame() 鏡射
+  // ---------------------------------------------------------------------------
+  const HOLD = { L: { hand: [-8, 112, 40] }, R: { hand: [8, 114, 40] } };            // 前爪把球捧在胸前
+  const PAWS_DOWN = { L: { hand: [-8, 160, 32] }, R: { hand: [8, 160, 32] } };       // 四腳著地，前爪撐地
+  const P_SNIFF = { lean: 62, sq: .86, head: { pitch: -36 }, tailUp: .4, eyes: 'focus', mouth: 'smile', arms: PAWS_DOWN };
+  const P_SCOOP = { lean: 38, sq: .9, head: { pitch: 10 }, eyes: 'happy', mouth: 'open', arms: { L: { hand: [-8, 138, 42] }, R: { hand: [8, 140, 42] } } };
+  const P_SIT = { sq: .96, lean: -4, eyes: 'happy', mouth: 'open', blush: 1.4, arms: HOLD };
+  const P_NUDGE = { lean: 58, sq: .88, head: { pitch: -30 }, tailUp: .5, eyes: 'happy', mouth: 'smile', arms: { L: { hand: [-8, 158, 34] }, R: { hand: [8, 158, 34] } } };
+  const P_BRAKE = { sq: .84, lean: -10, tailUp: .3, eyes: 'wide', mouth: 'o' };
+  const ballHeld = (kind, off = [0, -4]) => ({ t: kind, hand: 'both', off });
+  const FETCH2 = {
+    // 1 發現：轉頭看球、睜大眼（頭上的「！」由舞台用 CSS 畫）
+    discover: (u) => { const e = EASE.out(Math.min(1, u * 2)); return { th: lerp(-10, -40, e), pose: { head: { yaw: -40 * e }, eyes: 'wide', mouth: 'o', look: [-2 * e, 0] } }; },
+    // 2 衝刺：大步跳，身體拉長前傾、尾巴平衡、後面揚塵＋速度線
+    dash: (u) => ({ th: -90, pose: {
+      y: -26 * Math.sin(Math.PI * u), sq: u < .15 ? lerp(.88, 1.08, u / .15) : u > .85 ? lerp(1.08, .9, (u - .85) / .15) : 1.08,
+      lean: u < .15 || u > .85 ? 14 : 24, tailUp: Math.sin(Math.PI * u), eyes: 'focus', mouth: 'open', head: { pitch: -10 },
+      props: u < .45 ? [{ t: 'fx', kind: 'dust', at: [120, 184], s: .7 }, { t: 'fx', kind: 'speed', at: [150, 110 - 26 * Math.sin(Math.PI * u)], rot: 180, s: .9 }] : [{ t: 'fx', kind: 'speed', at: [150, 110 - 26 * Math.sin(Math.PI * u)], rot: 180, s: .9 }] } }),
+    // 3 煞車：落地壓低、往後仰，前面揚起一點灰
+    brake: (u) => ({ th: -90, pose: { ...mix({ sq: .95, lean: 10, tailUp: .6, eyes: 'focus', mouth: 'open' }, P_BRAKE, EASE.out(Math.min(1, u * 2))), props: [{ t: 'fx', kind: 'dust', at: [10, 184], s: .6 }] } }),
+    // 4 四腳著地聞一聞：前爪撐地、頭往前看、鼻子湊近球
+    sniff: (u) => {
+      const p = mix(P_BRAKE, P_SNIFF, EASE.io(Math.min(1, u / .3)));
+      p.head = { ...p.head, pitch: p.head.pitch + (u > .3 ? 4 * Math.sin((u - .3) * Math.PI * 6) : 0) };
+      p.props = u > .35 ? [{ t: 'fx', kind: 'sniff', at: [-36, 142] }] : [];
+      return { th: -90, pose: p };
+    },
+    // 5 撈起來：前爪從下面把球捧起（球黏在雙手）
+    scoop: (u, kind) => ({ th: -90, pose: { ...mix(P_SNIFF, P_SCOOP, EASE.io(u)), props: [ballHeld(kind, [-4, -2])] } }),
+    // 6 坐起來抱球：直立、球抱在胸前、得意
+    sit: (u, kind) => { const e = EASE.out(u); return { th: lerp(-90, -30, e), pose: { ...mix(P_SCOOP, P_SIT, e), props: [ballHeld(kind), ...(u > .4 ? [{ t: 'fx', kind: 'sparkle', at: [130, 40] }] : [])] } }; },
+    // 轉向回家的方向（抱著球）；回程面向右（家在球的另一邊）
+    turnHome: (u, kind) => ({ th: lerp(-30, 90, EASE.io(u)), pose: { ...P_SIT, mouth: 'smile', props: [ballHeld(kind)] } }),
+    // 7A 抱著球小步蹦回去（看得出小心捧著）
+    carry: (u, kind) => ({ th: 90, pose: { y: -12 * Math.sin(Math.PI * u), sq: u < .12 ? lerp(.92, 1, u / .12) : u > .88 ? lerp(1, .93, (u - .88) / .12) : 1, lean: 6, tailUp: .6 * Math.sin(Math.PI * u), eyes: 'happy', mouth: 'smile', blush: 1.2, arms: HOLD, props: [ballHeld(kind, [2, -4])] } }),
+    // 7B 用鼻子推：先把球放下、趴低（球改由舞台畫在鼻子前的地上）
+    drop: (u) => ({ th: 90, pose: mix({ ...P_SIT, mouth: 'smile' }, P_NUDGE, EASE.io(u)) }),
+    // 一推一滾：前 35% 往前頂（球滾出去），之後小步跟上
+    nudge: (u) => {
+      const push = u < .35 ? Math.sin(Math.PI * u / .35) : 0;
+      const p = mix(P_NUDGE, { ...P_NUDGE, lean: 66, head: { pitch: -22 } }, push);
+      if (u >= .35) p.y = -4 * Math.sin(Math.PI * (u - .35) / .65);
+      return { th: 90, pose: p };
+    },
+    // 用鼻子推回來的籃球：再撈起來、坐好（從趴低開始）
+    rescoop: (u, kind) => ({ th: lerp(90, -30, EASE.io(Math.max(0, (u - .4) / .6))), pose: u < .4 ? { ...mix(P_NUDGE, P_SCOOP, EASE.io(u / .4)), props: [ballHeld(kind, [-4, -2])] } : { ...mix(P_SCOOP, P_SIT, EASE.out((u - .4) / .6)), props: [ballHeld(kind)] } }),
+    // 8 到家（籃球）：轉向籃框、把球捧到胸前準備再投
+    homeB: (u) => { const e = EASE.io(u); return { th: lerp(-30, -45, e), pose: { ...mix(P_SIT, { sq: .9, lean: 6, eyes: 'focus', mouth: 'smile', head: { pitch: -8 }, look: [-1.5, -1], arms: { R: { hand: [6, 106, 42] }, L: { hand: [-8, 104, 44] } } }, e), props: [ballHeld('bball', [-4, -6]), { t: 'hoop', at: [-12, 40], s: .9 }] } }; },
+    // 8 到家（排球）：把球放在腳邊、伸爪拍一拍、冒小愛心（球由舞台畫在腳邊）
+    homeV: (u) => {
+      const set = { lean: 20, sq: .94, head: { pitch: 16 }, eyes: 'happy', mouth: 'smile', arms: { R: { hand: [12, 132, 48] } } };
+      const p = mix({ ...P_SIT, mouth: 'smile' }, set, EASE.io(Math.min(1, u / .25)));
+      if (u > .25) p.arms = { ...p.arms, R: { hand: [12, 132 - 6 * Math.abs(Math.sin((u - .25) * Math.PI * 4)), 48] } };
+      p.props = u > .5 ? [{ t: 'fx', kind: 'heart', at: [118, 140 - (u - .5) * 30], s: .8 }] : [];
+      return { th: -20, pose: p };
+    },
+    // 用鼻子推回來的排球：趴著伸爪拍一拍
+    homeVNudge: (u) => {
+      const p = mix(P_NUDGE, { ...P_NUDGE, eyes: 'happy', head: { pitch: -20 } }, Math.min(1, u * 3));
+      p.arms = { L: { hand: [-8, 158, 34] }, R: { hand: [8, 150 - 6 * Math.abs(Math.sin(u * Math.PI * 4)), 48] } };
+      p.props = u > .4 ? [{ t: 'fx', kind: 'heart', at: [196, 128 - (u - .4) * 30], s: .8 }] : [];
+      return { th: 90, pose: p };
+    }
+  };
+  // 鏡射（球在右邊時）：角度、轉頭、眼珠、場景道具的 x 都左右對調
+  function mirrorFrame(fr) {
+    const p = { ...fr.pose };
+    if (p.head) p.head = { ...p.head, yaw: -(p.head.yaw || 0), roll: -(p.head.roll || 0) };
+    if (p.look) p.look = [-p.look[0], p.look[1]];
+    if (p.roll) p.roll = -p.roll;
+    if (p.props) p.props = p.props.map((q) => {
+      const o = { ...q };
+      if (o.at) o.at = [160 - o.at[0], o.at[1]];
+      if (o.off) o.off = [-o.off[0], o.off[1]];
+      if (o.kind === 'speed' && o.rot != null) o.rot = 180 - o.rot;
+      if (o.kind === 'sniff') o.kind = 'sniffR'; else if (o.kind === 'sniffR') o.kind = 'sniff';
+      return o;
+    });
+    return { th: -fr.th, pose: p };
+  }
+
+  // ---------------------------------------------------------------------------
   // 舞台用的反應與小動作（工作反應、摸頭、頭暈、吃東西、跳、打盹…）
   // 頭部 pitch：正＝低頭、負＝抬頭（見 quokka-pose.js）
   // loop:true 的可以重複播（例如長摸撒嬌）
@@ -303,7 +386,7 @@
     shy: { head: { pitch: 8, roll: -6 }, eyes: 'happy', mouth: 'smile', blush: 1.5 }
   };
 
-  const api = { sample, mix, EASE, ANIMS, FETCH, REACT, STILL };
+  const api = { sample, mix, EASE, ANIMS, FETCH, FETCH2, mirrorFrame, REACT, STILL };
   if (typeof window !== 'undefined') window.QuokkaAnim = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();
