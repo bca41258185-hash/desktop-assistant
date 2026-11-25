@@ -13,11 +13,15 @@
 //   mouth       smile | open | o | flat | chew
 //   blush       腮紅濃度 0–1.5
 //   feet        auto | stand | air（騰空時腳尖朝下）；tailUp 尾巴上揚 0–1
+//   accessory   飾品：'straw' 或 {type,color} 或陣列；省略＝用目前套用的個體特徵（traits.accessory，舊資料＝頭帶）；'none'＝不戴
 //   props       [{t:'racket', hand:'R', ang, len}, {t:'shuttle'|'vball'|'bball'|'leaf', at:[X,Y], rot, s}, {t:'hoop', at}, {t:'fx', kind, at, rot, s}]
 
 (function () {
   const A = (typeof window !== 'undefined' && window.QuokkaArt) ? window.QuokkaArt : require('./quokka-art.js');
   const I = A.internals;
+  // 飾品模組（頭帶、帽子、眼鏡、圍巾…）；沒載入時就不畫飾品
+  const ACC = () => (typeof window !== 'undefined' && window.QuokkaAcc) ? window.QuokkaAcc
+    : (typeof require === 'function' ? require('./quokka-acc.js') : null);
   const rad = (a) => a * Math.PI / 180, f1 = (v) => (+v).toFixed(1);
   const HEAD = new Set(['head', 'cheekL', 'cheekR', 'snout', 'snoutTip']);
   const FEET_Y = 176, NECK = [0, 80, -2];
@@ -266,12 +270,22 @@
 
     // 耳朵（在頭後面）
     const ek = I.earK();
-    const ears = [-1, 1].map((k) => {
+    const earList = [-1, 1].map((k) => {
       const q = PH([k * 22, 19, -12]), f = facingH([k * .3, 0, 1]), w = 9 * (0.5 + 0.5 * Math.abs(f)), base = PH([k * 18, 27, -10]);
       const inner = f > 0.15 ? `<ellipse cx="${f1(q.X)}" cy="${f1(q.Y + 1.6)}" rx="${f1(w * .62)}" ry="6.8" fill="#f2c38c"/><ellipse cx="${f1(q.X)}" cy="${f1(q.Y + 2.8)}" rx="${f1(w * .35)}" ry="4" fill="#8a7460"/>` : '';
       const tilt = Math.atan2(q.X - base.X, base.Y - q.Y) * 180 / Math.PI;
-      return `<g filter="url(#fz${id})" transform="rotate(${f1(tilt * .6)} ${f1(base.X)} ${f1(base.Y)}) translate(${f1(q.X)} ${f1(q.Y + 8)}) scale(${ek * T.hs}) translate(${f1(-q.X)} ${f1(-q.Y - 8)})"><ellipse cx="${f1(q.X)}" cy="${f1(q.Y)}" rx="${f1(w)}" ry="10.5" fill="${f > 0 ? '#b38a5e' : '#93744f'}"/>${inner}</g>`;
-    }).join('');
+      return { z: q.Z, svg: `<g filter="url(#fz${id})" transform="rotate(${f1(tilt * .6)} ${f1(base.X)} ${f1(base.Y)}) translate(${f1(q.X)} ${f1(q.Y + 8)}) scale(${ek * T.hs}) translate(${f1(-q.X)} ${f1(-q.Y - 8)})"><ellipse cx="${f1(q.X)}" cy="${f1(q.Y)}" rx="${f1(w)}" ry="10.5" fill="${f > 0 ? '#b38a5e' : '#93744f'}"/>${inner}</g>` };
+    });
+
+    // 飾品：全部在頭部／身體的 3D 座標裡定位，前後遮擋用頭部本身的座標判斷（見 quokka-acc.js）
+    const AC = ACC();
+    const accL = AC ? AC.draw(AC.resolve(pose.accessory, A.traits()), {
+      id, th, PH, PB, hs: T.hs,
+      head: parts.filter((p) => HEAD.has(p[0])).map((p) => p.slice(1)),
+      body: parts.filter((p) => !HEAD.has(p[0])).map((p) => p.slice(1))
+    }) : { back: [], ear: [], front: [], top: [], earsOver: false };
+    // 耳朵與耳邊小飾品依深度排序（遠的先畫）
+    const ears = earList.concat(accL.ear).sort((a, b) => a.z - b.z).map((e) => e.svg).join('');
 
     // 頭（獨立輪廓：可以轉、點、歪）
     const hc = PH([0, 22, -2]), muz = PH([0, 60, 29]), chin = PH([0, 68, 30]), hF = facingH([0, 0, 1]);
@@ -280,15 +294,6 @@
         <ellipse cx="${f1(hc.X)}" cy="${f1(hc.Y - 2)}" rx="26" ry="9" fill="#7c6244" opacity=".4" filter="url(#b3${id})"/>
         ${hF > -0.2 ? `<ellipse cx="${f1(muz.X)}" cy="${f1(muz.Y + 2)}" rx="${f1(12 + 18 * Math.max(0, cH))}" ry="15" fill="#dfa65e" opacity=".85" filter="url(#b3${id})"/><ellipse cx="${f1(chin.X)}" cy="${f1(chin.Y)}" rx="${f1(7 + 7 * Math.max(0, cH))}" ry="6" fill="#f3e2c4" opacity=".85" filter="url(#b3${id})"/>` : ''}
       </g>`;
-
-    // 頭帶
-    const ring = [];
-    for (let a = 0; a <= 360; a += 6) { const r = rad(a); ring.push(PH([27.6 * Math.sin(r), 30 - 2.4 * Math.cos(r), -2 + 22.4 * Math.cos(r)])); }
-    const hz = PH([0, 30, -2]).Z;
-    const vis = ring.filter((q) => q.Z > hz - 1.5);
-    const band = vis.length > 1 ? `<path d="M${vis.map((q) => f1(q.X) + ' ' + f1(q.Y)).join(' L')}" fill="none" style="stroke: var(--band, #e5533d)" stroke-width="6.4" stroke-linejoin="round"/>` : '';
-    const kn = PH([0, 31, -27.5]);
-    const knot = kn.Z - hz > 0 ? `<g transform="translate(${f1(kn.X)} ${f1(kn.Y - 31)})"><path d="M-3 34 Q-6 43 -10 49 L-7 50 Q-3 44 0 35 Z M3 34 Q6 43 10 49 L7 50 Q3 44 0 35 Z" style="fill: var(--band, #e5533d)"/><ellipse cx="0" cy="33" rx="3" ry="2.8" style="fill: var(--band, #e5533d)"/></g>` : '';
 
     // 五官
     const face = [];
@@ -376,9 +381,9 @@
     });
 
     const defs = I.DEFS(id).replace(/<linearGradient id="bg[^>]*>/, `<linearGradient id="bg${id}" gradientUnits="userSpaceOnUse" x1="0" y1="14" x2="0" y2="176">`)
-      .replace('</defs>', `${PROP_DEFS(id)}<clipPath id="cb${id}"><path d="${bodyD}"/></clipPath><clipPath id="ch${id}"><path d="${headD}"/></clipPath></defs>`);
+      .replace('</defs>', `${PROP_DEFS(id)}${AC ? AC.defs(id) : ''}<clipPath id="cb${id}"><path d="${bodyD}"/></clipPath><clipPath id="ch${id}"><path d="${headD}"/></clipPath></defs>`);
     const shadow = `<ellipse cx="${f1(80 + dx)}" cy="183" rx="${f1(30 - Math.min(16, -(pose.y || 0) * .4))}" ry="4" fill="#000" opacity="${f1(Math.max(.04, .12 + (pose.y || 0) * .002))}"/>`;
-    const svg = `${defs}${shadow}${props.back.join('')}${out.back.join('')}${armsSvg.back.join('')}${out.body.join('')}${out.front.join('')}${ears}${headSvg}${band}${knot}${face.join('')}${armsSvg.front.join('')}${props.front.join('')}`;
+    const svg = `${defs}${shadow}${props.back.join('')}${out.back.join('')}${armsSvg.back.join('')}${accL.back.join('')}${out.body.join('')}${out.front.join('')}${accL.earsOver ? '' : ears}${headSvg}${accL.front.join('')}${accL.earsOver ? ears : ''}${face.join('')}${accL.top.join('')}${armsSvg.front.join('')}${props.front.join('')}`;
     return { svg: I.paint(svg), hands };
   }
   // 包成完整 SVG（單隻）
