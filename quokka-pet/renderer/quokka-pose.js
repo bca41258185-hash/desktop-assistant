@@ -34,14 +34,15 @@
       if (pose.roll) q = rotZ(q, pose.roll, [0, FEET_Y, 0]);
       return [q[0], q[1] + (pose.y || 0), q[2]];
     };
+    const hs = pose.headScale || 1;
     const H = (p) => {
-      let q = p;
+      let q = hs === 1 ? p : [NECK[0] + (p[0] - NECK[0]) * hs, NECK[1] + (p[1] - NECK[1]) * hs, NECK[2] + (p[2] - NECK[2]) * hs];
       if (h.roll) q = rotZ(q, h.roll, NECK);
       if (h.pitch) q = rotX(q, -h.pitch, NECK);
       if (h.yaw) q = rotY(q, h.yaw, NECK);
       return B(q);
     };
-    return { B, H, sq, k, yaw: h.yaw || 0 };
+    return { B, H, sq, k, yaw: h.yaw || 0, hs };
   }
 
   // ---- 手臂：固定長度的上臂＋前臂（兩段骨架反向運動學），手肘自然往外下方彎；目標太遠就伸直，不會拉長
@@ -218,7 +219,7 @@
     // 身體與頭各自的橢圓
     const ell = (part, head) => {
       const [, x, y, z, rx, ry, rz] = part, q = head ? PH([x, y, z]) : PB([x, y, z]), cc = head ? cH : c, ss = head ? sH : s;
-      return { cx: q.X, cy: q.Y, rx: Math.hypot(rx * cc, rz * ss) * T.k, ry: ry * (head ? 1 : T.sq) };
+      return { cx: q.X, cy: q.Y, rx: Math.hypot(rx * cc, rz * ss) * (head ? T.hs : T.k), ry: ry * (head ? T.hs : T.sq) };
     };
     const parts = I.q3();
     const bodyE = parts.filter((p) => !HEAD.has(p[0])).map((p) => ell(p, false));
@@ -269,7 +270,7 @@
       const q = PH([k * 22, 19, -12]), f = facingH([k * .3, 0, 1]), w = 9 * (0.5 + 0.5 * Math.abs(f)), base = PH([k * 18, 27, -10]);
       const inner = f > 0.15 ? `<ellipse cx="${f1(q.X)}" cy="${f1(q.Y + 1.6)}" rx="${f1(w * .62)}" ry="6.8" fill="#f2c38c"/><ellipse cx="${f1(q.X)}" cy="${f1(q.Y + 2.8)}" rx="${f1(w * .35)}" ry="4" fill="#8a7460"/>` : '';
       const tilt = Math.atan2(q.X - base.X, base.Y - q.Y) * 180 / Math.PI;
-      return `<g filter="url(#fz${id})" transform="rotate(${f1(tilt * .6)} ${f1(base.X)} ${f1(base.Y)}) translate(${f1(q.X)} ${f1(q.Y + 8)}) scale(${ek}) translate(${f1(-q.X)} ${f1(-q.Y - 8)})"><ellipse cx="${f1(q.X)}" cy="${f1(q.Y)}" rx="${f1(w)}" ry="10.5" fill="${f > 0 ? '#b38a5e' : '#93744f'}"/>${inner}</g>`;
+      return `<g filter="url(#fz${id})" transform="rotate(${f1(tilt * .6)} ${f1(base.X)} ${f1(base.Y)}) translate(${f1(q.X)} ${f1(q.Y + 8)}) scale(${ek * T.hs}) translate(${f1(-q.X)} ${f1(-q.Y - 8)})"><ellipse cx="${f1(q.X)}" cy="${f1(q.Y)}" rx="${f1(w)}" ry="10.5" fill="${f > 0 ? '#b38a5e' : '#93744f'}"/>${inner}</g>`;
     }).join('');
 
     // 頭（獨立輪廓：可以轉、點、歪）
@@ -296,7 +297,7 @@
       const e = PH([k * 13, 43, 19]), f = facingH([k * .42, 0, .9]);
       if (f > 0.05) {
         const sx = (0.35 + 0.65 * f).toFixed(2), ex = e.X + look[0] * 1.4 * f, ey = e.Y + look[1];
-        const g = (inner) => `<g transform="translate(${f1(e.X)} ${f1(e.Y)}) scale(${sx} 1) translate(${f1(-e.X)} ${f1(-e.Y)})">${inner}</g>`;
+        const g = (inner) => `<g transform="translate(${f1(e.X)} ${f1(e.Y)}) scale(${(sx * T.hs).toFixed(2)} ${T.hs.toFixed(2)}) translate(${f1(-e.X)} ${f1(-e.Y)})">${inner}</g>`;
         const ln = (d) => g(`<path d="${d}" fill="none" stroke="#1f1814" stroke-width="1.8" stroke-linecap="round"/>`);
         switch (pose.eyes) {
           case 'happy': face.push(ln(`M${f1(e.X - 4.5)} ${f1(e.Y + 1.2)} Q${f1(e.X)} ${f1(e.Y - 3.8)} ${f1(e.X + 4.5)} ${f1(e.Y + 1.2)}`)); break;
@@ -311,7 +312,7 @@
       if (fb > 0.1) face.push(`<ellipse cx="${f1(b.X)}" cy="${f1(b.Y)}" rx="${f1(6.5 * fb)}" ry="4" fill="#f0907c" opacity="${(0.3 * (pose.blush == null ? 1 : pose.blush)).toFixed(2)}" filter="url(#b1${id})"/>`);
     }
     if (hF > -0.25) {
-      const n = PH([0, 53, 36 + 3 * Math.abs(sH)]), w = 6.8 * (0.62 + 0.38 * Math.abs(cH));
+      const n = PH([0, 53, 36 + 3 * Math.abs(sH)]), w = 6.8 * (0.62 + 0.38 * Math.abs(cH)) * Math.sqrt(T.hs);
       face.push(`<ellipse cx="${f1(n.X)}" cy="${f1(n.Y)}" rx="${f1(w)}" ry="5.8" fill="url(#ns${id})"/><ellipse cx="${f1(n.X - w * .35)}" cy="${f1(n.Y - 2.5)}" rx="${f1(w * .38)}" ry="1.2" fill="#d4dfec" opacity=".5"/>`);
       const mc = PH([0, 62.5, 32]), mf = Math.abs(cH) * .6 + .4;
       const mp = [[-9.5, 59, 25], [-4.6, 63.6, 30.5], [0, 61.4, 33], [4.6, 63.6, 30.5], [9.5, 59, 25]].map((p) => ({ q: PH(p), f: facingH([p[0] / 20, 0, 1]) })).filter((m) => m.f > -0.1);
