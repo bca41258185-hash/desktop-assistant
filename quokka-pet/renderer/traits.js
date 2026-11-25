@@ -115,7 +115,6 @@
   // 另加「黏人」（affection）描述對使用者的依賴。依據：
   //   · 短尾矮袋鼠天性好奇、敢靠近人，但約五分之一的人與牠互動時牠會緊張 → 膽量有高有低
   //   · 袋鼠研究：膽子大的個體朋友也較多 → 膽量與社交正相關
-  //   · 公的會依體重排地位、較常主動互動；母的很少主動社交 → 母的「主動找朋友」機率較低
   // ---------------------------------------------------------------------------
   const ACTIVITIES = {
     badminton: '羽球', volleyball: '排球', basketball: '籃球', eat: '吃葉子', hop: '跳跳', selfie: '自拍', nap: '打盹'
@@ -163,8 +162,8 @@
       ['cool', P.sociability < 0.3 && P.affection < 0.45 ? 1 - P.sociability : 0]
     ].filter((c) => c[1] > 0).sort((x, y) => y[1] - x[1]);
     const archetype = cands.length ? cands[0][0] : 'easy';
-    // 社交風格（之後多隻庫卡互動用）：母的較少主動
-    const initiative = round(clamp(P.sociability * (t.sex === 'female' ? 0.65 : 1) * (0.6 + 0.4 * P.boldness) * 1.4, 0, 1), 2);
+    // 社交風格（之後多隻庫卡互動用）：只看親人與膽量，與性別無關
+    const initiative = round(clamp(P.sociability * (0.6 + 0.4 * P.boldness) * 1.25, 0, 1), 2);
     const socialStyle = initiative > 0.68 ? 'leader' : P.sociability > 0.5 ? 'friendly' : P.boldness < 0.4 ? 'watcher' : 'solo';
     return { ...P, likes, dislike, hobbies, archetype, socialStyle, initiative };
   }
