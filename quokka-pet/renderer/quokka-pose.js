@@ -357,6 +357,7 @@
     const props = { back: [], front: [] };
     (pose.props || []).forEach((p) => {
       let svg = '';
+      if (p.t === 'racket' && p.at) { props.front.push(racket(id, p.at[0], p.at[1], p.ang || 0, p.len || 1)); return; }
       if (p.t === 'racket') { const h = hands[p.hand || 'R']; if (h) { svg = racket(id, h.X, h.Y, p.ang || 0, p.len || 1, p.hit, p.swoosh); (h.behind ? props.back : props.front).push(svg); } return; }
       // 道具可以黏在手上：hand＝'L'／'R'／'both'（兩手中間），off＝相對位移
       let [x, y] = p.at || [0, 0];
