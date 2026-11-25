@@ -43,11 +43,8 @@ html, body {
 .view { position: absolute; inset: 0; display: none; }
 .view.on { display: block; }
 .view.mirror { transform: scaleX(-1); }
-/* 轉身時每一格配一個小跳步 */
+/* 轉身時由 pet.js 逐格控制位移，暫停待機的呼吸動畫 */
 #pet.turning #petArt { animation: none; }
-#pet.turn-step #petArt { animation: turnHop 0.11s ease-out; }
-@keyframes turnHop {
-  0%   { transform: translateY(0) scale(1, 1); }
   45%  { transform: translateY(-4px) scale(0.99, 1.02); }
   100% { transform: translateY(0) scale(1, 1); }
 }

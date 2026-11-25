@@ -22,14 +22,18 @@ function renderCharacter(id) {
   currentId = c.id;
   const v = c.views || {};
   petArt.innerHTML = Object.keys(v)
-    .map((k) => `<div class="view view-${k}" data-img="${k}">${v[k] || ''}</div>`).join('');
+    .map((k) => `<div class="view view-${k}" data-img="${k}">${v[k] || ''}</div>`).join('') + '<div class="view view-dyn" data-img="dyn"></div>';
+  dynEl = petArt.querySelector('.view-dyn');
   petEl.dataset.character = c.id;
   setView('front');
   scheduleAction();
 }
+let dynEl = null;
 function setView(view) {
   if (!ART || !ART.VIEW_MAP[view]) view = 'front';
   petEl.dataset.view = view;
+  curAngle = viewAngle(view);
+  if (turning) { cancelAnimationFrame(turning.raf); turning.done(); }
   const [img, mirror] = ART ? ART.VIEW_MAP[view] : ['front', false];
   for (const el of petArt.children) {
     const on = el.dataset.img === img;
@@ -38,36 +42,45 @@ function setView(view) {
   }
 }
 
-// 轉身：沿十六方位一格一格轉，每格配一個小跳步
+// 轉身：角度連續變化（緩入緩出），每 5° 即時由 3D 模型算一張圖，轉完停在最近的十六方位
+// 畫格快取在記憶體；轉身期間只有一張動態圖在 DOM 裡，靜止時改回分層正面／預先畫好的方位圖
 let turning = null;
+const frameCache = new Map();
+let curAngle = 0;   // 目前畫面上的角度（轉身中途也會更新，讓中途改方向能從原地接著轉）
+const viewAngle = (v) => (ART && ART.VIEW_MAP[v] ? ART.VIEW_MAP[v][2] : 0);
+function showTurnFrame(angle) {
+  curAngle = angle;
+  let a = ((angle % 360) + 540) % 360 - 180;            // -180..180
+  const q = Math.round(Math.abs(a) / 5) * 5;
+  if (!frameCache.has(q)) frameCache.set(q, ART.render3d(q, 'qdyn'));
+  if (dynEl.dataset.q !== String(q)) { dynEl.innerHTML = frameCache.get(q); dynEl.dataset.q = String(q); }
+  dynEl.classList.toggle('mirror', a < 0 && q !== 180);
+}
 function turnTo(target, opts = {}) {
-  const order = ART ? ART.TURN_ORDER : ['front'];
-  let i = order.indexOf(petEl.dataset.view || 'front');
-  const t = order.indexOf(target);
-  if (i < 0 || t < 0) return Promise.resolve();
-  const steps = [];
-  if (opts.full) { const N = order.length; for (let k = 1; k <= N; k++) steps.push(order[(i + k * (opts.dir || 1) + N) % N]); }
-  else {
-    const N = order.length, fwd = (t - i + N) % N, dir = fwd <= N / 2 ? 1 : -1;
-    while (i !== t) { i = (i + dir + N) % N; steps.push(order[i]); }
-  }
-  if (turning) clearInterval(turning);
+  if (!ART || !ART.VIEW_MAP[target] || !ART.render3d) { setView(target); return Promise.resolve(); }
+  const from = turning ? curAngle : viewAngle(petEl.dataset.view || 'front');
+  let delta = ((viewAngle(target) - from) % 360 + 540) % 360 - 180;
+  if (opts.full) delta = 360 * (opts.dir || 1);
+  if (turning) { cancelAnimationFrame(turning.raf); turning.done(); }
+  if (Math.abs(delta) < 1 || reduceMotion) { setView(target); return Promise.resolve(); }
+  // 時間：預設每 90° 約 0.28 秒；可用 opts.ms 指定整段長度
+  const ms = opts.ms || Math.max(180, Math.abs(delta) / 90 * 280);
+  const hops = Math.max(1, Math.round(Math.abs(delta) / 90));   // 每轉 90° 輕輕跳一下
   return new Promise((resolve) => {
-    if (!steps.length) return resolve();
-    const stepMs = opts.stepMs || 110;
+    const t0 = performance.now();
     petEl.classList.add('turning');
-    let k = 0;
-    const next = () => {
-      setView(steps[k]);
-      petEl.classList.remove('turn-step'); void petEl.offsetWidth; petEl.classList.add('turn-step');
-      k += 1;
-      if (k >= steps.length) {
-        clearInterval(turning); turning = null;
-        setTimeout(() => { petEl.classList.remove('turning', 'turn-step'); resolve(); }, stepMs);
-      }
+    for (const el of petArt.children) el.classList.remove('on', 'mirror');
+    dynEl.classList.add('on');
+    const st = { raf: 0, target, done: () => { petArt.style.transform = ''; petEl.classList.remove('turning'); dynEl.classList.remove('on'); turning = null; resolve(); } };
+    turning = st;
+    const tick = (now) => {
+      const t = Math.min(1, (now - t0) / ms), e = 0.5 - 0.5 * Math.cos(Math.PI * t);
+      showTurnFrame(from + delta * e);
+      petArt.style.transform = `translateY(${(-3.5 * Math.abs(Math.sin(Math.PI * hops * t))).toFixed(2)}px)`;
+      if (t < 1) st.raf = requestAnimationFrame(tick);
+      else { st.done(); setView(target); }
     };
-    next();
-    turning = setInterval(next, stepMs);
+    st.raf = requestAnimationFrame(tick);
   });
 }
 
@@ -99,7 +112,7 @@ function setPose(pose, opts = {}) {
   const ms = isAction ? ((c.actionMs && c.actionMs[pose]) || 4800) : BASE_POSES[pose];
   if (ms) {
     poseTimer = setTimeout(() => {
-      if (pose === 'sniff') setView('front');
+      if (pose === 'sniff') turnTo('front', { ms: 320 });
       petEl.dataset.pose = 'idle';
       const line = isAction ? (c.actionLines && c.actionLines[pose]) : opts.endLine;
       if (line && !bubbleEl.classList.contains('show')) showBubble({ text: line, duration: 2500 });
@@ -175,7 +188,7 @@ function patReaction() {
   else if (patIndex === 1) setPose('pat2', { endLine: PAT_LINES[1] });
   else {
     setPose('idle');
-    turnTo('front', { full: true, dir: Math.random() < 0.5 ? 1 : -1, stepMs: 70 })
+    turnTo('front', { full: true, dir: Math.random() < 0.5 ? 1 : -1, ms: 1100 })
       .then(() => { if (!bubbleEl.classList.contains('show')) showBubble({ text: PAT_LINES[2], duration: 2000 }); });
   }
 }
@@ -216,16 +229,15 @@ function onCursor({ dx, dy }) {
   lastCursor = { dx, dy };
   const now = performance.now();
   if (moving) { cursorStillSince = now; sniffedThisStill = false; }
-  const canLook = isIdle() && !dragging && !away && ['front', 'f34r', 'f34l'].includes(petEl.dataset.view);
+  const canLook = isIdle() && !dragging && !away && (turning ? ['front', 'f34r', 'f34l'].includes(turning.target) : ['front', 'f34r', 'f34l'].includes(petEl.dataset.view));
   if (!canLook) return;
-  if (dist > 520) { setLook(0, 0); if (petEl.dataset.view !== 'front') setView('front'); return; }
-  if (Math.abs(dx) > 150) setView(dx > 0 ? 'f34r' : 'f34l');
-  else setView('front');
+  const face = (v) => { if ((turning ? turning.target : petEl.dataset.view) !== v) turnTo(v, { ms: 320 }); };
+  if (dist > 520) { setLook(0, 0); face('front'); return; }
+  face(Math.abs(dx) > 150 ? (dx > 0 ? 'f34r' : 'f34l') : 'front');
   setLook(Math.max(-1, Math.min(1, dx / 150)), Math.max(-1, Math.min(1, dy / 220)));
   if (!sniffedThisStill && dist < 280 && now - cursorStillSince > 6000) {
     sniffedThisStill = true;
-    setView(dx >= 0 ? 'f34r' : 'f34l');
-    setPose('sniff', { keepView: true });
+    turnTo(dx >= 0 ? 'f34r' : 'f34l', { ms: 320 }).then(() => setPose('sniff', { keepView: true }));
   }
 }
 function setLook(x, y) {
@@ -294,7 +306,7 @@ window.addEventListener('mousemove', (e) => {
   samples.push({ x: e.screenX, y: e.screenY, t: now });
   samples = samples.filter((s) => now - s.t < 90);
   if (moved >= 5 && petEl.dataset.pose !== 'lifted' && !away) {
-    if (turning) { clearInterval(turning); turning = null; petEl.classList.remove('turning', 'turn-step'); }
+    if (turning) { cancelAnimationFrame(turning.raf); turning.done(); }
     setView('front');
     setPose('lifted');
   }
