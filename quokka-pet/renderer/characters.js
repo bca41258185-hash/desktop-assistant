@@ -1,5 +1,5 @@
 // 短尾矮袋鼠「庫卡」的角色資料：名稱、問候語、動作清單、台詞、AI 人格與造型。
-// 造型由 quokka-art.js 產生（八方位＋分層正面）；此檔不含繪圖細節。
+// 造型由 quokka-art.js 產生（十六方位＋分層正面）；此檔不含繪圖細節。
 //
 // 資料結構保留「角色表」的形式（CHARACTERS / ORDER / DEFAULT_ID）。
 // 此檔同時供 renderer（window.CHARACTERS）與主行程（module.exports）使用。
@@ -46,7 +46,7 @@
       quoteTitle: '庫卡語錄',
       quoteHint: '以下是庫卡的原創球場打氣語，以及幾則短尾矮袋鼠的生態小知識；並非引用任何名人名言。',
       speakLabel: '讓庫卡說這句',
-      // 正面造型（面板縮圖用）與八方位（桌寵用）；用 getter 延後產生，主行程用不到就不產生
+      // 正面造型（面板縮圖用）與十六方位（桌寵用）；用 getter 延後產生，主行程用不到就不產生
       get svg() { return ART ? ART.views().front : ''; },
       get views() { return ART ? ART.views() : {}; }
     }

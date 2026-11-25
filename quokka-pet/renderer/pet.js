@@ -1,8 +1,8 @@
-// 桌寵 renderer：造型與八方位、姿勢與動作、互動（摸頭、長摸、游標跟隨、拎起、甩出、離開偵測）、說話氣泡。
+// 桌寵 renderer：造型與十六方位、姿勢與動作、互動（摸頭、長摸、游標跟隨、拎起、甩出、離開偵測）、說話氣泡。
 //
 // 狀態都寫在 #pet 的 data 屬性上，由 pet.css 決定畫面：
 //   data-pose  目前姿勢（idle、think、happy、各種動作與互動）
-//   data-view  目前方位（front、f34r、sider、b34r、back、b34l、sidel、f34l）
+//   data-view  目前方位（十六方位，見 QuokkaArt.TURN_ORDER；f34r、sider、back 等舊名稱仍可用）
 
 const petEl = document.getElementById('pet');
 const petArt = document.getElementById('petArt');
@@ -14,15 +14,15 @@ let currentId = window.CHAR_DEFAULT || Object.keys(CHARS)[0];
 const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // ---------------------------------------------------------------------------
-// 造型：五張圖疊在一起，依 data-view 顯示其中一張；左邊三個方位用 CSS 鏡射
+// 造型：九張圖疊在一起（正面＋右半邊每 22.5°），依 data-view 顯示其中一張；左半邊用 CSS 鏡射
 // ---------------------------------------------------------------------------
 function renderCharacter(id) {
   const c = CHARS[id] || CHARS[currentId];
   if (!c) return;
   currentId = c.id;
   const v = c.views || {};
-  petArt.innerHTML = ['front', 'f34', 'side', 'b34', 'back']
-    .map((k) => `<div class="view view-${k}">${v[k] || ''}</div>`).join('');
+  petArt.innerHTML = Object.keys(v)
+    .map((k) => `<div class="view view-${k}" data-img="${k}">${v[k] || ''}</div>`).join('');
   petEl.dataset.character = c.id;
   setView('front');
   scheduleAction();
@@ -30,9 +30,15 @@ function renderCharacter(id) {
 function setView(view) {
   if (!ART || !ART.VIEW_MAP[view]) view = 'front';
   petEl.dataset.view = view;
+  const [img, mirror] = ART ? ART.VIEW_MAP[view] : ['front', false];
+  for (const el of petArt.children) {
+    const on = el.dataset.img === img;
+    el.classList.toggle('on', on);
+    el.classList.toggle('mirror', on && mirror);
+  }
 }
 
-// 轉身：沿八方位一格一格轉，每格配一個小跳步
+// 轉身：沿十六方位一格一格轉，每格配一個小跳步
 let turning = null;
 function turnTo(target, opts = {}) {
   const order = ART ? ART.TURN_ORDER : ['front'];
@@ -40,10 +46,10 @@ function turnTo(target, opts = {}) {
   const t = order.indexOf(target);
   if (i < 0 || t < 0) return Promise.resolve();
   const steps = [];
-  if (opts.full) { for (let k = 1; k <= 8; k++) steps.push(order[(i + k * (opts.dir || 1) + 8) % 8]); }
+  if (opts.full) { const N = order.length; for (let k = 1; k <= N; k++) steps.push(order[(i + k * (opts.dir || 1) + N) % N]); }
   else {
-    const fwd = (t - i + 8) % 8, dir = fwd <= 4 ? 1 : -1;
-    while (i !== t) { i = (i + dir + 8) % 8; steps.push(order[i]); }
+    const N = order.length, fwd = (t - i + N) % N, dir = fwd <= N / 2 ? 1 : -1;
+    while (i !== t) { i = (i + dir + N) % N; steps.push(order[i]); }
   }
   if (turning) clearInterval(turning);
   return new Promise((resolve) => {
@@ -169,7 +175,7 @@ function patReaction() {
   else if (patIndex === 1) setPose('pat2', { endLine: PAT_LINES[1] });
   else {
     setPose('idle');
-    turnTo('front', { full: true, dir: Math.random() < 0.5 ? 1 : -1, stepMs: 100 })
+    turnTo('front', { full: true, dir: Math.random() < 0.5 ? 1 : -1, stepMs: 70 })
       .then(() => { if (!bubbleEl.classList.contains('show')) showBubble({ text: PAT_LINES[2], duration: 2000 }); });
   }
 }

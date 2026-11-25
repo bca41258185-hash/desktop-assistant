@@ -1,7 +1,7 @@
 /* 桌寵視窗：透明背景，角色置中偏下，氣泡在上方。
    動畫全由 #pet 的 data-pose 驅動：
    idle / think / happy、球類 badminton / volleyball / basketball、招牌動作 eat / hop / selfie / nap，
-   互動 pat1 / pat2 / pet / lifted / dizzy / wave / sniff / sleep；方位由 data-view 決定（八方位，左邊鏡射）。
+   互動 pat1 / pat2 / pet / lifted / dizzy / wave / sniff / sleep；方位由 data-view 決定（十六方位，左邊鏡射）。
    整隻身體的位移（呼吸、跳、打盹、自拍）放在外層 HTML 的 #petArt 上，由合成器處理，
    不必每格重畫帶毛絨濾鏡的 SVG；只有手、球、五官等局部動作才在 SVG 內動。 */
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -39,14 +39,10 @@ html, body {
 #petArt { position: relative; width: 100%; height: 100%; transform-origin: 50% 96%; will-change: transform; }
 #petArt svg { width: 100%; height: 100%; display: block; overflow: visible; }
 
-/* --- 八方位：五張圖疊放，依 data-view 只顯示一張；左邊三個方位水平鏡射 --- */
+/* --- 十六方位：九張圖疊放，pet.js 依 data-view 只顯示一張（.on）；左半邊水平鏡射（.mirror） --- */
 .view { position: absolute; inset: 0; display: none; }
-#pet[data-view="front"] .view-front,
-#pet[data-view="f34r"] .view-f34, #pet[data-view="f34l"] .view-f34,
-#pet[data-view="sider"] .view-side, #pet[data-view="sidel"] .view-side,
-#pet[data-view="b34r"] .view-b34, #pet[data-view="b34l"] .view-b34,
-#pet[data-view="back"] .view-back { display: block; }
-#pet[data-view="f34l"] .view-f34, #pet[data-view="sidel"] .view-side, #pet[data-view="b34l"] .view-b34 { transform: scaleX(-1); }
+.view.on { display: block; }
+.view.mirror { transform: scaleX(-1); }
 /* 轉身時每一格配一個小跳步 */
 #pet.turning #petArt { animation: none; }
 #pet.turn-step #petArt { animation: turnHop 0.11s ease-out; }
