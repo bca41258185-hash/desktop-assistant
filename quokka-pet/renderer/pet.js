@@ -138,7 +138,7 @@ function setPose(pose, opts = {}) {
 }
 const isIdle = () => petEl.dataset.pose === 'idle' && !turning;
 
-// 待機時每隔 20–40 秒依權重隨機做一個動作（不連續重複）；忙碌時略過這一輪
+// 待機時依個性（活潑程度）每隔 10–40 秒、依權重（含最愛／不愛）隨機做一個動作（不連續重複）；忙碌時略過這一輪
 let actionTimer = null;
 let lastAction = '';
 function pickAction() {
