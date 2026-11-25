@@ -1,4 +1,4 @@
-// 短尾矮袋鼠個體特徵：每次「生成」都抽一組不同、但落在真實範圍內的體型、年齡與毛色。
+// 短尾矮袋鼠個體特徵：每次「生成」都抽一組不同、但落在真實範圍內的體型、年齡、毛色，以及個性、社交風格與興趣。
 // 主行程用它產生並存檔；renderer 用它把特徵換算成造型參數（身形寬窄、臉頰、耳朵、尾長、整體大小、毛色）。
 //
 // 真實範圍（成年個體）：
@@ -71,7 +71,7 @@
       grey: round(stage === 'senior' ? lerp(0.12, 0.3, (ageMonths - 97) / 71) : stage === 'juvenile' ? 0.04 : r() * 0.06, 3),
       bellyLight: round((r() - 0.5) * 0.05, 3)
     };
-    return {
+    const t = {
       v: 1, seed, sex, ageMonths, stage,
       lengthCm: round(lengthCm), tailCm: round(tailCm), weightKg: round(weightKg, 2),
       sitHeightCm: round(lengthCm * 0.74),           // 坐姿立起時的高度（估算：頭身長 × 0.74）
@@ -81,6 +81,8 @@
       fur,
       band: BAND_COLORS[Math.floor(r() * BAND_COLORS.length)]
     };
+    t.personality = personality(t);
+    return t;
   }
 
   // ---------------------------------------------------------------------------
@@ -104,6 +106,113 @@
       ['體型', buildName(t.condition)],
       ['毛色', t.fur.name + (t.fur.rufous > 0.5 ? '，臉偏紅' : '') + (t.fur.grey > 0.12 ? '，略帶灰白' : '')]
     ];
+  }
+
+
+  // ---------------------------------------------------------------------------
+  // 個性與興趣
+  // 動物個性研究常用的面向：活潑（activity）、親人／社交（sociability）、膽量（boldness）、好奇（curiosity），
+  // 另加「黏人」（affection）描述對使用者的依賴。依據：
+  //   · 短尾矮袋鼠天性好奇、敢靠近人，但約五分之一的人與牠互動時牠會緊張 → 膽量有高有低
+  //   · 袋鼠研究：膽子大的個體朋友也較多 → 膽量與社交正相關
+  //   · 公的會依體重排地位、較常主動互動；母的很少主動社交 → 母的「主動找朋友」機率較低
+  // ---------------------------------------------------------------------------
+  const ACTIVITIES = {
+    badminton: '羽球', volleyball: '排球', basketball: '籃球', eat: '吃葉子', hop: '跳跳', selfie: '自拍', nap: '打盹'
+  };
+  const HOBBIES = ['曬太陽', '看雲', '收集漂亮的葉子', '聽海浪聲', '數星星', '散步探險', '整理毛毛', '拍風景照', '研究零食', '聽音樂', '跟朋友聊天', '找陰涼的樹叢'];
+  const ARCHETYPES = {
+    athlete: { name: '運動健將', greet: '嗨！我是庫卡，今天打哪一種球？我已經熱身好了！', back: '你回來了！來，打一場！', pat: ['嘿嘿，好舒服。', '摸完再來打球！', '再摸一下就出發！'], petDone: '好，充電完畢！' },
+    clingy: { name: '黏人開心果', greet: '嗨嗨！我是庫卡，可以一直待在你旁邊嗎？', back: '你終於回來了！我好想你～', pat: ['嘿嘿，好舒服。', '再摸一下嘛～', '最喜歡你了！'], petDone: '嘿嘿，謝謝你摸我。' },
+    shy: { name: '害羞小可愛', greet: '那個……你好，我是庫卡。請、請多指教。', back: '啊……你回來了。（小聲）歡迎回來。', pat: ['嗚……有點不好意思。', '耳、耳朵癢癢的。', '……謝謝。'], petDone: '（臉紅）……謝謝。' },
+    explorer: { name: '好奇探險家', greet: '你好！我是庫卡，你的桌面好多新東西，我可以到處看看嗎？', back: '你回來啦！剛剛我發現了好多東西！', pat: ['嘿嘿，好舒服。', '咦，你手上有什麼味道？', '再摸一下，我再去探險！'], petDone: '謝謝！我要繼續去探險了。' },
+    sleepy: { name: '慵懶睡神', greet: '呼……我是庫卡。工作加油，我先瞇一下喔。', back: '嗯……你回來啦？我剛剛只是閉目養神。', pat: ['嗯……好舒服……', '再摸下去我會睡著喔……', '呼……'], petDone: '呼……謝謝……' },
+    cool: { name: '獨立酷酷派', greet: '我是庫卡。你忙你的，我自己會找事做。', back: '喔，回來了。', pat: ['……還行。', '好啦好啦，夠了喔。', '哼，沒有很舒服啦。'], petDone: '好了，夠了。' },
+    easy: { name: '隨和好夥伴', greet: '嗨，我是庫卡！今天也笑著把事情做完，等等一起打球吧。', back: '你回來啦！歡迎回來～', pat: ['嘿嘿，好舒服。', '耳朵癢癢的！', '再摸一下嘛～'], petDone: '嘿嘿，謝謝你摸我。' }
+  };
+  const SOCIAL_STYLES = {
+    leader: '主動找朋友、喜歡帶頭玩',
+    friendly: '朋友來找就很開心',
+    watcher: '先在旁邊觀察，熟了才靠近',
+    solo: '喜歡自己玩'
+  };
+  const sig = (z) => 1 / (1 + Math.exp(-1.7 * z));
+  function personality(t) {
+    const r = rng(((t.seed >>> 0) ^ 0x5bd1e995) >>> 0);
+    const n = () => clamp(normal(r), -2.5, 2.5);
+    const zb = n(), zs = 0.5 * zb + 0.87 * n(), zc = 0.4 * zb + 0.92 * n(), za = n(), zf = 0.5 * zs + 0.87 * n();
+    const ageAct = t.stage === 'juvenile' ? 0.5 : t.stage === 'senior' ? -0.6 : 0;
+    const P = {
+      activity: round(sig(za + ageAct), 2), sociability: round(sig(zs), 2), boldness: round(sig(zb), 2),
+      curiosity: round(sig(zc + (t.stage === 'juvenile' ? 0.4 : 0)), 2), affection: round(sig(zf), 2)
+    };
+    // 喜歡兩種活動、不太愛一種；活潑的偏好運動、慵懶的偏好打盹與吃
+    const ids = Object.keys(ACTIVITIES);
+    const pref = (a) => (['badminton', 'volleyball', 'basketball', 'hop'].includes(a) ? P.activity : a === 'nap' || a === 'eat' ? 1 - P.activity : a === 'selfie' ? P.sociability : 0.5) + r() * 0.9;
+    const ranked = ids.map((a) => [a, pref(a)]).sort((x, y) => y[1] - x[1]).map((x) => x[0]);
+    const likes = ranked.slice(0, 2), dislike = ranked[ranked.length - 1];
+    const hb = HOBBIES.slice(); const hobbies = [];
+    while (hobbies.length < 2) hobbies.push(hb.splice(Math.floor(r() * hb.length), 1)[0]);
+    // 個性類型：取最突出的特質
+    const cands = [
+      ['athlete', P.activity > 0.68 && likes.some((a) => ['badminton', 'volleyball', 'basketball'].includes(a)) ? P.activity : 0],
+      ['clingy', P.affection > 0.68 && P.sociability > 0.5 ? (P.affection + P.sociability) / 2 : 0],
+      ['shy', P.boldness < 0.3 ? 1 - P.boldness : 0],
+      ['explorer', P.curiosity > 0.7 ? P.curiosity : 0],
+      ['sleepy', P.activity < 0.3 ? 1 - P.activity : 0],
+      ['cool', P.sociability < 0.3 && P.affection < 0.45 ? 1 - P.sociability : 0]
+    ].filter((c) => c[1] > 0).sort((x, y) => y[1] - x[1]);
+    const archetype = cands.length ? cands[0][0] : 'easy';
+    // 社交風格（之後多隻庫卡互動用）：母的較少主動
+    const initiative = round(clamp(P.sociability * (t.sex === 'female' ? 0.65 : 1) * (0.6 + 0.4 * P.boldness) * 1.4, 0, 1), 2);
+    const socialStyle = initiative > 0.68 ? 'leader' : P.sociability > 0.5 ? 'friendly' : P.boldness < 0.4 ? 'watcher' : 'solo';
+    return { ...P, likes, dislike, hobbies, archetype, socialStyle, initiative };
+  }
+  function ensurePersonality(t) {
+    if (t && !t.personality) t.personality = personality(t);
+    return t;
+  }
+  const bars = (v) => '●'.repeat(Math.round(v * 4) + 1) + '○'.repeat(4 - Math.round(v * 4));
+  function describePersonality(t) {
+    const P = t && t.personality; if (!P) return [];
+    return [
+      ['個性', ARCHETYPES[P.archetype].name],
+      ['社交', SOCIAL_STYLES[P.socialStyle]],
+      ['活潑', bars(P.activity)], ['親人', bars(P.sociability)], ['膽量', bars(P.boldness)],
+      ['好奇', bars(P.curiosity)], ['黏人', bars(P.affection)],
+      ['最愛', P.likes.map((a) => ACTIVITIES[a]).join('、')],
+      ['不太愛', ACTIVITIES[P.dislike]],
+      ['嗜好', P.hobbies.join('、')]
+    ];
+  }
+  // 行為參數：桌寵依此調整動作頻率、偏好、台詞與互動反應
+  function behavior(t) {
+    const P = t && t.personality;
+    if (!P) return null;
+    const A = ARCHETYPES[P.archetype];
+    const weightK = {};
+    Object.keys(ACTIVITIES).forEach((a) => {
+      let k = P.likes.includes(a) ? 3 : a === P.dislike ? 0.25 : 1;
+      if (a === 'nap') k *= 1.6 - P.activity;
+      weightK[a] = round(k, 2);
+    });
+    const gap = 30 - 16 * P.activity;          // 平均間隔（秒）：很活潑約 14 秒、很慵懶約 30 秒
+    return {
+      weightK, likes: P.likes, dislike: P.dislike, names: ACTIVITIES,
+      intervalMs: [Math.round(gap * 700), Math.round(gap * 1300)],
+      sniffDelayMs: Math.round(3000 + (1 - P.curiosity) * 7000),
+      shy: P.boldness < 0.3,                   // 膽小：游標靠太久會害羞地轉開，而不是湊過去聞
+      petReversals: P.affection > 0.6 ? 3 : P.affection < 0.35 ? 6 : 4,
+      greet: A.greet, back: A.back, pat: A.pat, petDone: A.petDone
+    };
+  }
+  // AI 聊天：把這一隻的個性與興趣接在角色人格後面
+  function personaText(t) {
+    const P = t && t.personality; if (!P) return '';
+    const A = ARCHETYPES[P.archetype];
+    return `這一隻庫卡的個體設定：${t.sex === 'male' ? '公' : '母'}的，${ageText(t.ageMonths)}，個性是「${A.name}」，` +
+      `社交上${SOCIAL_STYLES[P.socialStyle]}；最喜歡${P.likes.map((a) => ACTIVITIES[a]).join('和')}，不太愛${ACTIVITIES[P.dislike]}，` +
+      `平常的嗜好是${P.hobbies.join('和')}。說話語氣請符合這個個性（例如：${A.greet}）。`;
   }
 
   // ---------------------------------------------------------------------------
@@ -161,7 +270,7 @@
     return svg.replace(/#[0-9a-fA-F]{6}\b/g, (c) => m[c.toLowerCase()] || c);
   }
 
-  const api = { generate, describe, shape, recolor, colorMap, RANGES, FUR_TYPES, BAND_COLORS };
+  const api = { generate, describe, describePersonality, ensurePersonality, behavior, personaText, ARCHETYPES, shape, recolor, colorMap, RANGES, FUR_TYPES, BAND_COLORS };
   if (typeof window !== 'undefined') window.QuokkaTraits = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

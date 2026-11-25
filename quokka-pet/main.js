@@ -67,6 +67,20 @@ function currentTraits() {
   saveConfig();
   return config.settings.quokkaTraits;
 }
+// 舊設定檔可能只有體型沒有個性：補上（由同一個 seed 產生，所以每次補出來都一樣）
+function traitsWithPersonality() {
+  const t = currentTraits();
+  if (!t.personality) { QuokkaTraits.ensurePersonality(t); saveConfig(); }
+  return t;
+}
+function greetingFor(c) {
+  const b = QuokkaTraits.behavior(traitsWithPersonality());
+  return (b && b.greet) || c.greeting;
+}
+function traitsInfo() {
+  const t = traitsWithPersonality();
+  return { traits: t, info: QuokkaTraits.describe(t), personality: QuokkaTraits.describePersonality(t) };
+}
 
 function configPath() {
   return path.join(app.getPath('userData'), 'config.json');
@@ -143,7 +157,7 @@ function createPetWindow() {
   petWindow.webContents.on('did-finish-load', () => {
     const id = currentCharacterId();
     const c = CHARACTERS[id];
-    petWindow.webContents.send('pet:character', { id, greeting: c.greeting, traits: currentTraits() });
+    petWindow.webContents.send('pet:character', { id, greeting: greetingFor(c), traits: currentTraits() });
   });
 
   // 預設放在主螢幕右下角
@@ -216,7 +230,7 @@ function setPetCharacter(id, withGreeting) {
     const c = CHARACTERS[id];
     petWindow.webContents.send('pet:character', {
       id,
-      greeting: withGreeting && c ? c.greeting : undefined,
+      greeting: withGreeting && c ? greetingFor(c) : undefined,
       traits: currentTraits()
     });
   }
@@ -477,14 +491,14 @@ function registerIpc() {
   });
 
   // 切換造型：立即更新桌寵（不需重啟）、持久化、播放問候語
-  ipcMain.handle('quokka:traits', () => ({ traits: currentTraits(), info: QuokkaTraits.describe(currentTraits()) }));
+  ipcMain.handle('quokka:traits', () => traitsInfo());
   ipcMain.handle('quokka:regenerate', () => {
     config.settings.quokkaTraits = QuokkaTraits.generate();
     saveConfig();
     if (petWindow && !petWindow.isDestroyed()) {
-      petWindow.webContents.send('pet:character', { id: currentCharacterId(), traits: currentTraits(), greeting: '嗨，我是新來的庫卡！請多指教～' });
+      petWindow.webContents.send('pet:character', { id: currentCharacterId(), traits: currentTraits(), greeting: greetingFor(CHARACTERS[currentCharacterId()]) });
     }
-    return { traits: currentTraits(), info: QuokkaTraits.describe(currentTraits()) };
+    return traitsInfo();
   });
 
   ipcMain.handle('character:set', (e, id) => {
@@ -591,7 +605,7 @@ function registerIpc() {
 
     // 進入思考姿勢
     setPetPose('think');
-    const systemPrompt = c.persona;
+    const systemPrompt = c.persona + '\n' + QuokkaTraits.personaText(traitsWithPersonality());
 
     try {
       const reply = await provider.chat([

@@ -37,7 +37,10 @@ function applyTraits(t) {
   const sh = window.QuokkaTraits && window.QuokkaTraits.shape(t);
   if (sh) petEl.style.setProperty('--size', sh.sizeK.toFixed(3));
   if (t.band) petEl.style.setProperty('--band', t.band);
+  BEH = window.QuokkaTraits ? window.QuokkaTraits.behavior(window.QuokkaTraits.ensurePersonality(t)) : null;
 }
+// 個性行為參數（動作偏好、頻率、台詞、互動反應）；沒有特徵資料時用預設
+let BEH = null;
 function setView(view) {
   if (!ART || !ART.VIEW_MAP[view]) view = 'front';
   petEl.dataset.view = view;
@@ -123,7 +126,12 @@ function setPose(pose, opts = {}) {
     poseTimer = setTimeout(() => {
       if (pose === 'sniff') turnTo('front', { ms: 320 });
       petEl.dataset.pose = 'idle';
-      const line = isAction ? (c.actionLines && c.actionLines[pose]) : opts.endLine;
+      let line = isAction ? (c.actionLines && c.actionLines[pose]) : opts.endLine;
+      // 個性：做到最愛的有時會說出來；做到不愛的會小抱怨
+      if (isAction && BEH) {
+        if (pose === BEH.dislike) line = '其實我不太喜歡' + BEH.names[pose] + '……';
+        else if (BEH.likes.includes(pose) && Math.random() < 0.4) line = '我最喜歡' + BEH.names[pose] + '了！';
+      }
       if (line && !bubbleEl.classList.contains('show')) showBubble({ text: line, duration: 2500 });
     }, ms);
   }
@@ -136,7 +144,7 @@ let lastAction = '';
 function pickAction() {
   const c = charOf(currentId);
   const list = actionsOf(currentId).filter((a) => a !== lastAction);
-  const w = (a) => (c.actionWeights && c.actionWeights[a]) || 1;
+  const w = (a) => ((c.actionWeights && c.actionWeights[a]) || 1) * ((BEH && BEH.weightK[a]) || 1);
   let r = Math.random() * list.reduce((sum, a) => sum + w(a), 0);
   for (const a of list) { r -= w(a); if (r < 0) return a; }
   return list[0];
@@ -151,7 +159,7 @@ function scheduleAction() {
       if (lastAction) setPose(lastAction);
     }
     scheduleAction();
-  }, 20000 + Math.random() * 20000);
+  }, BEH ? BEH.intervalMs[0] + Math.random() * (BEH.intervalMs[1] - BEH.intervalMs[0]) : 20000 + Math.random() * 20000);
 }
 
 // ---------------------------------------------------------------------------
@@ -193,12 +201,13 @@ let patIndex = Math.floor(Math.random() * 3);
 function patReaction() {
   if (dragging || away) return;
   patIndex = (patIndex + 1) % 3;
-  if (patIndex === 0) setPose('pat1', { endLine: PAT_LINES[0] });
-  else if (patIndex === 1) setPose('pat2', { endLine: PAT_LINES[1] });
+  const lines = (BEH && BEH.pat) || PAT_LINES;
+  if (patIndex === 0) setPose('pat1', { endLine: lines[0] });
+  else if (patIndex === 1) setPose('pat2', { endLine: lines[1] });
   else {
     setPose('idle');
     turnTo('front', { full: true, dir: Math.random() < 0.5 ? 1 : -1, ms: 1100 })
-      .then(() => { if (!bubbleEl.classList.contains('show')) showBubble({ text: PAT_LINES[2], duration: 2000 }); });
+      .then(() => { if (!bubbleEl.classList.contains('show')) showBubble({ text: ((BEH && BEH.pat) || PAT_LINES)[2], duration: 2000 }); });
   }
 }
 
@@ -217,11 +226,11 @@ function onHoverMove(e) {
   if (dir && dir !== lastDirX && Math.abs(e.movementX) >= 2) { petSamples.push(now); lastDirX = dir; }
   petSamples = petSamples.filter((t) => now - t < 1400);
   const petting = petEl.dataset.pose === 'pet';
-  if (petSamples.length >= 4 && (isIdle() || petting)) {
+  if (petSamples.length >= ((BEH && BEH.petReversals) || 4) && (isIdle() || petting)) {
     if (!petting) { setPose('pet'); petStartedAt = now; }
     if (petEndTimer) clearTimeout(petEndTimer);
     petEndTimer = setTimeout(() => {
-      if (petEl.dataset.pose === 'pet') { setPose('idle'); showBubble({ text: '嘿嘿，謝謝你摸我。', duration: 2200 }); }
+      if (petEl.dataset.pose === 'pet') { setPose('idle'); showBubble({ text: (BEH && BEH.petDone) || '嘿嘿，謝謝你摸我。', duration: 2200 }); }
     }, 900);
     if (now - petStartedAt > 8000) { clearTimeout(petEndTimer); petSamples = []; setPose('nap'); }
   }
@@ -244,8 +253,12 @@ function onCursor({ dx, dy }) {
   if (dist > 520) { setLook(0, 0); face('front'); return; }
   face(Math.abs(dx) > 150 ? (dx > 0 ? 'f34r' : 'f34l') : 'front');
   setLook(Math.max(-1, Math.min(1, dx / 150)), Math.max(-1, Math.min(1, dy / 220)));
-  if (!sniffedThisStill && dist < 280 && now - cursorStillSince > 6000) {
+  if (!sniffedThisStill && dist < 280 && now - cursorStillSince > ((BEH && BEH.sniffDelayMs) || 6000)) {
     sniffedThisStill = true;
+    if (BEH && BEH.shy) {   // 膽小：害羞地轉開、偷看
+      turnTo(dx >= 0 ? 'f34l' : 'f34r', { ms: 420 }).then(() => { setPose('pat2', { keepView: true }); showBubble({ text: '（偷偷看你）', duration: 1800 }); setTimeout(() => turnTo('front', { ms: 500 }), 1800); });
+      return;
+    }
     turnTo(dx >= 0 ? 'f34r' : 'f34l', { ms: 320 }).then(() => setPose('sniff', { keepView: true }));
   }
 }
@@ -260,7 +273,7 @@ function onAway(isAway) {
   if (isAway === away) return;
   away = isAway;
   if (away) { setView('front'); setPose('sleep'); }
-  else { setPose('wave'); showBubble({ text: '你回來啦！歡迎回來～', duration: 3000 }); }
+  else { setPose('wave'); showBubble({ text: (BEH && BEH.back) || '你回來啦！歡迎回來～', duration: 3000 }); }
 }
 
 // ---------------------------------------------------------------------------

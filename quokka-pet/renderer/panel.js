@@ -382,7 +382,7 @@ function renderProfile(res) {
     profileArt.style.setProperty('--band', res.traits.band);
   }
   profileInfo.innerHTML = '';
-  res.info.forEach(([k, v]) => {
+  res.info.concat(res.personality || []).forEach(([k, v]) => {
     const dt = document.createElement('dt'); dt.textContent = k;
     const dd = document.createElement('dd'); dd.textContent = v;
     profileInfo.append(dt, dd);
