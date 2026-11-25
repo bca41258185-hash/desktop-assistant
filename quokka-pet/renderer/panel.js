@@ -371,10 +371,35 @@ document.getElementById('saveSettings').addEventListener('click', async () => {
 // ---------------------------------------------------------------------------
 // 初始載入
 // ---------------------------------------------------------------------------
+// 庫卡檔案卡：顯示個體特徵；「重新生成」會換成另一隻（需確認，因為原本那隻就不見了）
+const profileArt = document.getElementById('profileArt');
+const profileInfo = document.getElementById('profileInfo');
+function renderProfile(res) {
+  if (!res || !profileInfo) return;
+  if (window.QuokkaArt) {
+    window.QuokkaArt.configure(res.traits);
+    profileArt.innerHTML = window.QuokkaArt.views().front;
+    profileArt.style.setProperty('--band', res.traits.band);
+  }
+  profileInfo.innerHTML = '';
+  res.info.forEach(([k, v]) => {
+    const dt = document.createElement('dt'); dt.textContent = k;
+    const dd = document.createElement('dd'); dd.textContent = v;
+    profileInfo.append(dt, dd);
+  });
+}
+const regenBtn = document.getElementById('regenTraits');
+if (regenBtn) regenBtn.addEventListener('click', async () => {
+  if (!confirm('要換成另一隻新的庫卡嗎？目前這隻的體型與毛色不會保留。')) return;
+  renderProfile(await window.api.regenerateTraits());
+  renderCharPicker();
+});
+
 (async function init() {
   renderFolders(await window.api.listFolders());
   renderChanges(await window.api.listChanges());
   renderTasks(await window.api.listTasks());
+  renderProfile(await window.api.getTraits());
   await loadSettings();
   await loadQuotes(selectedCharId);
 })();

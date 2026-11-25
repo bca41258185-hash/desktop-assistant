@@ -71,6 +71,16 @@
     <div id="actionRows"></div>
     <p class="hint">待機時每隔 20–40 秒也會自己隨機做一個動作；把牠拖到別處放下時會跳一下。</p>
     <!-- 造型選擇器：只有一種造型時自動隱藏，日後新增造型才會出現 -->
+    <h2 class="mt">庫卡檔案</h2>
+    <div class="profile">
+      <div class="profile-art" id="profileArt"></div>
+      <dl class="profile-info" id="profileInfo"></dl>
+    </div>
+    <div class="profile-actions">
+      <button type="button" id="regenTraits">重新生成（換一隻）</button>
+    </div>
+    <p class="hint">體型、年齡、毛色在真實範圍內隨機產生（頭身長：公 43–54 cm、母 39–50 cm；體重：公 2.7–4.2 kg、母 1.6–3.5 kg；壽命約 10 年）。第一次啟動時決定，之後固定不變。</p>
+
     <div id="charSection" hidden>
       <h2 class="mt">選擇造型</h2>
       <div class="char-picker" id="charPicker"></div>
@@ -122,6 +132,7 @@
     </p>
   </section>
 
+  <script src="traits.js"></script>
   <script src="quokka-art.js"></script>
   <script src="characters.js"></script>
   <script src="panel.js"></script>

@@ -300,7 +300,7 @@ function b34(id) {
 // 座標：x 右、y 下（同 SVG）、z 朝觀者（正面時）。θ＝轉向角：0 正面、90 右側（口鼻朝右）、180 背面、-90 左側。
 // 尺寸依參考照片（正面量測）與 iNaturalist 開放授權照片（斜角、側面）校正：梨形身材、圓臉頰、口鼻斜角時突出。
 // ===========================================================================
-const Q3 = [
+const Q3_BASE = [
   // [名稱, cx, cy, cz, rx, ry, rz]
   ['thighL', -30, 148, -6, 17, 21, 25], ['thighR', 30, 148, -6, 17, 21, 25],
   ['hips', 0, 140, -1, 46, 34, 34],
@@ -312,6 +312,27 @@ const Q3 = [
   ['snout', 0, 56.5, 21, 11, 9, 18],
   ['snoutTip', 0, 55, 34, 7, 6.5, 7]
 ];
+let _views = null;
+let Q3 = Q3_BASE, TAILK = 1, EARK = 1, TRAITS = null;
+const TR = () => (typeof window !== 'undefined' && window.QuokkaTraits) ? window.QuokkaTraits
+  : (typeof require === 'function' ? require('./traits.js') : null);
+// 套用個體特徵（體型胖瘦、臉頰、耳朵、尾長、毛色）；之後產生的所有圖都會用這組特徵
+function configure(traits) {
+  TRAITS = traits || null; _views = null;
+  const sh = traits && TR() ? TR().shape(traits) : null;
+  if (!sh) { Q3 = Q3_BASE; TAILK = 1; EARK = 1; return; }
+  const w = sh.widthK, c = sh.cheekK, k = (f) => 1 + (w - 1) * f;
+  Q3 = Q3_BASE.map(([n, x, y, z, rx, ry, rz]) => {
+    if (n === 'hips' || n === 'rump') return [n, x, y, z, rx * w, ry, rz * w];
+    if (n.startsWith('thigh')) return [n, x * k(.8), y, z, rx * w, ry, rz * w];
+    if (n === 'chest') return [n, x, y, z, rx * k(.6), ry, rz * k(.6)];
+    if (n === 'neck') return [n, x, y, z, rx * k(.3), ry, rz * k(.3)];
+    if (n.startsWith('cheek')) return [n, x * (1 + (c - 1) * .5), y, z, rx * c, ry * c, rz * c];
+    return [n, x, y, z, rx, ry, rz];
+  });
+  TAILK = sh.tailK; EARK = sh.earK;
+}
+const paint = (svg) => (TRAITS && TR() ? TR().recolor(svg, TRAITS) : svg);
 const rad = (a) => a * Math.PI / 180;
 function q3proj(p, th) {
   const c = Math.cos(rad(th)), s = Math.sin(rad(th));
@@ -340,7 +361,7 @@ function q3render(th, id, opts = {}) {
   const c = Math.cos(rad(th)), s = Math.sin(rad(th)), P = (p) => q3proj(p, th), f1 = (v) => v.toFixed(1);
   const outline = q3outline(th);
   // 尾巴：由粗到細，從臀部往後沿地面拖；正背面時只看到朝觀者的一小截
-  const tq = [[0, 158, -26, 6.5], [0, 164, -40, 5.4], [0, 168, -54, 4.4], [0, 170.5, -68, 3.4], [0, 171.5, -80, 2.4]].map(([x, y, z, r]) => ({ ...P([x, y, z]), r }));
+  const tq = [[0, 158, -26, 6.5], [0, 164, -40, 5.4], [0, 168, -54, 4.4], [0, 170.5, -68, 3.4], [0, 171.5, -80, 2.4]].map(([x, y, z, r]) => ({ ...P([x, y, -26 + (z + 26) * TAILK]), r }));
   let tail = '', tailFront = false;
   if (Math.abs(tq[0].X - tq[4].X) < 6) {
     if (c < 0) { tailFront = true; const x = tq[0].X; tail = `<ellipse cx="${f1(x)}" cy="183" rx="6.5" ry="2.2" fill="#000" opacity=".14" filter="url(#b1${id})"/><path d="M${f1(x - 6)} 156 C${f1(x - 6.4)} 168 ${f1(x - 5)} 177 ${f1(x - 3.6)} 181.5 C${f1(x - 2.4)} 185.6 ${f1(x + 2.4)} 185.6 ${f1(x + 3.6)} 181.5 C${f1(x + 5)} 177 ${f1(x + 6.4)} 168 ${f1(x + 6)} 156 Z" fill="url(#tl${id})" filter="url(#fz${id})"/>`; }
@@ -353,7 +374,7 @@ function q3render(th, id, opts = {}) {
   const ears = [-1, 1].map((k) => {
     const q = P([k * 22, 19, -12]), f = q3facing([k * .3, 0, 1], th), w = 9 * (0.5 + 0.5 * Math.abs(f));
     const inner = f > 0.15 ? `<ellipse cx="${f1(q.X)}" cy="20.6" rx="${f1(w * .62)}" ry="6.8" fill="#f2c38c"/><ellipse cx="${f1(q.X)}" cy="21.8" rx="${f1(w * .35)}" ry="4" fill="#8a7460"/>` : '';
-    return `<g class="ear" filter="url(#fz${id})"><ellipse cx="${f1(q.X)}" cy="19" rx="${f1(w)}" ry="10.5" fill="${f > 0 ? '#b38a5e' : '#93744f'}"/>${inner}</g>`;
+    return `<g class="ear" filter="url(#fz${id})" transform="translate(${f1(q.X)} 27) scale(${EARK}) translate(${f1(-q.X)} -27)"><ellipse cx="${f1(q.X)}" cy="19" rx="${f1(w)}" ry="10.5" fill="${f > 0 ? '#b38a5e' : '#93744f'}"/>${inner}</g>`;
   }).join('');
   // 腳：長腳掌，腳尖有小爪子
   const feet = [-1, 1].map((k) => {
@@ -383,7 +404,7 @@ function q3render(th, id, opts = {}) {
   const vis = ring.filter((q) => q.Z > -1.5);
   const band = vis.length > 1 ? `<path d="M${vis.map((q) => f1(q.X) + ' ' + f1(q.Y)).join(' L')}" fill="none" style="stroke: var(--band, #e5533d)" stroke-width="6.4"/>` : '';
   const kn = P([0, 31, -27.5]);
-  const knot = kn.Z > 0 ? `<path transform="translate(${f1(kn.X)} 0)" d="M-3 34 Q-6 43 -10 49 L-7 50 Q-3 44 0 35 Z M3 34 Q6 43 10 49 L7 50 Q3 44 0 35 Z" fill="#c9432f"/><ellipse cx="${f1(kn.X)}" cy="33" rx="${f1(3.4 * (0.5 + 0.5 * Math.abs(c)))}" ry="2.8" fill="#d24a35"/>` : '';
+  const knot = kn.Z > 0 ? `<path transform="translate(${f1(kn.X)} 0)" d="M-3 34 Q-6 43 -10 49 L-7 50 Q-3 44 0 35 Z M3 34 Q6 43 10 49 L7 50 Q3 44 0 35 Z" style="fill: var(--band, #e5533d)"/><path transform="translate(${f1(kn.X)} 0)" d="M-3 34 Q-6 43 -10 49 L-7 50 Q-3 44 0 35 Z M3 34 Q6 43 10 49 L7 50 Q3 44 0 35 Z" fill="#000" opacity=".15"/><ellipse cx="${f1(kn.X)}" cy="33" rx="${f1(3.4 * (0.5 + 0.5 * Math.abs(c)))}" ry="2.8" style="fill: var(--band, #e5533d)"/>` : '';
   // 五官：每個部位都有 3D 位置，轉開時自動變窄、移位或消失
   const face = [];
   for (const k of [-1, 1]) {
@@ -424,7 +445,7 @@ function frontLayered(id) {
   const ey = 43, ns = .9, nx = (v) => 80 + (v - 80) * ns, ny = (v) => 53.5 + (v - 53.5) * ns, my = ny(60);
   const H = 'display="none"';
   const NOSE = `M${nx(72.6)} ${ny(51.2)} C${nx(72.4)} ${ny(46.4)} ${nx(87.6)} ${ny(46.4)} ${nx(87.4)} ${ny(51.2)} C${nx(87.4)} ${ny(56.2)} ${nx(83.8)} ${ny(59)} ${nx(80.9)} ${ny(59.6)} L80 ${ny(60)} L${nx(79.1)} ${ny(59.6)} C${nx(76.2)} ${ny(59)} ${nx(72.6)} ${ny(56.2)} ${nx(72.6)} ${ny(51.2)} Z`;
-  const ear = (cls, cx) => `<g class="ear ${cls}"><g filter="url(#fz${id})"><ellipse cx="${cx}" cy="19" rx="9" ry="10.5" fill="#b38a5e"/><ellipse cx="${cx}" cy="20.6" rx="5.6" ry="6.8" fill="#f2c38c"/><ellipse cx="${cx}" cy="21.8" rx="3.2" ry="4" fill="#8a7460"/></g></g>`;
+  const ear = (cls, cx) => `<g class="ear ${cls}"><g filter="url(#fz${id})" transform="translate(${cx} 27) scale(${EARK}) translate(${-cx} -27)"><ellipse cx="${cx}" cy="19" rx="9" ry="10.5" fill="#b38a5e"/><ellipse cx="${cx}" cy="20.6" rx="5.6" ry="6.8" fill="#f2c38c"/><ellipse cx="${cx}" cy="21.8" rx="3.2" ry="4" fill="#8a7460"/></g></g>`;
   const toeClaws = [54.5, 58.6, 62.8, 67, 93, 97.2, 101.4, 105.5].map((x, i) => {
     const y = (i % 4 === 0 || i % 4 === 3) ? 182.4 : 183.6, k = x < 80 ? -.25 : .25;
     return `<path d="M${x - 1.05} ${y - .8} Q${x + k} ${y + 2} ${x + k * 3} ${y + 3.8} Q${x + .9} ${y + 1.6} ${x + 1.05} ${y - .8} Z" fill="#f6eddf" stroke="#6e5844" stroke-width=".35"/>`;
@@ -563,14 +584,13 @@ function frontLayered(id) {
 // ---------------------------------------------------------------------------
 // 匯出：五個實際繪製的視角（左邊三個由 CSS 鏡射）
 // ---------------------------------------------------------------------------
-let _views = null;
 // 實際繪製的角度：正面（分層，可做所有姿勢）＋右半邊 22.5° 一格；左半邊用鏡射
 const ANGLES = [22.5, 45, 67.5, 90, 112.5, 135, 157.5, 180];
 const akey = (a) => 'a' + String(a).replace('.', '_');
 function views() {
   if (_views) return _views;
-  _views = { front: frontLayered('qf') };
-  for (const a of ANGLES) _views[akey(a)] = q3render(a, 'q' + akey(a));
+  _views = { front: paint(frontLayered('qf')) };
+  for (const a of ANGLES) _views[akey(a)] = paint(q3render(a, 'q' + akey(a)));
   return _views;
 }
 // 十六方位：名稱 → [圖, 是否鏡射, 角度]。舊名稱 f34r / sider / b34r / back… 保留給互動程式用
@@ -583,7 +603,7 @@ for (const a of ANGLES) {
   VIEW_MAP[n + 'l'] = [akey(a), true, -a];
 }
 const TURN_ORDER = Object.keys(VIEW_MAP).sort((x, y) => ((VIEW_MAP[x][2] + 360) % 360) - ((VIEW_MAP[y][2] + 360) % 360));
-const api = { views, frontLayered, VIEW_MAP, TURN_ORDER, render3d: q3render, __arm: arm, __DEFS: DEFS, __fur: fur, __eye: eye, __claw: CLAW };
+const api = { views, frontLayered, VIEW_MAP, TURN_ORDER, render3d: (a, id) => paint(q3render(a, id)), configure, traits: () => TRAITS, __arm: arm, __DEFS: DEFS, __fur: fur, __eye: eye, __claw: CLAW };
 if (typeof window !== 'undefined') window.QuokkaArt = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

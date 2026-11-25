@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('api', {
   onAway: (cb) => ipcRenderer.on('pet:away', (_e, isAway) => cb(isAway)),
   playAction: (action) => ipcRenderer.invoke('pet:play-action', action),
   setCharacter: (id) => ipcRenderer.invoke('character:set', id),
+  getTraits: () => ipcRenderer.invoke('quokka:traits'),
+  regenerateTraits: () => ipcRenderer.invoke('quokka:regenerate'),
   onCharacterChanged: (cb) => ipcRenderer.on('character:changed', (_e, id) => cb(id)),
 
   // --- 名言 ---

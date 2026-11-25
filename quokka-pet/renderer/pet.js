@@ -29,6 +29,15 @@ function renderCharacter(id) {
   scheduleAction();
 }
 let dynEl = null;
+// 套用個體特徵：體型與毛色交給繪圖模組，整體大小與頭帶顏色用 CSS 變數
+function applyTraits(t) {
+  if (!ART || !ART.configure) return;
+  ART.configure(t);
+  frameCache.clear();
+  const sh = window.QuokkaTraits && window.QuokkaTraits.shape(t);
+  if (sh) petEl.style.setProperty('--size', sh.sizeK.toFixed(3));
+  if (t.band) petEl.style.setProperty('--band', t.band);
+}
 function setView(view) {
   if (!ART || !ART.VIEW_MAP[view]) view = 'front';
   petEl.dataset.view = view;
@@ -261,6 +270,7 @@ window.api.onSpeak(showBubble);
 window.api.onCharacter((payload) => {
   const id = typeof payload === 'string' ? payload : payload && payload.id;
   const greeting = payload && payload.greeting;
+  if (payload && payload.traits) applyTraits(payload.traits);
   if (id) renderCharacter(id);
   setPose('idle');
   if (greeting) showBubble(greeting);

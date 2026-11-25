@@ -41,8 +41,9 @@ html, body {
 
 /* --- 十六方位：九張圖疊放，pet.js 依 data-view 只顯示一張（.on）；左半邊水平鏡射（.mirror） --- */
 .view { position: absolute; inset: 0; display: none; }
+.view { transform: scale(var(--size, 1)); transform-origin: 50% 93%; }
 .view.on { display: block; }
-.view.mirror { transform: scaleX(-1); }
+.view.mirror { transform: scale(calc(-1 * var(--size, 1)), var(--size, 1)); }
 /* 轉身時由 pet.js 逐格控制位移，暫停待機的呼吸動畫 */
 #pet.turning #petArt { animation: none; }
   45%  { transform: translateY(-4px) scale(0.99, 1.02); }

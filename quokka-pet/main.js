@@ -7,6 +7,7 @@ const fs = require('fs');
 const chokidar = require('chokidar');
 const { createProvider } = require('./providers');
 const { CHARACTERS, DEFAULT_ID } = require('./renderer/characters');
+const QuokkaTraits = require('./renderer/traits');
 
 function loadQuotes() {
   try {
@@ -56,6 +57,15 @@ const CONFIG_DEFAULTS = {
 function currentCharacterId() {
   const id = config && config.settings && config.settings.characterId;
   return CHARACTERS[id] ? id : DEFAULT_ID;
+}
+
+// 個體特徵（體型、年齡、毛色…）：第一次啟動時隨機生成並存檔，之後固定；按「重新生成」才會換一隻
+function currentTraits() {
+  const t = config && config.settings && config.settings.quokkaTraits;
+  if (t && t.v === 1 && t.fur) return t;
+  config.settings.quokkaTraits = QuokkaTraits.generate();
+  saveConfig();
+  return config.settings.quokkaTraits;
 }
 
 function configPath() {
@@ -133,7 +143,7 @@ function createPetWindow() {
   petWindow.webContents.on('did-finish-load', () => {
     const id = currentCharacterId();
     const c = CHARACTERS[id];
-    petWindow.webContents.send('pet:character', { id, greeting: c.greeting });
+    petWindow.webContents.send('pet:character', { id, greeting: c.greeting, traits: currentTraits() });
   });
 
   // 預設放在主螢幕右下角
@@ -206,7 +216,8 @@ function setPetCharacter(id, withGreeting) {
     const c = CHARACTERS[id];
     petWindow.webContents.send('pet:character', {
       id,
-      greeting: withGreeting && c ? c.greeting : undefined
+      greeting: withGreeting && c ? c.greeting : undefined,
+      traits: currentTraits()
     });
   }
 }
@@ -466,6 +477,16 @@ function registerIpc() {
   });
 
   // 切換造型：立即更新桌寵（不需重啟）、持久化、播放問候語
+  ipcMain.handle('quokka:traits', () => ({ traits: currentTraits(), info: QuokkaTraits.describe(currentTraits()) }));
+  ipcMain.handle('quokka:regenerate', () => {
+    config.settings.quokkaTraits = QuokkaTraits.generate();
+    saveConfig();
+    if (petWindow && !petWindow.isDestroyed()) {
+      petWindow.webContents.send('pet:character', { id: currentCharacterId(), traits: currentTraits(), greeting: '嗨，我是新來的庫卡！請多指教～' });
+    }
+    return { traits: currentTraits(), info: QuokkaTraits.describe(currentTraits()) };
+  });
+
   ipcMain.handle('character:set', (e, id) => {
     if (!CHARACTERS[id]) return { ok: false };
     config.settings.characterId = id;
