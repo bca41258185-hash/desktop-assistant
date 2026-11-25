@@ -338,7 +338,8 @@ function q3proj(p, th) {
   const c = Math.cos(rad(th)), s = Math.sin(rad(th));
   return { X: 80 + p[0] * c + p[2] * s, Y: p[1], Z: -p[0] * s + p[2] * c };
 }
-const q3facing = (n, th) => n[0] * Math.sin(rad(th)) + n[2] * Math.cos(rad(th));
+// 朝向觀者的程度：法向量投影到深度方向（與 q3proj 的 Z 一致；+x 那側在轉向右時會轉到後面）
+const q3facing = (n, th) => -n[0] * Math.sin(rad(th)) + n[2] * Math.cos(rad(th));
 // 身體輪廓：逐列取所有橢球投影的最外緣，再平滑成一條連續曲線
 function q3outline(th) {
   const c = Math.cos(rad(th)), s = Math.sin(rad(th));
@@ -603,7 +604,9 @@ for (const a of ANGLES) {
   VIEW_MAP[n + 'l'] = [akey(a), true, -a];
 }
 const TURN_ORDER = Object.keys(VIEW_MAP).sort((x, y) => ((VIEW_MAP[x][2] + 360) % 360) - ((VIEW_MAP[y][2] + 360) % 360));
-const api = { views, frontLayered, VIEW_MAP, TURN_ORDER, render3d: (a, id) => paint(q3render(a, id)), configure, traits: () => TRAITS, __arm: arm, __DEFS: DEFS, __fur: fur, __eye: eye, __claw: CLAW };
+// 給姿勢模組（quokka-pose.js）用的內部元件
+const internals = { q3: () => Q3, tailK: () => TAILK, earK: () => EARK, proj: q3proj, facing: q3facing, cr, fur, eye, arm, paw, CLAW, DEFS, paint, FOOT, PAW };
+const api = { internals, views, frontLayered, VIEW_MAP, TURN_ORDER, render3d: (a, id) => paint(q3render(a, id)), configure, traits: () => TRAITS, __arm: arm, __DEFS: DEFS, __fur: fur, __eye: eye, __claw: CLAW };
 if (typeof window !== 'undefined') window.QuokkaArt = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();
