@@ -29,9 +29,9 @@ const F34 = cr([[78, 15], [92, 15.5], [101, 19], [105.5, 26], [107.5, 35], [109.
   [109, 64], [108.6, 71], [109.2, 81], [111, 96], [113, 118], [112.6, 142], [109, 160], [101, 170], [88, 173.4], [70, 173.4],
   [55, 169], [46, 158], [42, 136], [43, 110], [46, 92], [47.6, 80], [47.2, 66], [48, 52], [49.5, 38], [53, 26], [60, 18.5], [69, 15.5]]);
 // 後 45 度：口鼻轉到頭後面被擋住，右緣只剩臉頰的毛
-const B34 = cr([[78, 15], [92, 15.5], [101, 19], [105.5, 26], [107.5, 35], [109, 44], [110.5, 52], [110.2, 60], [108.8, 68],
-  [109.2, 81], [111, 96], [113, 118], [112.6, 142], [109, 160], [101, 170], [88, 173.4], [70, 173.4],
-  [55, 169], [46, 158], [42, 136], [43, 110], [46, 92], [47.6, 80], [47.2, 66], [48, 52], [49.5, 38], [53, 26], [60, 18.5], [69, 15.5]]);
+const B34 = cr([[78, 15], [92, 15.5], [101, 19], [105.5, 26], [107.5, 35], [109.4, 44], [111.6, 51], [112, 58], [110, 66],
+  [108, 81], [109, 96], [110.5, 118], [110.2, 142], [107, 160], [100, 170], [88, 173.4], [70, 173.4],
+  [54, 169], [45, 158], [41.5, 136], [42.5, 110], [45.5, 92], [47.4, 80], [47.2, 66], [48, 52], [49.5, 38], [53, 26], [60, 18.5], [69, 15.5]]);
 
 function fur(n, x0, x1, seed0) {
   let seed = seed0 || 11; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647); let o = '';
@@ -118,7 +118,7 @@ const DEFS = (id) => `<defs>
   <linearGradient id="bg${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9a7650"/><stop offset=".33" stop-color="#b0855a"/><stop offset=".55" stop-color="#b0936c"/><stop offset="1" stop-color="#cbb08a"/></linearGradient>
   <linearGradient id="bk${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#93704c"/><stop offset=".3" stop-color="#a37a52"/><stop offset=".6" stop-color="#a38a6a"/><stop offset="1" stop-color="#b9a283"/></linearGradient>
   <radialGradient id="ns${id}" cx="40%" cy="28%" r="75%"><stop offset="0" stop-color="#6f7580"/><stop offset=".35" stop-color="#2e3138"/><stop offset="1" stop-color="#121316"/></radialGradient>
-  <linearGradient id="tl${id}" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stop-color="#5d4f43"/><stop offset="1" stop-color="#3f352d"/></linearGradient>
+  <linearGradient id="tl${id}" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stop-color="#94734f"/><stop offset=".6" stop-color="#7a5c40"/><stop offset="1" stop-color="#5e4632"/></linearGradient>
   ${handDefs(id)}
 </defs>`;
 const PAW = '#4a3b30', FOOT = '#5a4a3d', BAND = 'var(--band, #e5533d)';
@@ -133,7 +133,13 @@ function eye(x, y, id, o = {}) {
 const CLAW = (x, y, ang, len = 3.6) => `<path transform="translate(${x} ${y}) rotate(${ang})" d="M-1 0 Q-.35 ${len * .62} .35 ${len} Q.85 ${len * .55} 1 0 Z" fill="#f6eddf" stroke="#6e5844" stroke-width=".35"/>`;
 const SIDEARMS = (id) => arm(id, [[103, 102], [106, 112], [110, 119], [115.5, 124]], -18, { thumb: -1, side: 1, fadeTo: .3 });
 const F34ARMS = (id) => arm(id, [[77, 104], [78, 113], [84, 121.5], [91.5, 127.5]], 12, { thumb: 1, side: -1, w2: 6.2 }) + arm(id, [[100, 104], [102, 113], [102, 121], [100.5, 127.5]], -4, { thumb: -1, side: 1 });
-const SIDECLAWS = () => [[119.5, 167.6, -80], [121.5, 170.3, -84], [121.6, 173, -90]].map(([x, y, a]) => CLAW(x, y, a, 3.2)).join('');
+// 尾巴：根部從身體裡漸漸浮現（遮罩漸層），邊緣與身體同樣毛絨
+function softTail(id, key, d, x1, y1, x2, y2, fadeTo = .3) {
+  return `<defs><linearGradient id="tf${id}${key}" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="${fadeTo}" stop-color="#fff" stop-opacity="1"/></linearGradient>
+  <mask id="tm${id}${key}" maskUnits="userSpaceOnUse" x="-20" y="-20" width="200" height="240"><rect x="-20" y="-20" width="200" height="240" fill="url(#tf${id}${key})"/></mask></defs>
+  <g mask="url(#tm${id}${key})"><path d="${d}" fill="url(#tl${id})" filter="url(#fz${id})"/></g>`;
+}
+const SIDECLAWS = () => [[122.6, 167.6, -78], [123.8, 170.4, -86], [123.2, 173.2, -94]].map(([x, y, a]) => CLAW(x, y, a, 3.2)).join('');
 const F34CLAWS = () => [[105.5, 181.6, -28], [109.4, 181, -40], [112.6, 179, -55], [76.5, 179.6, -25], [80.2, 178.6, -40]].map(([x, y, a]) => CLAW(x, y, a, 3.1)).join('');
 
 const SHADE = (id, cx) => `
@@ -145,9 +151,10 @@ const SHADE = (id, cx) => `
 function side(id) {
   return `<svg viewBox="0 0 160 196" xmlns="http://www.w3.org/2000/svg">${DEFS(id)}<clipPath id="c${id}"><path d="${SIDE}"/></clipPath>
   <!-- 細長、幾乎無毛的尾巴，沿地面往後拖（約頭身長 60%） -->
-  <path d="M60 160 C44 166 26 170 6 170.5 C3 170.6 2 172.4 5 173 C26 174.5 46 173.5 64 170 Z" fill="url(#tl${id})"/>
+  <path d="M66 155 C50 161 32 166.5 14 169.4 C11 169.9 10.6 172.2 13.6 172.4 C32 173 50 172.6 68 170 Z" fill="url(#tl${id})" filter="url(#fz${id})"/>
   <!-- 遠側（另一隻）後腳，略偏前、較暗 -->
-  <path d="M86 167 C98 166.5 112 167 126 169.5 C129 170.5 128 173 125 173.2 L84 173.4 Z" fill="#43372d" filter="url(#fz${id})"/>
+  <path d="M86 167 C98 166.5 112 167 126 169.5 C129.4 170.6 128.6 173.4 125 173.4 L84 173.4 Z" fill="#43372d" filter="url(#fz${id})"/>
+  ${[[128.2, 169.6, -82], [128.4, 172, -92]].map(([x, y, a]) => CLAW(x, y, a, 2.6)).join('')}
   <!-- 遠側耳朵 -->
   <ellipse cx="93" cy="19" rx="5" ry="6.5" fill="#8a6a4b" filter="url(#fz${id})"/>
   <path d="${SIDE}" fill="url(#bg${id})" filter="url(#fz${id})"/>
@@ -175,10 +182,10 @@ function side(id) {
   <path d="M123.4 54.6 Q124.6 54 125.2 55.2" fill="none" stroke="#000" stroke-width=".7" opacity=".6"/>
   <path d="M120 58.2 Q117 62 112.5 61.6 Q110.4 61.3 109.6 59.4" fill="none" stroke="#2a211b" stroke-width="1.4" stroke-linecap="round"/>
   <!-- 近側後腳：長而平貼地面 -->
-  <path d="M66 163 C82 161 102 162 117 166 C123 167.6 123 174 118 174.4 L70 174.6 C62 174.6 60 165 66 163 Z" fill="${FOOT}" filter="url(#fz${id})"/>
+  <path d="M62 166 C60 170 62 174 68 174.4 L116 174.6 C121.4 174.6 124.6 172.4 124 169.8 C123.4 167.2 119 165.8 114 165.4 C100 164.2 80 163.2 70 163.4 C65 163.6 63 164.4 62 166 Z" fill="${FOOT}" filter="url(#fz${id})"/>
+  <ellipse cx="72" cy="168" rx="9" ry="4.4" fill="#6b5847" opacity=".5" filter="url(#b1${id})"/>
   ${SIDECLAWS()}
-  <path d="M72 165 C86 164 102 165 114 167.6" fill="none" stroke="#8a7663" stroke-width="1.6" opacity=".6"/>
-  <path d="M110 171 L119 171.6 M108 173 L118.5 173.2" stroke="#2f2620" stroke-width=".6" opacity=".6"/>
+  <path d="M114.5 166.6 L120 167.6 M115 169.6 L121.6 170.2 M115 172.4 L121 172.8" stroke="#2f2620" stroke-width=".55" opacity=".55" stroke-linecap="round"/>
   ${SIDEARMS(id)}
   </svg>`;
 }
@@ -195,7 +202,7 @@ function back(id) {
     <!-- 頭頸背面帶紅褐、背中線較深、兩側臀部隆起 -->
     <ellipse cx="80" cy="50" rx="30" ry="26" fill="#b07f52" opacity=".45" filter="url(#b3${id})"/>
     <ellipse cx="80" cy="80" rx="20" ry="5" fill="#68533e" opacity=".15" filter="url(#b3${id})"/>
-    <ellipse cx="80" cy="120" rx="6" ry="45" fill="#68533e" opacity=".35" filter="url(#b3${id})"/>
+    <ellipse cx="80" cy="118" rx="9" ry="44" fill="#68533e" opacity=".2" filter="url(#b3${id})"/>
     <ellipse cx="58" cy="148" rx="18" ry="22" fill="#ad9878" opacity=".6" filter="url(#b3${id})"/><ellipse cx="102" cy="148" rx="18" ry="22" fill="#ad9878" opacity=".6" filter="url(#b3${id})"/>
     <ellipse cx="40" cy="120" rx="6" ry="40" fill="#78614a" opacity=".45" filter="url(#b3${id})"/><ellipse cx="120" cy="120" rx="6" ry="40" fill="#78614a" opacity=".45" filter="url(#b3${id})"/>
     ${fur(1100, 40, 120, 37)}
@@ -205,9 +212,8 @@ function back(id) {
   <path d="M77 37 Q74 46 70 52 L73 53 Q77 47 80 38 Z M83 37 Q86 46 90 52 L87 53 Q83 47 80 38 Z" fill="#c9432f"/>
   <ellipse cx="80" cy="36.5" rx="3.6" ry="3" fill="#d24a35"/>
   <!-- 尾巴：從臀部中央垂下，貼地往後（朝觀者）延伸，前縮變短 -->
-  <ellipse cx="80" cy="181.5" rx="5" ry="2" fill="#000" opacity=".12" filter="url(#b1${id})"/>
-  <path d="M75.5 163 C75 170 76.5 176 78.5 180.5 C79.4 182.4 80.8 182.4 81.6 180.5 C83.6 176 85 170 84.5 163 Z" fill="url(#tl${id})"/>
-  <path d="M78 165 C78 171 79 176 80 179" fill="none" stroke="#7a6655" stroke-width=".8" opacity=".5"/>
+  <ellipse cx="80" cy="183" rx="6.5" ry="2.2" fill="#000" opacity=".14" filter="url(#b1${id})"/>
+  ${softTail(id, 'b', 'M73.5 154 C73 166 74 175 75.6 181.5 C76.8 185.6 83.2 185.6 84.4 181.5 C86 175 87 166 86.5 154 Z', 80, 154, 80, 184, .4)}
   </svg>`;
 }
 
@@ -215,7 +221,7 @@ function back(id) {
 function f34(id) {
   return `<svg viewBox="0 0 160 196" xmlns="http://www.w3.org/2000/svg">${DEFS(id)}<clipPath id="c${id}"><path d="${F34}"/></clipPath>
   <!-- 尾巴往左後方沿地面拖 -->
-  <path d="M58 161 C46 165 32 168 18 168.6 C15 168.8 14.6 170.8 17.5 171.2 C32 172.2 46 171.6 60 168.6 Z" fill="url(#tl${id})"/>
+  <path d="M62 156 C49 162 35 166 22 168.2 C19 168.7 18.6 170.8 21.6 171 C36 171.6 49 171 64 168.4 Z" fill="url(#tl${id})" filter="url(#fz${id})"/>
   <!-- 遠側耳（左，大半被頭擋住）、近側耳（往中間移，約 x90） -->
   <g filter="url(#fz${id})"><ellipse cx="56" cy="21.5" rx="6.4" ry="7.8" fill="#9a7a55"/><ellipse cx="56.8" cy="22.6" rx="3.8" ry="5" fill="#e5bb87"/></g>
   <g filter="url(#fz${id})"><ellipse cx="90" cy="19.5" rx="7" ry="8.2" fill="#b38a5e"/><ellipse cx="90.6" cy="20.6" rx="4.5" ry="5.6" fill="#f2c38c"/><ellipse cx="91.2" cy="21.8" rx="2.5" ry="3.4" fill="#8a7460"/></g>
@@ -242,12 +248,12 @@ function f34(id) {
   <g transform="translate(81 42.6) scale(.78 1) translate(-81 -42.6)">${eye(81, 42.6, id)}</g>
   ${eye(99, 42.2, id)}
   <!-- 鼻子：往右前方突出，右側輪廓較尖 -->
-  <ellipse cx="104.5" cy="54" rx="8.4" ry="6.8" fill="#3b2f26" opacity=".4" filter="url(#b1${id})"/>
-  <path d="M97.4 50.4 C97.6 45.8 110.6 45.8 113.6 50 C115.4 53 113 57.4 109.6 58.6 L106 59.4 L104.4 59 C100.6 58.2 97.2 55 97.4 50.4 Z" fill="url(#ns${id})"/>
-  <ellipse cx="102.6" cy="48.8" rx="2.6" ry="1.2" fill="#d4dfec" opacity=".5"/>
-  <path d="M102.2 55 Q103.4 53.8 104.6 55.2 M109.2 55 Q110.6 53.8 111.8 54.8" fill="none" stroke="#000" stroke-width=".8" opacity=".6"/>
+  <ellipse cx="105" cy="54" rx="7.4" ry="6.2" fill="#3b2f26" opacity=".4" filter="url(#b1${id})"/>
+  <path d="M98.8 50.8 C99 46.8 110.4 46.8 111.8 50.6 C112.6 54.4 109.8 57.6 106.8 58.4 L105.6 58.8 L104.6 58.4 C101.4 57.6 98.6 54.8 98.8 50.8 Z" fill="url(#ns${id})"/>
+  <ellipse cx="102.8" cy="49.3" rx="2.4" ry="1.1" fill="#d4dfec" opacity=".5"/>
+  <path d="M102.4 55 Q103.5 53.9 104.6 55.1 M107.8 55 Q109.1 53.9 110.2 54.9" fill="none" stroke="#000" stroke-width=".8" opacity=".6"/>
   <!-- 招牌微笑：遠側嘴角較長、近側嘴角繞到臉頰 -->
-  <path d="M105.4 59.4 V62 M93.5 58.6 Q97.4 65 101.8 64.2 Q104.4 63.6 105.4 62 Q106.4 63.6 108.2 63.6 Q110.6 63.4 112 59" fill="none" stroke="#2a211b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M105.4 58.8 V62 M94 58.6 Q97.6 65 101.8 64.2 Q104.4 63.6 105.4 62 Q106.4 63.6 108.2 63.6 Q110.4 63.4 111.6 59" fill="none" stroke="#2a211b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
   ${F34ARMS(id)}
   <!-- 近側腳：腳趾朝右前方 -->
   <g filter="url(#fz${id})"><path d="M86 166 C96 165 108 168 114 174 C117 178 113 182 107 181.5 C97 181 88 178 84 174 Z" fill="${FOOT}"/></g>
@@ -261,27 +267,29 @@ function b34(id) {
   <!-- 耳背：近側往中間（x90）、遠側在左 -->
   <g filter="url(#fz${id})"><ellipse cx="56" cy="21.5" rx="7" ry="8" fill="#93744f"/><ellipse cx="90" cy="19.5" rx="6.6" ry="7.8" fill="#8d6f4f"/></g>
   <!-- 腳：腳跟在身體下方，近側腳的腳趾從右下方露出來 -->
-  <g filter="url(#fz${id})"><path d="M80 168 C92 167 106 170 116 175 C118 178 114 180 108 179.6 C96 179 86 177 80 175 Z" fill="${FOOT}"/></g>
+  <g filter="url(#fz${id})"><ellipse cx="56" cy="172.6" rx="8.5" ry="4.6" fill="#43372d"/>
+    <path d="M72 168 C86 166 104 169 115 174 C118 177 115 180.4 108 180 C96 179.4 82 178.4 72 176.4 C67.6 175 67.6 169 72 168 Z" fill="${FOOT}"/></g>
   <path d="${B34}" fill="url(#bk${id})" filter="url(#fz${id})"/>
   <g clip-path="url(#c${id})">
     <ellipse cx="70" cy="50" rx="28" ry="26" fill="#b07f52" opacity=".45" filter="url(#b3${id})"/>
     <!-- 背中線在左側（約 x60），右緣露出一點臉頰與腹部的淺色 -->
     <ellipse cx="60" cy="118" rx="6" ry="46" fill="#68533e" opacity=".38" filter="url(#b3${id})"/>
-    <ellipse cx="111" cy="66" rx="6" ry="13" fill="#dfa65e" opacity=".55" filter="url(#b3${id})"/>
+    <ellipse cx="110.5" cy="58" rx="7" ry="14" fill="#dfa65e" opacity=".6" filter="url(#b3${id})"/>
+    <ellipse cx="111" cy="66" rx="4" ry="6" fill="#f3e2c4" opacity=".6" filter="url(#b3${id})"/>
     <ellipse cx="110" cy="140" rx="8" ry="28" fill="#d2bf9e" opacity=".6" filter="url(#b3${id})"/>
     <ellipse cx="52" cy="148" rx="15" ry="22" fill="#ad9878" opacity=".55" filter="url(#b3${id})"/><ellipse cx="90" cy="150" rx="17" ry="22" fill="#ad9878" opacity=".5" filter="url(#b3${id})"/>
     <ellipse cx="45" cy="120" rx="6" ry="40" fill="#78614a" opacity=".45" filter="url(#b3${id})"/>
     ${fur(1050, 42, 114, 63)}
   </g>
+  <!-- 臉頰外緣的鬍鬚（口鼻轉到後面，只露出這一點） -->
+  <path d="M111 50 l4 -1.2 M111.8 53.5 l4.6 .2 M111.2 57 l4 1.6" stroke="#4a3b30" stroke-width=".5" opacity=".55" stroke-linecap="round"/>
   <!-- 頭帶背面：結在後腦正中（投影到約 x62） -->
   <path d="M49.5 31 Q66 37 108.6 30 L108 24.5 Q66 31 50 25 Z" style="fill: var(--band, #e5533d)"/>
   <path d="M59 34 Q56 43 52 49 L55 50 Q59 44 62 35 Z M65 34 Q68 43 72 49 L69 50 Q65 44 62 35 Z" fill="#c9432f"/>
   <ellipse cx="62" cy="33.4" rx="3.4" ry="2.8" fill="#d24a35"/>
-  <!-- 腳跟 -->
-  <g filter="url(#fz${id})"><ellipse cx="57" cy="172.5" rx="10" ry="5" fill="#43372d"/><ellipse cx="82" cy="173" rx="10" ry="5" fill="#43372d"/></g>
   ${[[112.2, 178.4, -62], [115.4, 176.6, -75]].map(([x, y, a]) => CLAW(x, y, a, 3)).join('')}
   <!-- 尾巴：從臀部往左前方（朝觀者）沿地面拖出 -->
-  <path d="M62 152 C58 162 46 172 26 177.5 C23 178.4 23.4 181 26.6 180.6 C48 177 62 168 67 154 Z" fill="url(#tl${id})"/>
+  ${softTail(id, 'q', 'M57 150 C54 162 45 171 30 177.4 C26.8 178.8 27.6 181.8 31 181.2 C50 177.8 63 168 70 153 Z', 64, 150, 30, 180, .32)}
   </svg>`;
 }
 
@@ -383,7 +391,8 @@ function frontLayered(id) {
           <path d="M114.8 148 V163 M119.6 145.2 V165.8 M124.4 148 V163 M112.2 151.5 H127 M111.7 155.5 H127.5 M112.2 159.5 H127" stroke="#a7bdd1" stroke-width=".6" fill="none"/>
         </g>
       </g>
-      ${arm(id, [[106, 97], [109, 107], [112, 118], [114, 128]], -4, { thumb: -1, side: 1, fadeTo: .12, w1: 9.5 })}
+      <ellipse cx="106.5" cy="100" rx="7.5" ry="8" fill="#a9845c" filter="url(#fz${id})"/>
+      ${arm(id, [[106, 98], [111, 107], [113.5, 118], [114, 128]], -4, { thumb: -1, side: 1, fadeTo: .04, w1: 12, w2: 7.4, bulge: 2 })}
     </g>
 
     <!-- 特效 -->
