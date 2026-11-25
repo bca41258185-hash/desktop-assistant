@@ -6,6 +6,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   // --- 桌寵 ---
   movePetBy: (dx, dy) => ipcRenderer.send('pet:move-by', { dx, dy }),
+  throwBall: (p) => ipcRenderer.send('ball:throw', p),
+  pickupBall: () => ipcRenderer.send('ball:pickup'),
+  removeBall: () => ipcRenderer.send('ball:remove'),
+  onBall: (cb) => ipcRenderer.on('ball:event', (_e, ev) => cb(ev)),
   togglePanel: () => ipcRenderer.send('panel:toggle'),
   onSpeak: (cb) => ipcRenderer.on('pet:speak', (_e, text) => cb(text)),
   // 角色與姿勢

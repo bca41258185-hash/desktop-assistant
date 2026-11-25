@@ -398,7 +398,89 @@ function setupAwayWatch() {
 // ---------------------------------------------------------------------------
 // IPC
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// 丟出去的球：獨立的透明小視窗（滑鼠穿透），主行程用簡單物理算位置
+//   重力、地面彈跳（越彈越低）、滾動摩擦、螢幕左右邊與上緣反彈、籃框（框邊＋籃板）碰撞
+//   地面＝庫卡腳下那條線（由桌寵傳來），停下後通知桌寵去撿
+// ---------------------------------------------------------------------------
+const BALL_PX = 44;            // 球視窗大小（球直徑約 26 px，四周留陰影空間）
+let ball = null;               // { win, kind, x, y, vx, vy, r, rot, ground, timer, stopped, scored, hoop }
+function removeBall(fade) {
+  if (!ball) return;
+  const b = ball; ball = null;
+  clearInterval(b.timer);
+  if (b.life) clearTimeout(b.life);
+  if (!b.win || b.win.isDestroyed()) return;
+  if (fade) { try { b.win.webContents.send('ball:state', { rot: b.rot, fade: true }); } catch (e) {} setTimeout(() => { if (!b.win.isDestroyed()) b.win.destroy(); }, 650); }
+  else b.win.destroy();
+}
+function throwBall({ kind, x, y, vx, vy, ground, r, hoop }) {
+  removeBall(false);
+  const win = new BrowserWindow({
+    width: BALL_PX, height: BALL_PX, x: Math.round(x - BALL_PX / 2), y: Math.round(y - BALL_PX / 2),
+    frame: false, transparent: true, resizable: false, movable: false, focusable: false, skipTaskbar: true,
+    alwaysOnTop: true, hasShadow: false, show: false,
+    webPreferences: { preload: path.join(__dirname, 'ball-preload.js'), contextIsolation: true, nodeIntegration: false }
+  });
+  win.setIgnoreMouseEvents(true);
+  win.setAlwaysOnTop(true, 'screen-saver');
+  win.loadFile(path.join(__dirname, 'renderer', 'ball.html'), { query: { kind } });
+  win.once('ready-to-show', () => { if (!win.isDestroyed()) win.showInactive(); });
+  const wa = screen.getDisplayNearestPoint({ x: Math.round(x), y: Math.round(y) }).workArea;
+  ball = { win, kind, x, y, vx, vy, r: r || 13, rot: 0, ground: Math.min(ground, wa.y + wa.height), wa, stopped: false, scored: false, hoop, bounces: 0 };
+  const G = 1500, DT = 1 / 60;
+  ball.timer = setInterval(() => {
+    const b = ball;
+    if (!b || b.win.isDestroyed()) return;
+    const floor = b.ground - b.r;
+    if (!b.stopped) {
+      b.vy += G * DT;
+      const px = b.x, py = b.y;
+      b.x += b.vx * DT; b.y += b.vy * DT;
+      // 籃框：兩個框邊當小圓點碰撞，籃板當直線；球從框中間往下穿過＝進球
+      if (b.hoop) {
+        const H = b.hoop;
+        for (const rx of [H.left, H.right]) {
+          const dx = b.x - rx, dy = b.y - H.y, d = Math.hypot(dx, dy), min = b.r + 2;
+          if (d < min && d > 0) {
+            const nx = dx / d, ny = dy / d, vn = b.vx * nx + b.vy * ny;
+            if (vn < 0) { b.vx -= 1.6 * vn * nx; b.vy -= 1.6 * vn * ny; b.x = rx + nx * min; b.y = H.y + ny * min; }
+          }
+        }
+        if (b.x - b.r < H.board && b.x > H.board - 30 && b.y > H.boardTop && b.y < H.boardBottom && b.vx < 0) { b.vx = -b.vx * .55; b.x = H.board + b.r; }
+        if (!b.scored && py < H.y && b.y >= H.y && b.x > H.left + 3 && b.x < H.right - 3 && b.vy > 0) {
+          b.scored = true; b.vx *= .3;
+          if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('ball:event', { type: 'score' });
+        }
+      }
+      // 螢幕邊界
+      if (b.x - b.r < b.wa.x) { b.x = b.wa.x + b.r; b.vx = Math.abs(b.vx) * .6; }
+      if (b.x + b.r > b.wa.x + b.wa.width) { b.x = b.wa.x + b.wa.width - b.r; b.vx = -Math.abs(b.vx) * .6; }
+      if (b.y - b.r < b.wa.y) { b.y = b.wa.y + b.r; b.vy = Math.abs(b.vy) * .5; }
+      // 地面：彈跳越來越低，太低就改成滾動
+      if (b.y > floor) {
+        b.y = floor;
+        if (Math.abs(b.vy) > 140) { b.vy = -b.vy * (b.kind === 'bball' ? .62 : .5); b.vx *= .88; b.bounces++; }
+        else { b.vy = 0; b.vx *= Math.pow(.2, DT); if (Math.abs(b.vx) < 10) { b.vx = 0; b.stopped = true; } }
+      }
+      b.rot += (b.x - px) / b.r * 57.3;
+      if (b.stopped && petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('ball:event', { type: 'landed', x: b.x, y: b.y });
+    }
+    b.win.setPosition(Math.round(b.x - BALL_PX / 2), Math.round(b.y - BALL_PX / 2));
+    try { b.win.webContents.send('ball:state', { rot: b.rot }); } catch (e) {}
+  }, 1000 / 60);
+  // 安全網：40 秒內沒被撿走就自己淡出
+  ball.life = setTimeout(() => {
+    removeBall(true);
+    if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('ball:event', { type: 'gone' });
+  }, 40000);
+}
+
 function registerIpc() {
+  ipcMain.on('ball:throw', (e, p) => { if (p && isFinite(p.x) && isFinite(p.y)) throwBall(p); });
+  ipcMain.on('ball:pickup', () => removeBall(false));
+  ipcMain.on('ball:remove', () => removeBall(true));
+
   // 桌寵拖曳／甩出：依位移移動視窗，並限制在所在螢幕的工作區內（甩出去不會飛出螢幕）
   ipcMain.on('pet:move-by', (e, { dx, dy }) => {
     if (!petWindow || petWindow.isDestroyed()) return;

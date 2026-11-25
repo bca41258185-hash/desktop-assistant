@@ -38,6 +38,7 @@ function applyTraits(t) {
   if (sh) petEl.style.setProperty('--size', sh.sizeK.toFixed(3));
   if (t.band) petEl.style.setProperty('--band', t.band);
   BEH = window.QuokkaTraits ? window.QuokkaTraits.behavior(window.QuokkaTraits.ensurePersonality(t)) : null;
+  if (BEH && t.personality) BEH.activity = t.personality.activity;
 }
 // 個性行為參數（動作偏好、頻率、台詞、互動反應）；沒有特徵資料時用預設
 let BEH = null;
@@ -108,6 +109,8 @@ let poseTimer = null;
 function charOf(id) { return CHARS[id] || {}; }
 function actionsOf(id) { const c = charOf(id); return Array.isArray(c.actions) ? c.actions : []; }
 function setPose(pose, opts = {}) {
+  if (window.QuokkaAnim && window.QuokkaAnim.ANIMS[pose] && !reduceMotion) { playAnim(pose); return; }
+  if (anim) stopAnim();
   if (poseTimer) { clearTimeout(poseTimer); poseTimer = null; }
   pose = pose || 'idle';
   const isAction = actionsOf(currentId).includes(pose);
@@ -153,13 +156,168 @@ function scheduleAction() {
   if (actionTimer) { clearTimeout(actionTimer); actionTimer = null; }
   if (reduceMotion || !actionsOf(currentId).length) return;
   actionTimer = setTimeout(() => {
-    const busy = !isIdle() || petEl.dataset.view !== 'front' || bubbleEl.classList.contains('show') || dragging || away;
+    const busy = !isIdle() || fetchJob || anim || petEl.dataset.view !== 'front' || bubbleEl.classList.contains('show') || dragging || away;
     if (!busy) {
       lastAction = pickAction();
       if (lastAction) setPose(lastAction);
     }
     scheduleAction();
   }, BEH ? BEH.intervalMs[0] + Math.random() * (BEH.intervalMs[1] - BEH.intervalMs[0]) : 20000 + Math.random() * 20000);
+}
+
+
+// ---------------------------------------------------------------------------
+// 關鍵影格動畫（三種球）：每一格用可擺姿勢的 3D 模型即時畫，約 30 fps
+// 籃球、排球會把球真的丟到桌面上（獨立的球視窗），球停下後庫卡跳過去撿回來
+// ---------------------------------------------------------------------------
+const POSE = window.QuokkaPose, ANIM = window.QuokkaAnim;
+let anim = null;            // { name, t0, st, raf, fired }
+let fetchJob = null;        // 撿球流程
+const FRAME_MS = 33;
+function drawPosed(th, pose) {
+  const svg = POSE.svg(th, 'qa', pose, '0 0 160 196');
+  for (const el of petArt.children) el.classList.toggle('on', el === dynEl);
+  dynEl.classList.remove('mirror');
+  dynEl.dataset.q = '';
+  dynEl.innerHTML = svg;
+}
+// SVG 座標 → 螢幕座標（含視窗位置、縮放）
+function svgToScreen(x, y) {
+  const svg = dynEl.querySelector('svg');
+  if (!svg) return { x: window.screenX, y: window.screenY };
+  const pt = svg.createSVGPoint(); pt.x = x; pt.y = y;
+  const q = pt.matrixTransform(svg.getScreenCTM());
+  return { x: window.screenX + q.x, y: window.screenY + q.y };
+}
+function stopAnim() {
+  if (!anim) return;
+  cancelAnimationFrame(anim.raf);
+  anim = null;
+  dynEl.classList.remove('on');
+  setView('front');
+}
+function playAnim(name) {
+  stopAnim();
+  if (fetchJob) return;                       // 正在撿球就不開新動作
+  const a = ANIM.ANIMS[name];
+  if (poseTimer) { clearTimeout(poseTimer); poseTimer = null; }
+  petEl.dataset.pose = 'anim';
+  petEl.dataset.anim = name;
+  anim = { name, t0: performance.now(), st: { thrown: false }, fired: new Set(), last: 0 };
+  const tick = (now) => {
+    if (!anim) return;
+    const t = (now - anim.t0) / 1000;
+    for (const ev of a.events || []) if (t >= ev.t && !anim.fired.has(ev)) { anim.fired.add(ev); onAnimEvent(name, ev, t); }
+    if (now - anim.last >= FRAME_MS || t >= a.dur) {
+      anim.last = now;
+      const s = ANIM.sample(a, t);
+      s.pose.props = a.props ? a.props(Math.min(t, a.dur), anim.st) : [];
+      drawPosed(s.th, s.pose);
+      anim.lastFrame = s;
+    }
+    if (t < a.dur) { anim.raf = requestAnimationFrame(tick); return; }
+    const thrown = anim.st.thrown;
+    anim = null;
+    if (thrown) return;                       // 球丟出去了：停在最後姿勢，等球停下來再去撿
+    dynEl.classList.remove('on');
+    petEl.dataset.pose = 'idle';
+    setView('front');
+    if (a.endLine && !bubbleEl.classList.contains('show')) showBubble({ text: a.endLine, duration: 2500 });
+  };
+  anim.raf = requestAnimationFrame(tick);
+}
+// 放手丟球：算出球在螢幕上的位置與速度，交給主行程的物理
+function onAnimEvent(name, ev, t) {
+  if (ev.name !== 'throw' || !window.api.throwBall) return;
+  const a = ANIM.ANIMS[name], s = ANIM.sample(a, t);
+  s.pose.props = [];
+  const { hands } = POSE.render(s.th, 'qe', s.pose);
+  const from = ev.fromHand && hands.L && hands.R ? [(hands.L.X + hands.R.X) / 2 - 6, (hands.L.Y + hands.R.Y) / 2 - 10] : ev.from;
+  const p = svgToScreen(from[0], from[1]), o = svgToScreen(0, 0), u = svgToScreen(1, 0).x - o.x;   // 1 個 SVG 單位 = u 像素
+  const ground = svgToScreen(80, 183).y;
+  const power = (0.85 + Math.random() * 0.35);
+  let vx, vy, hoop = null;
+  if (ev.kind === 'bball') {
+    // 投向籃框（框在 SVG 的 (-13, 40) 一帶）；力道有隨機，所以有時進、有時彈框、有時打板
+    const rimL = svgToScreen(-24, 40), rimR = svgToScreen(-2, 40), board = svgToScreen(7, 14), boardB = svgToScreen(7, 54);
+    hoop = { left: rimL.x, right: rimR.x, y: rimL.y, board: board.x, boardTop: board.y, boardBottom: boardB.y };
+    vx = -(170 + Math.random() * 120) * u / 1.02; vy = -(420 + Math.random() * 110) * u / 1.02;
+  } else {
+    // 排球：墊太大力，往上衝出視窗、往左或右落下
+    const dir = Math.random() < .5 ? -1 : 1;
+    vx = dir * (160 + Math.random() * 260) * u; vy = -(760 + Math.random() * 260) * u * power;
+  }
+  anim.st.thrown = true;
+  window.api.throwBall({ kind: ev.kind, x: p.x, y: p.y, vx, vy, ground, r: 12 * u, hoop });
+}
+// 球的事件：進球、停下（去撿）、消失
+window.api.onBall && window.api.onBall((ev) => {
+  if (ev.type === 'score') showBubble({ text: '唰！空心！', duration: 1600 });
+  else if (ev.type === 'landed') startFetch(ev.x, ev.kind);
+  else if (ev.type === 'gone' && fetchJob) endFetch('球不見了……');
+});
+
+// 撿球：轉身 → 一跳一跳過去 → 彎腰抱球 → 抱著跳回原位 → 轉回正面
+function startFetch(ballX) {
+  const kind = petEl.dataset.anim === 'basketball' ? 'bball' : 'vball';
+  if (anim) { cancelAnimationFrame(anim.raf); anim = null; }
+  const foot = svgToScreen(80, 183), u = svgToScreen(1, 0).x - svgToScreen(0, 0).x;
+  const dist = ballX - foot.x, dir = Math.sign(dist) || 1;
+  const screenW = window.screen.availWidth || 1600;
+  if (Math.abs(dist) > screenW * 0.55) { window.api.removeBall(); return endFetch('球跑太遠了，算了～'); }
+  const act = BEH && BEH.activity != null ? BEH.activity : .5;
+  const hopMs = 430 - act * 120, step = (34 + act * 14) * u;      // 越活潑跳越快、越遠
+  const startX = window.screenX;
+  fetchJob = { kind, dir, startX, phase: 'look', t0: performance.now(), moved: 0, target: Math.abs(dist) - 30 * u, carry: false, hopMs, step, delay: 250 + (1 - act) * 1200 };
+  petEl.dataset.pose = 'anim';
+  runFetch();
+}
+function endFetch(line) {
+  if (fetchJob && fetchJob.raf) cancelAnimationFrame(fetchJob.raf);
+  fetchJob = null;
+  dynEl.classList.remove('on');
+  petEl.dataset.pose = 'idle';
+  setView('front');
+  if (line) showBubble({ text: line, duration: 2200 });
+}
+function runFetch() {
+  const F = ANIM.FETCH, J = fetchJob;
+  if (!J) return;
+  const now = performance.now(), t = now - J.t0;
+  const faceTh = J.dir > 0 ? 90 : -90;
+  const ballProp = (pose) => (J.carry ? [{ t: J.kind, hand: 'both', off: [J.dir * 4, -6] }] : []);
+  let th = faceTh, pose = {};
+  if (J.phase === 'look') {                 // 先看著球（慵懶的看比較久）
+    const u = Math.min(1, t / Math.max(300, J.delay));
+    th = -20 + (faceTh + 20) * ANIM.EASE.io(Math.min(1, u * 1.4));
+    pose = { eyes: 'focus', mouth: 'o', look: [J.dir * 2, 0] };
+    if (u >= 1) { J.phase = 'go'; J.t0 = now; }
+  } else if (J.phase === 'go' || J.phase === 'back') {
+    const u = Math.min(1, t / J.hopMs);
+    pose = J.phase === 'go' ? F.hop(u) : F.carry(u);
+    if (J.phase === 'back') th = -faceTh;
+    // 每一格把視窗往前推一點（跟跳的弧線同步）
+    const want = J.step * ANIM.EASE.io(u), dx = Math.round(want - (J.hopDone || 0));
+    if (dx) { window.api.movePetBy((J.phase === 'go' ? J.dir : -J.dir) * dx, 0); J.hopDone = (J.hopDone || 0) + dx; }
+    if (u >= 1) {
+      J.moved += J.hopDone; J.hopDone = 0; J.t0 = now;
+      if (J.phase === 'go' && J.moved >= J.target) { J.phase = 'reach'; }
+      if (J.phase === 'back' && Math.abs(window.screenX - J.startX) <= J.step * .6) { J.phase = 'turn'; }
+    }
+  } else if (J.phase === 'reach') {          // 彎腰抱球
+    const u = Math.min(1, t / 600);
+    pose = F.reach(u < .6 ? u / .6 : 1 - (u - .6) / .4 * .4);
+    if (u > .55 && !J.carry) { J.carry = true; window.api.pickupBall(); }
+    if (u >= 1) { J.phase = 'back'; J.t0 = now; }
+  } else if (J.phase === 'turn') {           // 回到原位、轉正面
+    const u = Math.min(1, t / 500);
+    th = -faceTh * (1 - ANIM.EASE.io(u));
+    pose = { eyes: 'happy', mouth: 'open', blush: 1.2, arms: { L: { hand: [-6, 108, 40] }, R: { hand: [6, 110, 40] } } };
+    if (u >= 1) return endFetch(J.kind === 'bball' ? '撿回來了！再投一次～' : '撿到了！下次輕一點墊。');
+  }
+  pose.props = J.carry || J.phase === 'reach' ? [{ t: J.kind, hand: 'both', off: [0, -4] }] : [];
+  drawPosed(th, pose);
+  J.raf = requestAnimationFrame(runFetch);
 }
 
 // ---------------------------------------------------------------------------
@@ -330,6 +488,8 @@ window.addEventListener('mousemove', (e) => {
   samples = samples.filter((s) => now - s.t < 90);
   if (moved >= 5 && petEl.dataset.pose !== 'lifted' && !away) {
     if (turning) { cancelAnimationFrame(turning.raf); turning.done(); }
+    if (fetchJob) { window.api.removeBall(); fetchJob = null; }
+    if (anim) { if (anim.st.thrown) window.api.removeBall(); stopAnim(); }
     setView('front');
     setPose('lifted');
   }

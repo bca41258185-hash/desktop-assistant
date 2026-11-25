@@ -384,7 +384,13 @@
     return `<svg viewBox="${vb}" class="view-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="overflow:visible">${render(th, id, pose).svg}</svg>`;
   }
 
-  const api = { render, svg };
+  // 單顆球（給獨立的球視窗用）：以球心為中心、半徑 12 的 SVG
+  function ballSVG(kind, rot = 0, scale = 1) {
+    const id = 'bw';
+    const body = kind === 'bball' ? bball(id, 0, 0, rot, 1) : vball(id, 0, 0, rot, 1);
+    return `<svg viewBox="-16 -16 32 32" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;overflow:visible"><defs>${PROP_DEFS(id)}</defs>${body}</svg>`;
+  }
+  const api = { render, svg, ballSVG };
   if (typeof window !== 'undefined') window.QuokkaPose = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();
