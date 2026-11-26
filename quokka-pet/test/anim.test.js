@@ -266,3 +266,16 @@ test('反應動畫修正：bigCheer 落地時是正面；cover 的手在頭兩�
   // 衝刺：騰空時腳收起來、尾巴不超過 .4
   for (let u = 0; u <= 1; u += .05) { const p = A.FETCH2.dash(u).pose; assert.ok(p.tailUp <= .4 + 1e-9); if (p.y < -6) assert.strictEqual(p.feet, 'air'); }
 });
+
+test('排球撿回來：說「撿回來了」那一段（homeHug）球一直抱在雙手上，前後和 homeToss／homeV 接得起來', () => {
+  const A = require('../renderer/quokka-anim.js'), F = A.FETCH2;
+  assert.ok(typeof F.homeHug === 'function');
+  for (let i = 0; i <= 20; i++) {
+    const fr = F.homeHug(i / 20), ball = (fr.pose.props || []).find((p) => p.t === 'vball');
+    assert.ok(ball && ball.hand === 'both', `homeHug(${i / 20}) 球在雙手上`);
+  }
+  const a = F.homeToss(1, 'vball'), b = F.homeHug(0), c = F.homeHug(1), d = F.homeV(0);
+  assert.strictEqual(a.th, b.th, '接住 → 抱著說話：角度接得上');
+  assert.strictEqual(c.th, d.th, '說完 → 放到腳邊：角度接得上');
+  assert.deepStrictEqual(c.pose.arms.L.hand, d.pose.arms.L.hand, '說完 → 放到腳邊：手的位置接得上');
+});

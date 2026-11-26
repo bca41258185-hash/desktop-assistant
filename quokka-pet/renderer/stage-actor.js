@@ -614,6 +614,7 @@
     blocked(nx, dir, ignore) {   // 前方 120 px 內有別隻（伴侶、自己的小袋鼠、媽媽除外）、或游標就在前面 → 停
       for (const o of S.actors.values()) {
         if (o === this || o.inPouch || Math.abs(o.y - this.y) > 80 || (ignore && ignore.has(o)) || (S.family && S.family.close(this, o))) continue;
+        if (o.job && o.job.name === 'yield' && o.job.ready) continue;                     // 已經往後退一步讓路：從牠前面經過
         // 別隻正在撿球：牠來回的那條路都算擋住（不要走進去跟牠撞在一起）
         if (o.job && o.job.name === 'fetch' && nx > Math.min(o.x, o.job.ballX, o.job.homeX) - 100 && nx < Math.max(o.x, o.job.ballX, o.job.homeX) + 100) return true;
         const ox = o.job && o.job.name === 'walk' ? o.x + o.job.dir * o.job.step : o.x;

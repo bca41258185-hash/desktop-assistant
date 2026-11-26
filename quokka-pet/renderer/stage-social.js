@@ -64,14 +64,13 @@
         if (o === I || o === O || o === laneFor) continue;
         if (o.isFollow && (momOf(o) === I || momOf(o) === O)) continue;                  // 自己的小袋鼠會跟著讓開
         if (!(o.x > lo && o.x < hi)) continue;
+        if (o.job && o.job.name === 'yield' && o.job.mover === I) { if (!o.job.ready) blocked = true; continue; }   // 已經往後退一步讓路了
         blocked = true;
         if (o.job || o.mode !== 'awake' || o.isFollow) continue;
-        const cands = [];
-        for (let i = 0; i < 4; i++) cands.push(lo - 36 - 100 * (n + i), hi + 36 + 100 * (n + i));
-        cands.sort((p, q) => Math.abs(p - o.x) - Math.abs(q - o.x));
-        const tx = cands.find((c) => c > 44 && c < W - 44 && all.every((q) => q === o || Math.abs((q.sideTo != null ? q.sideTo : q.x) - c) >= 92));
+        // 讓路：往後退一小步（不再跳到這一段的外側，免得走很遠、從球上或別隻旁邊經過）；兩隻互動完才跳回來
+        const duet = this;
+        o.requestActivity(6, yieldJob(o, I, null, I.x, { avoid: [ix, ox], busy: () => !duet.over && !!I.job && I.job.duet === duet }));
         n++;
-        if (tx != null) o.requestActivity(6, sideStepJob(o, tx, I, [I, O]));
       }
       if (blocked) return 'wait';
       if (laneFor && (laneFor.x - I.x) * (laneFor.x - ix) <= 0) return false;            // 爸爸的路上還是會碰到媽媽：取消
@@ -292,16 +291,17 @@
     return clear;
   };
   // 往後退一小步讓路：看一眼 → 小跳往後（depth）、必要時往旁邊挪一點 → 回頭看撿球的 → 等撿完 → 跳回地面線
-  function yieldJob(o, mover, ballX, fromX) {
+  function yieldJob(o, mover, ballX, fromX, opt = {}) {
     const k = o.k, D = 26 * k, HOP = 420;
     const politeOk = (x) => [...S.actors.values()].every((q) => q === o || q === mover || q.inPouch || Math.abs(q.y - o.y) > 40 || F.close(o, q) || Math.abs((q.sideTo != null ? q.sideTo : q.x) - x) >= 92 * (q.k + k) / 2 / S.SCALE);
     // 撿球的會停在球前面 88 單位（站位）；退的那一步要離球和站位都有一個身體的距離、離別隻保持禮貌距離
-    const standX = ballX - (Math.sign(ballX - fromX) || 1) * 88 * mover.k;
+    const standX = ballX == null ? null : ballX - (Math.sign(ballX - fromX) || 1) * 88 * mover.k;
     let dx = 0;
     for (const c of [0, 24, -24, 48, -48, 72, -72, 96, -96]) {
       const x = o.x + c * k;
       if (x < 44 || x > innerWidth - 44) continue;
-      if (Math.abs(x - ballX) < 70 * k || Math.abs(x - standX) < 60 * k) continue;
+      if (ballX != null && (Math.abs(x - ballX) < 70 * k || Math.abs(x - standX) < 60 * k)) continue;
+      if ((opt.avoid || []).some((v) => Math.abs(x - v) < 60 * k)) continue;
       if (!politeOk(x)) continue;
       dx = c * k; break;
     }
@@ -321,7 +321,7 @@
         }
         case 'turn': if (sub.tick(now)) return true; job.phase = 'wait'; p0 = now; return true;
         case 'wait': {                                                    // 撿完（或放棄）才回去
-          const busy = mover.job && mover.job.name === 'fetch' && S.actors.has(mover.id);
+          const busy = opt.busy ? opt.busy() : mover.job && mover.job.name === 'fetch' && S.actors.has(mover.id);
           if (busy && now - p0 < 25000) return true;
           job.phase = 'back'; p0 = now; x0 = o.x; d0 = o.depth; return true;
         }
@@ -354,22 +354,7 @@
       if (!o.requestActivity(6, job)) o.backT = setTimeout(poll, 600); else S.kick();
     }, 600);
   }
-  function sideStepJob(o, tx, mover, lane) {
-    const m = o.mover(tx, { gait: 'hop', speed: 1.2, turnMs: 200, lane: lane || null });
-    let sub = null, p0 = 0;
-    const job = { name: 'sideStep', ticks: true };
-    job.start = (now) => { p0 = now; o.sideTo = tx; o.lookBucket = mover.x < o.x ? 'L' : 'R'; o.showRest(); o.lookBucket = null; };      // 先看一眼衝過來的那隻
-    job.tick = (now) => {
-      if (now - p0 < 220) return true;
-      if (!sub && m.tick(now)) return true;
-      if (!sub) { o.depth = 0; o.zBoost = 0; o.place(); sub = o.turner((mover.x < o.x ? -1 : 1) * 30, 220); }   // 讓開後回頭看
-      return sub.tick(now);
-    };
-    job.interrupt = () => { o.sideTo = null; o.depth = 0; o.zBoost = 0; };
-    job.end = () => { o.sideTo = null; o.depth = 0; o.zBoost = 0; o.th = Math.round(o.th / 15) * 15; };
-    job.endOpts = { rest: true };
-    return job;
-  }
+
 
   // =====================================================================================
   // 通則：任何兩隻（非情侶、非跟隨期的母子）靜止時身體不得重疊。
