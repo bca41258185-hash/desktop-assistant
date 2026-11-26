@@ -5,7 +5,7 @@
   const S = window.Stage, api = S.api;
   const isId = (v) => typeof v === 'string' && v.length > 0 && v.length <= 80;
   const actorOf = (qid) => (isId(qid) ? S.actors.get(qid) : null);
-  let awayNow = false;
+  let awayNow = false, cursorStale = 0;
 
   // ---- 名單 ----------------------------------------------------------------------
   function placeNew(q, i, n) {
@@ -148,6 +148,9 @@
   api.onCursor((c) => {
     if (!c || !isFinite(c.x) || !isFinite(c.y)) return;
     S.cursor = { x: c.x, y: c.y };
+    // 主行程只在游標離某隻 400 px 內時才送座標（最慢每 0.12 秒）：1.5 秒沒收到＝游標已經走遠，
+    // 清掉舊座標，免得散步、走位一直被「游標就在前面」擋住
+    clearTimeout(cursorStale); cursorStale = setTimeout(() => { S.cursor = { x: -9999, y: -9999 }; }, 1500);
     const now = performance.now();
     for (const a of S.actors.values()) a.onCursor(S.cursor, now);
   });

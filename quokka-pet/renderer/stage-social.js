@@ -198,7 +198,7 @@
     // 其中一隻被更高層的活動打斷（a 的工作已經被換掉了）
     interrupted(a, reason) {
       if (this.over) return;
-      const why = reason === 'drag' ? 'drag' : reason === 'ring' ? 'alert' : /^react/.test(reason || '') ? 'work' : reason === 'remove' ? 'user' : 'user';
+      const why = reason === 'drag' ? 'drag' : reason === 'ring' ? 'alert' : /^react/.test(reason || '') ? 'work' : 'user';
       const wasPlay = this.phase === 'play', other = a === this.I ? this.O : this.I, oj = a === this.I ? this.jobO : this.jobI;
       const thA = this.endTh(a === this.I ? 'a' : 'b'), thO = this.endTh(a === this.I ? 'b' : 'a');
       this.over = true; this.teardown();
