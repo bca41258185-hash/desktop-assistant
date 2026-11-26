@@ -470,9 +470,13 @@
   F.pouchNow = function (j, mom) {
     if (j.inPouch) return;
     if (j.job) { const job = j.job; j.job = null; job.interrupt && job.interrupt('pouch'); j.hideLive(); j.setLayer(8); }
-    j.pouching = false; j.inPouch = true; j.el.style.display = 'none'; j.el.style.opacity = ''; j.depth = 0; j.zBoost = 0; j.place();
+    j.pouching = false; j.inPouch = true; j.depth = 0; j.place();
     if (mom && !mom.attach.carryingJoey && !pouchJoeys.get(mom.id)) { mom.carried = j; mom.attach.carryingJoey = true; }
     if (mom) { F.refresh(mom); if (mom.dragging) mom.setFrame('lift', 0, ANIM.STILL.lift); else if (!mom.job) mom.showRest(); }
+    // 媽媽「袋裡有小袋鼠」的那一格還在解碼：小袋鼠先留著，等那一格換上去才收起來（中間不會有空袋子的一格）
+    const t0 = performance.now();
+    const hide = () => { if (!j.inPouch) return; if (mom && mom.pendingSrc && performance.now() - t0 < 500) { requestAnimationFrame(hide); return; } j.el.style.display = 'none'; j.el.style.opacity = ''; j.zBoost = 0; };
+    hide();
     S.reportRects();
   };
   // 爬出來：從袋口跳下來，落在媽媽後面
@@ -498,7 +502,7 @@
       if (into) { x0 = j.x; y0 = j.y; }
       else { const p = pouch(); x0 = p.x; y0 = p.y; j.x = x0; j.y = y0; j.el.style.opacity = '0'; }
       ox = x0; oy = y0;
-      j.zBoost = -60; j.place();                                                     // 畫在媽媽後面
+      j.zBoost = 10200; j.place();                                                   // 畫在媽媽前面（袋口在肚子前面）：看得到牠跳上來、鑽進去
     };
     job.tick = (now) => {
       const u = Math.min(1, (now - job.p0) / dur), e = EASE.io(u);
@@ -508,7 +512,7 @@
       j.gaitFrame('hop', dir, u);
       j.x = from.x + (tgt.x - from.x) * e;
       j.y = from.y + (tgt.y - from.y) * e - Math.sin(Math.PI * u) * 34 * j.k / .5;
-      j.el.style.opacity = into ? String(S.clamp(1 - (u - .72) / .28, 0, 1)) : String(S.clamp(u / .25, 0, 1));
+      j.el.style.opacity = into ? String(S.clamp(1 - .6 * (u - .7) / .3, .4, 1)) : String(S.clamp(u / .25, 0, 1));
       j.place();
       return u < 1;
     };
@@ -516,7 +520,7 @@
     job.interrupt = () => { clean(); if (!into) { j.y = mom.y; j.place(); } };
     job.end = () => {
       if (into) { clean(); F.pouchNow(j, mom); return; }
-      clean(); j.y = mom.y; j.th = (mom.x > j.x ? 1 : -1) * 45; j.home = j.x; j.place();
+      clean(); j.zBoost = 80; j.y = mom.y; j.th = (mom.x > j.x ? 1 : -1) * 45; j.home = j.x; j.place();   // 落地時還在媽媽前面那一道（和跟著走時一樣）
       const p = j.toStage(80, 60); S.burst(p.x, p.y, 'stars');
     };
     return job;
@@ -621,7 +625,20 @@
       if (a.job && a.job.layer <= 1) { a.growT = setTimeout(play, 1500); return; }          // 正在被拖或響鈴：等結束再長大（不打斷）
       // 先（還是小小的樣子）跳到旁邊的空位，離爸媽和別隻有禮貌距離，再在那裡長大：長大的時候不會和媽媽疊在一起
       if (!a.grewMoved && !a.job) {
-        const sp = a.freeSpot(118);
+        // 找空位：不要站到爸媽中間（情侶待機時會靠在一起）；優先站到媽媽「離爸爸遠的那一側」外面，再來是爸爸外側
+        const dad = S.actors.get(a.attach.dad), mates = [mom, dad].filter((q) => q && !q.inPouch && Math.abs(q.y - a.y) <= 40);
+        const lo = Math.min(...mates.map((q) => q.x)), hi = Math.max(...mates.map((q) => q.x));
+        const others = [...S.actors.values()].filter((o) => o !== a && !o.inPouch && Math.abs(o.y - a.y) <= 40);
+        const okAt = (x) => x > 44 && x < innerWidth - 44 && others.every((o) => Math.abs((o.sideTo != null ? o.sideTo : o.x) - x) >= 118) && !(mates.length === 2 && x > lo && x < hi);
+        let sp = null;
+        if (mates.length) {
+          const cands = [];
+          for (let d = 120; d <= 420; d += 12) cands.push(lo - d, hi + d);
+          cands.sort((p, q) => Math.abs(p - a.x) - Math.abs(q - a.x));
+          const x = cands.find(okAt);
+          if (x != null) sp = { x, cross: others.some((o) => (o.x - a.x) * (o.x - x) < 0), others };
+        }
+        if (!sp) sp = a.freeSpot(118);
         if (sp && Math.abs(sp.x - a.x) > 6) {
           a.grewMoved = true; a.hs = 1.3; a.sideTo = sp.x;
           const m = a.mover(sp.x, { gait: 'hop', lane: sp.cross ? sp.others : null, speed: 1.1 });

@@ -906,7 +906,7 @@
         const u0 = rimNear - away * 3, h0 = rimH + R * .8, G = 1500 * ctx.kk;
         if (roomP >= 120 * ctx.kk) {
           // 拋物線要整段高過傳球那隻的頭（頭頂＋耳朵約 186 單位、再加球的半徑和一點餘裕）：不夠高就加大往上的速度
-          const land = baseP - away * 100 * ctx.kk, clearH = 186 * PS.k + R + 8 * ctx.kk, halfW = 50 * PS.k + R;
+          const land = baseP - away * 128 * ctx.kk, clearH = 186 * PS.k + R + 8 * ctx.kk, halfW = 50 * PS.k + R;
           let vh = 640 * ctx.kk, tt = 0, vu = 0;
           for (; vh < 1600 * ctx.kk; vh += 20 * ctx.kk) {
             tt = (vh + Math.sqrt(vh * vh + 2 * G * (h0 - R))) / G; vu = (land - u0) / tt;

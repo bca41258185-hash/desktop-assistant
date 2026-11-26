@@ -17,8 +17,6 @@ contextBridge.exposeInMainWorld('stageApi', {
   onPlay: on('q:play'),                     // {qid, action}
   onPresence: on('presence'),               // {away, locked, digest?}
   onCursor: on('stage:cursor'),             // {x, y}
-  onPause: on('stage:pause'),
-  onResume: on('stage:resume'),
   onHide: on('stage:hide'),                 // {until}
   onSocialStart: on('social:start'),        // {pairId, a, b, type, initiator}
   onSocialAbort: on('social:abort'),        // {pairId, by, reason}
@@ -28,7 +26,6 @@ contextBridge.exposeInMainWorld('stageApi', {
   savePos: (id, pos) => ipcRenderer.send('stage:save-pos', { id: str(id), pos: { x: num(pos && pos.x), y: num(pos && pos.y) } }),
   rest: (qid, x, y) => ipcRenderer.send('q:rest', { qid: str(qid), x: num(x), y: num(y) }),
   state: (qid, layer) => ipcRenderer.send('q:state', { qid: str(qid), layer: num(layer) }),
-  drop: (qid, screenX, screenY) => ipcRenderer.send('q:drop', { qid: str(qid), screenX: num(screenX), screenY: num(screenY) }),
   dblclick: (qid) => ipcRenderer.send('q:dblclick', { qid: str(qid) }),
   context: (qid) => ipcRenderer.send('q:context', { qid: str(qid) }),
   ack: (reminderId) => ipcRenderer.send('alert:ack', { reminderId: str(reminderId) }),
