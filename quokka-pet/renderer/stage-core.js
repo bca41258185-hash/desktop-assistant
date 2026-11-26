@@ -192,7 +192,8 @@
   let pngBusy = false;
   function toPNG(entry, svg) { pngQueue.push(entry); if (!pngBusy) nextPNG(); }
   function nextPNG() {
-    const entry = pngQueue.shift();
+    let entry = pngQueue.shift();
+    while (entry && cache.get(entry.key) !== entry) entry = pngQueue.shift();      // 已經被丟掉（外觀變了、長大）的畫格：網址已釋放，不要再載入
     if (!entry) { pngBusy = false; return; }
     pngBusy = true;
     const img = new Image();

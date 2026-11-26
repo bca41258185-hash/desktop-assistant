@@ -648,9 +648,14 @@
         target = S.clamp(a.x + dir * dist, lo, hi);
         if (Math.abs(target - a.x) < 40) target = S.clamp(a.x - dir * dist, lo, hi);
       }
-      const gait = o.gait || a.pickGait(Math.abs(target - a.x));
+      let gait = o.gait || a.pickGait(Math.abs(target - a.x));
       // 目的地要和非伴侶保持禮貌距離（四肢著地走時，前方再多留口鼻伸出去的距離）；放不下就縮短
-      { const t2 = S.politeTarget(a, target, { ignore: o.ignore, gait }); target = t2 == null ? a.x : t2; }
+      {
+        let t2 = S.politeTarget(a, target, { ignore: o.ignore, gait });
+        // 四肢著地走會因為口鼻伸出去而停得比較遠：改用小跳（直立）就能走到原本的目的地時，改用小跳
+        if (gait === 'walk' && !o.gait && (t2 == null || Math.abs(t2 - target) > 4)) { const t3 = S.politeTarget(a, target, { ignore: o.ignore, gait: 'hop' }); if (t3 != null && (t2 == null || Math.abs(t3 - target) < Math.abs(t2 - target))) { gait = 'hop'; t2 = t3; } }
+        target = t2 == null ? a.x : t2;
+      }
       const dir = Math.sign(target - a.x) || 1;
       const job = { name: o.name || 'walk', ticks: true, phase: 'glance', dir, target, gait, step: GINFO('hop').stride * a.k };
       const pauseAt = !o.noPause && Math.abs(target - a.x) > 110 && Math.random() < .4 ? a.x + (target - a.x) * (.35 + Math.random() * .3) : null;
@@ -853,7 +858,7 @@
           case 'discover': frame(ph, u, m); if (u >= 1) go('wait', now); break;
           case 'wait': {                                                 // 路上有別隻：請牠橫向跳開，等路清空再衝（不穿過別隻）
             frame('discover', 1, m);
-            if (now - (job.lastChk || 0) > 220) { job.lastChk = now; job.clear = S.clearPath ? S.clearPath(a, a.x, ball.x, 52, [Math.min(a.x, ball.x, home), Math.max(a.x, ball.x, home)]) : true; }   // 擋路的跳到「去撿＋抱回來」整條路線外
+            if (now - (job.lastChk || 0) > 220) { job.lastChk = now; job.clear = S.clearPath ? S.clearPath(a, a.x, ball.x, 82, [Math.min(a.x, ball.x, home), Math.max(a.x, ball.x, home)]) : true; }   // 球後面 82 px 內站著別隻也要請牠讓開（伸爪撈球時口鼻才不會碰到牠）   // 擋路的跳到「去撿＋抱回來」整條路線外
             if (job.clear) { const left = Math.abs(standX - a.x); job.dashHops = Math.max(0, Math.round(left / (DASH.stride * k))); job.dashStep = job.dashHops ? (standX - a.x) / job.dashHops : 0; go(job.dashHops ? 'dash' : 'brake', now); }
             else if (now - job.p0 > 9000) { ball.fade(); job.endOpts = { line: '被擋住了，等一下再撿～' }; return false; }
             break;
@@ -1132,12 +1137,20 @@
       if (!near) return false;
       const spot = this.freeSpot(100);
       if (!spot || Math.abs(spot.x - this.x) < 3) return false;
-      const a = this, m = this.mover(spot.x, { gait: 'hop', lane: spot.cross ? spot.others : null }), target = spot.x;
-      let sub = null;
+      const a = this;
+      let sub = null, target = spot.x, lastChk = 0, tries = 0;
+      // 跳的途中別隻也動了（目的地變得不禮貌）：每 0.3 秒看一次，必要時換一個空位（最多換 3 次）
+      const tgt = () => {
+        const now = performance.now();
+        if (now - lastChk > 300 && tries < 3) { lastChk = now; if (!S.politeOk(a, target, { ignore: null })) { a.sideTo = null; const sp = a.freeSpot(100); if (sp) { target = sp.x; tries++; } a.sideTo = target; job.target = target; } }
+        return target;
+      };
+      const m = this.mover(tgt, { gait: 'hop', lane: spot.cross ? spot.others : null });
       const clean = () => { a.depth = 0; a.zBoost = 0; a.sideTo = null; };
       a.sideTo = spot.x;
-      return !!this.requestActivity(6, { name: 'stepAway', ticks: true, target, tick(now) { if (!sub && m.tick(now)) return true; if (!sub) { clean(); a.place(); sub = a.smoothTo(m.dir * 30, {}, 220); } return sub.tick(now); },
-        interrupt: clean, end() { clean(); a.home = a.x; S.api.savePos(a.id, { x: Math.round(a.x), y: Math.round(a.y) }); } });
+      const job = { name: 'stepAway', ticks: true, target, tick(now) { if (!sub && m.tick(now)) return true; if (!sub) { clean(); a.place(); sub = a.smoothTo(m.dir * 30, {}, 220); } return sub.tick(now); },
+        interrupt: clean, end() { clean(); a.home = a.x; S.api.savePos(a.id, { x: Math.round(a.x), y: Math.round(a.y) }); if (S.checkOverlapSoon) S.checkOverlapSoon(); } };
+      return !!this.requestActivity(6, job);
     }
 
     // ---- 游標：靠近時眼睛看游標；停很久湊過去聞（膽小的害羞轉開） ----------------------
