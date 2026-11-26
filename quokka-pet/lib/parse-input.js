@@ -180,6 +180,7 @@
     else if (per === '中午') { if (H <= 4) H += 12; }
     else if (per === '上午' || per === '早上' || per === '早晨' || per === '清晨' || per === '一早' || per === '凌晨') { if (H === 12) { H = 0; soft = true; } else if (per === '凌晨' && H < 6) soft = true; }
     if (H > 23) return null;
+    if (H === 0) soft = true;                                   // 0 點：直接找下一次，不算「已過」
     return { H, M, wrap, soft };
   }
 

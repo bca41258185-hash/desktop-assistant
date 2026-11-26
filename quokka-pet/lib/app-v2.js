@@ -348,7 +348,7 @@ function start() {
       const item = { id: newId('r'), owner, text: str(r.text), rule: r.rule, enabled: true, createdAt: nowISO() };
       data.reminders.push(item); clock.schedule(); changed();
       event(owner, 'task-added', { text: item.text });
-      return { ok: true, type: 'reminder', item, message: r.movedToTomorrow ? '今天已過，改明天' : undefined };
+      return { ok: true, type: 'reminder', item, message: r.note || (r.movedToTomorrow ? '今天已過，改明天' : undefined) };
     }
     const item = { id: newId('t'), owner, text: r.text, done: false, createdAt: nowISO(), order: data.tasks.length };
     data.tasks.push(item); changed();
