@@ -93,7 +93,10 @@ test('同一種個性類型，個體數值不同講的話也不同', () => {
   assert.match(timid.lines[0], /^RSI \d+，低於 30：(好像|看起來|感覺)/); assert.match(brave.lines[0], /^RSI \d+，低於 30：我敢說，/);
   const curious = describe(a, { ...base, personality: P({ curiosity: .9 }) }), bored = describe(a, { ...base, personality: P({ curiosity: .1 }) });
   assert.ok(curious.tags.length > bored.tags.length);                        // 好奇的多講幾個訊號
-  assert.match(describe(a, { ...base, personality: P({ activity: .9 }) }).lines[0], /！$/);
+  // 活潑：漲的日子用驚嘆號；下跌的日子（這組資料是跌的）不用驚嘆號
+  const upDay = I.analyze(series(Array(80).fill(0.8)));
+  assert.match(describe(upDay, { ...base, personality: P({ activity: .9 }) }).lines[0], /！$/);
+  assert.ok(!/！|～/.test(Object.values(describe(a, { ...base, personality: P({ activity: .9 }) })).join('')));
   assert.match(describe(a, { ...base, personality: P({ activity: .1 }) }).lines[0], /……$/);
   assert.ok(describe(a, { ...base, personality: P({ affection: .9 }) }).lines.some((l) => /幫你盯著/.test(l)));
   assert.ok(describe(a, { ...base, personality: P({ sociability: .9 }) }).lines.some((l) => /其他庫卡/.test(l)));
@@ -101,7 +104,8 @@ test('同一種個性類型，個體數值不同講的話也不同', () => {
   const hoop = describe(a, { ...base, personality: P({}), likes: ['basketball', 'nap'], hobbies: ['曬太陽'] });
   assert.match(hoop.headline, /被蓋掉了/); assert.ok(/對手|比分|落後|防守/.test(hoop.lines.join('')));
   assert.equal(hoop.lines.at(-1), '講完了，我要去曬太陽了。');
-  assert.match(describe(a, { ...base, personality: P({}), stage: 'juvenile' }).headline, /哇！/);
+  assert.match(describe(upDay, { ...base, personality: P({}), stage: 'juvenile' }).headline, /哇！/);
+  assert.doesNotMatch(describe(a, { ...base, personality: P({}), stage: 'juvenile' }).headline, /哇|！/);   // 下跌的日子不驚呼（原本是「哇！今天辛苦一點。」）
   assert.ok(describe(a, { ...base, personality: P({}), stage: 'senior' }).lines.some((l) => /以前也看過/.test(l)));
   // 酷酷派就算愛打球也只講事實
   assert.ok(!/對手|灌木/.test(describe(a, { ...base, archetype: 'cool', personality: P({}), likes: ['basketball'] }).lines.join('')));
@@ -207,20 +211,24 @@ test('多空語氣和當天漲跌矛盾時用中性說法', () => {
   const a = I.analyze(SCEN.盤整小漲帶死亡交叉);
   assert.ok(a.v.pct > 0 && ids(a)[0] === 'deathCross');
   assert.equal(a.mood, 'flat'); assert.equal(a.mixed, true); assert.equal(a.lean, -1); assert.equal(a.dayDir, 1);
+  // 中性開場的內容一樣（今天小漲，但均線轉弱），但每種個性的說法不同
+  const heads = new Set();
   for (const ar of Object.keys(VOICE)) {
     const r = describe(a, { name: '台積電', symbol: '2330', archetype: ar });
-    assert.equal(r.headline, '台積電 ▲0.2%，死亡交叉。今天小漲，但均線轉弱。', ar);
+    assert.match(r.headline, /^台積電 ▲0\.2%，死亡交叉。.*今天小漲，但均線轉弱[，。]/, ar);
+    heads.add(r.headline);
   }
+  assert.equal(heads.size, Object.keys(VOICE).length);
   // 反過來：一路漲、今天小跌
   const b = I.analyze(SCEN.漲多小回);
   assert.ok(b.v.pct < 0); assert.equal(b.mixed, true); assert.equal(b.mood, 'flat');
   assert.match(describe(b, { name: 'x', symbol: 'x', archetype: 'cool' }).headline, /^x ▼0\.1%，.+。今天小跌，但其他指標偏強。$/);
   const c = I.analyze(SCEN.跌深小彈);
   assert.equal(c.mixed, true);
-  assert.match(describe(c, { name: 'x', symbol: 'x', archetype: 'athlete' }).headline, /今天小漲，但其他指標偏弱。$/);
+  assert.match(describe(c, { name: 'x', symbol: 'x', archetype: 'athlete' }).headline, /今天小漲，但其他指標偏弱[，。]/);
   const d = I.analyze(SCEN.漲多平盤);
   assert.equal(d.dayDir, 0); assert.equal(d.mood, 'flat');
-  assert.match(describe(d, { name: 'x', symbol: 'x', archetype: 'sleepy' }).headline, /^x 平盤，.+。今天平盤，但其他指標偏強。$/);
+  assert.match(describe(d, { name: 'x', symbol: 'x', archetype: 'sleepy' }).headline, /^x 平盤，.+。.*今天平盤，但其他指標偏強。$/);
   // 方向一致時照舊
   assert.equal(I.analyze(SCEN.大漲).mood, 'bull'); assert.equal(I.analyze(SCEN.大漲).mixed, false);
   assert.equal(I.analyze(SCEN.大跌).mood, 'bear');
@@ -228,16 +236,54 @@ test('多空語氣和當天漲跌矛盾時用中性說法', () => {
 test('價格完全不動：RSI 是 50、不報新高新低，只說今天沒什麼動靜', () => {
   assert.equal(I.rsi(Array(30).fill(100)).at(-1), 50);
   for (const name of ['完全不動', '停牌無成交']) {
-    const a = I.analyze(SCEN[name]);
+    const a = I.analyze(SCEN[name]), heads = new Set();
     assert.deepEqual(ids(a), ['still'], name); assert.equal(a.mood, 'flat');
     if (name === '完全不動') assert.equal(a.v.rsi, 50);
     for (const ar of Object.keys(VOICE)) {
       const r = describe(a, { name: '台積電', symbol: '2330', archetype: ar });
-      assert.equal(r.headline, '台積電 平盤，沒動靜。今天沒什麼動靜。', ar);
+      assert.ok(r.headline.startsWith('台積電 平盤，沒動靜。'), ar);
+      assert.ok(!/沒什麼動靜|沒動靜。.*沒動靜/.test(r.headline), `${ar}：${r.headline}`);   // 不重複講「沒動靜」
+      heads.add(r.headline);
       assert.deepEqual(r.tags, ['沒動靜']);
       assert.ok(!/新高|新低|RSI/.test(r.lines.join('')), ar);
     }
+    assert.equal(heads.size, Object.keys(VOICE).length, `${name}：各個性的開場要不同`);
   }
+});
+
+// ---- 第三輪審查補的測試 --------------------------------------------------------------------
+test('describe：欄位缺了不丟例外', () => {
+  for (const x of [null, undefined, {}, [], { ok: true }, { ok: true, v: {} }, { ok: true, signals: [] }, { ok: true, v: { pct: NaN }, signals: [{ id: 'nope' }] }, { ok: true, v: { pct: 1.2, ma20: 0, close: null }, signals: [{ id: 'bigUp', pct: 1.2 }], mood: 'bull' }]) {
+    for (const ar of [...Object.keys(VOICE), 'nope']) {
+      const r = describe(x, { archetype: ar });
+      assert.ok(r && typeof r.headline === 'string' && r.headline.length > 0 && Array.isArray(r.lines), JSON.stringify(x));
+      assert.ok(!/undefined|NaN|null|Infinity|^：/.test([r.headline, ...r.lines].join(' ')), `${JSON.stringify(x)}/${ar}：${r.headline}`);
+    }
+    assert.doesNotThrow(() => marketLine(x, {}));
+  }
+});
+test('盤中漲停說「漲到漲停價」，收盤後才說「鎖住」', () => {
+  const up = mk(N, (i, c) => (i === N - 1 ? c * 1.099 : noise(0.01)(i, c)));
+  const done = describe(I.analyze(up, { market: 'tw' }), { name: 'x', symbol: 'x', archetype: 'cool' });
+  assert.match(done.lines[0], /^漲停鎖住了/);
+  const live = describe(I.analyze(up.map((b, i) => (i === N - 1 ? { ...b, partial: true } : b)), { market: 'tw' }), { name: 'x', symbol: 'x', archetype: 'cool' });
+  assert.match(live.lines[0], /^目前漲到漲停價/); assert.ok(!/鎖住/.test(live.lines.join('')));
+});
+test('說法通順：跳空開高、看起來後面有停頓、RSI 不談人數、下跌不用驚嘆號、有訊號時不說「沒什麼事」', () => {
+  assert.equal(SIG.gapUp.fact({ gap: 3 }), '跳空開高 3.0%'); assert.equal(SIG.gapDown.fact({ gap: -3 }), '跳空開低 3.0%');
+  for (const d of Object.values(SIG)) assert.ok(!/買的人|賣的人/.test(d.leaf + d.sport), d.tag);
+  const all = [];
+  for (const [name, bars] of Object.entries(SCEN)) {
+    const a = I.analyze(bars, { market: 'tw' });
+    for (const who of WHO) {
+      const r = describe(a, { name: 'x', symbol: 'x', ...who }), text = [r.headline, ...r.lines].join(' / ');
+      all.push(text);
+      assert.ok(!/看起來[^，]/.test(text), `${name}：${text}`);
+      if (a.mood === 'bear' || a.dayDir < 0) assert.ok(!/[！～]|哇/.test(text), `${name}/${who.archetype}：${text}`);
+      if (a.signals[0].id !== 'quiet' && a.signals[0].id !== 'still') assert.ok(!/沒什麼事|沒什麼特別|沒發現新東西|很安靜/.test(r.headline), `${name}/${who.archetype}：${r.headline}`);
+    }
+  }
+  assert.ok(all.some((t) => /看起來，/.test(t)));
 });
 test('量：盤中不判量縮、量是 0 或缺值不產生量的訊號', () => {
   const VOLS = ['volUp', 'volDown', 'volBig', 'volDry'], vols = (a) => ids(a).filter((x) => VOLS.includes(x));

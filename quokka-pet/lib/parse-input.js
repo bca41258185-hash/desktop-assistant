@@ -99,7 +99,7 @@
   // ---- 日期詞 --------------------------------------------------------------------------------
   // 作法：先在整句裡找「日期」，再找「時刻」，兩段都拿掉以後剩下的就是內容；
   // 最後做「殘留檢查」：內容裡如果還有看起來像日期或時間、但沒被用到的片段，就不默默排程（見 residue()）。
-  const WK = '(?:週|周|星期|禮拜)', WD1 = '(?:[一二三四五六日天]|[1-7](?![\\d點:.]))', LSEP = '[、,，和跟及與]';
+  const WK = '(?:週|周|星期|禮拜)', WD1 = '(?:[日天]|[一二三四五六](?!\\s*點(?!名|數|心|子|餐|菜|擊))|[1-7](?![\\d點:.樓層Ff號棟館]))', LSEP = '[、,，和跟及與]';
   const PERIOD = '(?:上午|早上|早晨|清晨|一早|中午|下午(?!茶)|午後|傍晚|晚上|晚間|凌晨|半夜|午夜|深夜)';
   const NOT_AFTER_BEFORE = '(?![往去進面天後場置提言者任])';       // 「3點前往工地」的「前」不是截止
   const DOM_NOT = '(?!樓|線|館|出口|機|房|倉|門|棟|店|桌|車|球|字|碼|廳|梯|柱|樑|窗|坑|井|地|公)';   // 「5號出口」「3號倉」不是日期
@@ -115,13 +115,13 @@
     ['wend', `(?<wep>下|這|本)?(?:個)?${WK}末`],
     ['ymd', `(?<![\\d/.-])(?:民國\\s*)?(?<y>\\d{3,4})(?<ysep>[/.-])(?<ym>\\d{1,2})\\k<ysep>(?<yd>\\d{1,2})(?![\\d/])[日號]?`],
     ['roc', `民國\\s*(?<ry>\\d{2,3})\\s*年\\s*(?<rm>\\d{1,2})\\s*月\\s*(?<rd>\\d{1,2})\\s*[日號]?`],
-    ['md', `(?<![\\d/.:-])(?<mdp>明年|今年)?(?<mo>\\d{1,2})/(?<da>\\d{1,2})(?![/\\d])[日號]?`],
-    ['mdash', `(?<![\\d/.:-])(?<mo2>\\d{1,2})[-.](?<da2>\\d{1,2})(?=\\s+(?:${PERIOD}\\s*)?\\d{1,2}(?::\\d{2}|\\s*點))`],
-    ['cmd', `(?<!\\d)(?:(?<cy>\\d{4})\\s*年|(?<cyp>明年|今年))?\\s*(?<cmo>\\d{1,2}|[${CN}]{1,2})月(?<cda>\\d{1,2}|[${CN}]{1,3})[日號]?`],
-    ['dom', `(?<![\\d/.:-])(?<domp>這個?月|本月|下個?月)?(?<dom>\\d{1,2}|[${CN}]{1,3})號${DOM_NOT}`],
-    ['mend', '(?<mep>下個?)?月底'],
-    ['mstart', '(?<msp>下個?)?月初'],
-    ['ndays', `(?<![\\d.])(?<nd>\\d{1,2}|[${CN}]{1,2})天(?:之後|以後|後)`]
+    ['md', `(?:(?<mdp>明年|今年)|(?<![\\dA-Za-z/.:-]))(?<mo>\\d{1,2})/(?<da>\\d{1,2})(?![/\\d])[日號]?`],
+    ['mdash', `(?<![\\dA-Za-z/.:-])(?!7-11(?!\\d))(?<mo2>\\d{1,2})[-.](?<da2>\\d{1,2})(?=\\s+(?:${PERIOD}\\s*)?(?:\\d{1,2}(?::\\d{2}|\\s*點|\\s*[AaPp]\\.?[Mm](?![a-z]))|[${CN}]{1,3}點))`],
+    ['cmd', `(?:(?<cy>(?<!\\d)\\d{4})\\s*年|(?<cyp>明年|今年))?\\s*(?<cmo>(?<!\\d)\\d{1,2}|(?<![${CN}])[${CN}]{1,2})月(?<cda>\\d{1,2}|[${CN}]{1,3})[日號]?`],
+    ['dom', `(?:(?<domp>這個?月|本月|下下個?月|下個?月)|(?<![\\d/.:-]))(?<dom>\\d{1,2}|[${CN}]{1,3})號${DOM_NOT}`],
+    ['mend', `(?:(?<mep>下下個?|下個?)|(?<mem>(?<![\\d/.:])\\d{1,2}|(?<![${CN}])[${CN}]{1,2})|(?<!\\d))月底`],
+    ['mstart', `(?:(?<msp>下下個?|下個?)|(?<msm>(?<![\\d/.:])\\d{1,2}|(?<![${CN}])[${CN}]{1,2})|(?<!\\d))月初`],
+    ['ndays', `(?<nd>(?<![\\d.])\\d{1,2}|[${CN}]{1,2})天(?:之後|以後|後)`]
   ];
   const RE_DATE = new RegExp(DATE_ALTS.map(([k, src]) => `(?<A_${k}>${src})`).join('|'), 'g');
   const RE_MD_RANGE = /^\s*(?:-|~|–|—|到|至)\s*(\d{1,2})\/(\d{1,2})(?![/\d])/;
@@ -184,7 +184,7 @@
       let date = mkDate(y, mo, d);
       const fixedYear = !!(g.cy || yp);
       if (!date && !fixedYear && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) date = [1, 2, 3, 4].map((k) => mkDate(y + k, mo, d)).find(Boolean) || null;   // 2/29：找下一個閏年
-      if (!date) return { bad: `「${tok}」這個日期不存在` };
+      if (!date) return { bad: mo >= 1 && mo <= 12 && d >= 1 && d <= 31 ? `「${tok}」這個日期不存在` : `「${tok}」看不懂，請確認日期` };
       const label = tok.replace(/[日號]$/, (c) => (g.A_md ? '' : c));
       const p = past(date, label);
       if (p && p.bad) return p;
@@ -201,9 +201,9 @@
     if (g.A_monthly || g.A_dom) {
       const d = cnNum(g.mday || g.dom);
       if (!(d >= 1 && d <= 31)) return { bad: `「${tok}」這個日期不存在` };
-      const monthly = !!g.A_monthly, next = /^下/.test(g.domp || ''), fixed = !!g.domp;
+      const monthly = !!g.A_monthly, next = /^下下/.test(g.domp || '') ? 2 : /^下/.test(g.domp || '') ? 1 : 0, fixed = !!g.domp;
       let date = null;
-      for (let k = next ? 1 : 0; k < 4 && !date; k++) {
+      for (let k = next; k < 4 && !date; k++) {
         const x = mkDate(now.getFullYear() + Math.floor((now.getMonth() + k) / 12), ((now.getMonth() + k) % 12) + 1, d);
         if (x && (x >= today || fixed)) date = x;
         if (fixed) break;
@@ -215,13 +215,20 @@
       else if (!fixed && date.getMonth() !== now.getMonth()) r.notes = [`這個月 ${d} 號已過，設成 ${mdLabel(date)}`];
       return r;
     }
-    if (g.A_mend) {
-      const k = g.mep ? 2 : 1, date = new Date(now.getFullYear(), now.getMonth() + k, 0);
-      return { kind: 'once', date, label: tok, notes: [`${tok}＝${mdLabel(date)}`] };
-    }
-    if (g.A_mstart) {
-      const k = g.msp || now.getDate() > 1 ? 1 : 0, date = new Date(now.getFullYear(), now.getMonth() + k, 1);
-      return { kind: 'once', date, label: tok, notes: [`「${tok}」先設成 ${mdLabel(date)}`], uncertain: true };
+    // 月底／月初；「12月底」「下下個月初」也可以。寫了月份但今年已過 → 明年（附提示）
+    if (g.A_mend || g.A_mstart) {
+      const end = !!g.A_mend, pre = end ? g.mep : g.msp, M = cnNum(end ? g.mem : g.msm), notes = [];
+      let date;
+      if (Number.isFinite(M)) {
+        if (!(M >= 1 && M <= 12)) return { bad: `「${tok}」看不懂，請確認日期` };
+        date = end ? new Date(now.getFullYear(), M, 0) : new Date(now.getFullYear(), M - 1, 1);
+        if (date < today) { date = end ? new Date(now.getFullYear() + 1, M, 0) : new Date(now.getFullYear() + 1, M - 1, 1); notes.push(`${M} 月今年已過，當成明年`); }
+      } else {
+        const k = pre ? (/^下下/.test(pre) ? 2 : 1) + (end ? 1 : 0) : end ? 1 : now.getDate() > 1 ? 1 : 0;
+        date = end ? new Date(now.getFullYear(), now.getMonth() + k, 0) : new Date(now.getFullYear(), now.getMonth() + k, 1);
+      }
+      notes.push(end ? `${tok}＝${mdLabel(date)}` : `「${tok}」先設成 ${mdLabel(date)}`);
+      return { kind: 'once', date, label: tok, notes, uncertain: !end || notes.length > 1 };
     }
     if (g.A_ndays) { const n = cnNum(g.nd); return n >= 1 ? { kind: 'once', offset: n, label: tok } : null; }
     return null;
@@ -255,7 +262,7 @@
   // ---- 時刻 ----------------------------------------------------------------------------------
   const AP = '(?:am|pm|a\\.m\\.|p\\.m\\.)';
   // 一個時刻：15:30、3點、3點半、3點15分、3 點 15 分、三點一刻、兩點四十五、3點鐘、8:30pm、3pm
-  const timeSrc = (k) => `(?<![\\d:./A-Za-z])(?<h${k}>\\d{1,2}|[${CN}]{1,3})(?:(?<colon${k}>:)(?<mm${k}>\\d{2})(?![\\d:])|\\s*點(?!數|名|擊|子|心|餐|菜)(?:鐘|整)?(?:\\s*(?:(?<half${k}>半)|(?<q${k}>[一三])刻|(?<m${k}>\\d{1,2}|[${CN}]{1,3})\\s*分(?!鐘|之))|(?<m2${k}>\\d{1,2})(?![\\d樓F坪件張個人份頁號年月日%/:.x×*])|(?<m3${k}>[${CN}]{2,3})(?![樓坪件張個人份頁]))?|(?=\\s*${AP}(?![a-z])))(?:\\s*(?<ap${k}>${AP})(?![a-z]))?`;
+  const timeSrc = (k) => `(?<h${k}>(?<![\\d:./A-Za-z])\\d{1,2}|(?<![A-Za-z])[${CN}]{1,3})(?:(?<colon${k}>:)(?<mm${k}>\\d{2})(?![\\d:])|\\s*點(?!數|名|擊|子|心|餐|菜)(?:鐘|整)?(?:\\s*(?:(?<half${k}>半)|(?<q${k}>[一三])刻|(?<m${k}>\\d{1,2}|[${CN}]{1,3})\\s*分(?!鐘|之))|(?<m2${k}>\\d{1,2})(?![\\d樓F坪件張個人份頁號年月日%/:.x×*])|(?<m3${k}>[${CN}]{2,3})(?![樓坪件張個人份頁]))?|(?=\\s*${AP}(?![a-z])))(?:\\s*(?<ap${k}>${AP})(?![a-z]))?`;
   const RE_TIME = new RegExp(
     `(?:(?<pre>大概|大約|約莫|差不多|快)\\s*)?(?:(?<ap0>${AP})\\s+)?(?:(?<per>${PERIOD})\\s*的?\\s*)?${timeSrc('')}` +
     `(?:\\s*(?:~|-|–|—|到|至)\\s*(?:(?<perB>${PERIOD})\\s*)?${timeSrc('B')})?` +
@@ -416,7 +423,7 @@
 
   // 殘留檢查：內容裡還有「看起來像日期或時間、但沒被用到」的片段嗎？回傳 { kind: 'date' | 'time', frag } 或 null
   const RESIDUE_DATE = new RegExp([
-    '\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}', '民國\\s*\\d{2,3}', '(?<![\\dA-Za-z./:-])(?!7-11)\\d{1,2}-\\d{2}(?![\\d-])', '(?<![\\d.A-Za-z/:-])\\d{1,2}\\.\\d{1,2}(?=\\s*$|\\s+\\d)', '(?<![\\d/.:x×*-])\\d{1,2}/\\d{1,2}(?![/\\d])', `(?:\\d{1,2}|[${CN}]{1,2})月(?:\\d{1,2}|[${CN}]{1,3})[日號]?`,
+    '\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}', '民國\\s*\\d{2,3}', '(?<![\\dA-Za-z./:-])(?!7-11)\\d{1,2}-\\d{2}(?![\\d-])', '(?<![\\d.A-Za-z/:-])\\d{1,2}\\.\\d{1,2}(?=\\s*$|\\s+\\d)', '(?<![\\dA-Za-z/.:x×*-])\\d{1,2}/\\d{1,2}(?![/\\d])', `(?:\\d{1,2}|[${CN}]{1,2})月(?:\\d{1,2}|[${CN}]{1,3})[日號]?`,
     `(?<![\\d/.:-])\\d{1,2}號${DOM_NOT}`, '月底|月初|月中|年底|年初', `隔${WK}|隔天|隔週|隔周`, `下下?(?:個)?(?:${WK}|月)|下下?週|明年|後年`, `${WK}末`,
     `(?:這|本)?(?:個)?${WK}(?:[一二三四五六日天]|[1-7](?!\\d))`, '大後天|後天|明天|明日|今天|今日|昨天|前天|明早|明晚|今早|今晚', `每(?:天|日|週|周|星期|禮拜|個?月|年|小時|隔)`
   ].join('|'));
@@ -424,8 +431,11 @@
     `(?<![\\d:./A-Za-z第])\\d{1,2}\\s*點(?!數|名|擊|子|心|餐|菜)`, `(?<![\\d:./A-Za-z])\\d{1,2}:\\d{2}(?![\\d:])`, `[${CN}]{1,3}點(?:半|鐘|整|[一三]刻|\\d|[${CN}]{1,3}分)`,
     `(?<![A-Za-z\\d])\\d{1,2}(?::\\d{2})?\\s*${AP}(?![a-z])`, `(?:\\d+|[${CN}]{1,3}|半)\\s*(?:個)?(?:分鐘|小時|鐘頭)(?:之後|以後|後)`
   ].join('|'), 'i');
+  const RESIDUE_GLUED = /\d{3,}\s*點(?!數|名|擊|子|心|餐|菜)|\d{5,}(?::\d{2}(?!\d)|[/.\-]\d|[年月號日]|天(?:之後|以後|後))/;      // 長串數字黏著時刻或日期（回電09123456783點）：分不出哪幾位是時間
   function residue(content) {
-    let m = content.match(RESIDUE_DATE);
+    let m = content.match(RESIDUE_GLUED);
+    if (m) return { kind: 'time', frag: m[0], glued: true };
+    m = content.match(RESIDUE_DATE);
     if (m) return { kind: 'date', frag: m[0] };
     m = content.match(RESIDUE_TIME);
     if (m && !(/^1:\d{2}$/.test(m[0]) && SCALE_WORDS.test(content))) return { kind: 'time', frag: m[0].trim() };
@@ -465,7 +475,7 @@
     // 「9-10點」→「9點-10點」；「3、4點」「三四點」→ 取前面那個，原文留在內容後面
     let s = s0.replace(new RegExp(`(?<![\\d:./A-Za-z])(\\d{1,2})(\\s*(?:~|-|–|—|到|至)\\s*(?:${PERIOD}\\s*)?\\d{1,2}\\s*點)`), '$1點$2');
     s = s.replace(/(?<![\d:./A-Za-z])(\d{1,2})\s*[、,，或]\s*(\d{1,2})\s*點(左右|前後|多)?/, (all, a) => { suffix = `（${all}）`; return `${a}點`; });
-    s = s.replace(/(?<![零〇一二兩三四五六七八九十])([一二兩三四五六七八九])([二三四五六七八九])點(左右|前後|多)?/, (all, a, b) => { if (CN_D[b] !== CN_D[a] + 1) return all; suffix = `（${all}）`; return `${a}點`; });
+    s = s.replace(/(?<![零〇一二兩三四五六七八九十週周期拜])([一二兩三四五六七八九])([二三四五六七八九])點(左右|前後|多)?/, (all, a, b) => { if (CN_D[b] !== CN_D[a] + 1) return all; suffix = `（${all}）`; return `${a}點`; });
 
     const dm = findDate(s, now);
     let day = { kind: 'none' }, work = s, dateDl = false;
@@ -508,14 +518,15 @@
       }
       if (dateDl && !dlLabel) dlLabel = `（${day.label}前）`;
     }
+    if (dm && dm.bad && day.kind === 'none') return { type: 'task', note: `${dm.bad}，先當成待辦`, uncertain: true };
+    if (day.kind === 'none' && wdOrHour(s)) return wdOrHour(s);
     // 殘留檢查
     const left = residue(content);
     if (left) {
       if (left.kind === 'date' && day.kind === 'none') return { type: 'task', note: `「${left.frag}」看不懂，請確認日期；先當成待辦`, uncertain: true };
-      notes.push(left.kind === 'date' ? `「${left.frag}」看不懂，請確認日期` : `「${left.frag}」沒有用到，請確認時間`);
+      notes.push(left.glued ? `「${left.frag}」數字黏在一起，看不出是哪天幾點，請確認` : left.kind === 'date' ? `「${left.frag}」看不懂，請確認日期` : `「${left.frag}」沒有用到，請確認時間`);
       uncertain = true;
     }
-    if (dm && dm.bad && day.kind === 'none') return { type: 'task', note: `${dm.bad}，先當成待辦`, uncertain: true };
     // 只有日期的截止（週五前送審）：當天 09:00 提醒，不再提早
     if (noClock && dateDl && !g.dl) suffix += dlLabel;
     return build(g, content, day, now, { notes, uncertain, suffix, noClock, dlLabel });
@@ -570,6 +581,13 @@
     return r;
   }
 
+  // 「週三點」「下週三點半」：是星期三，還是（下週）三點？分不出來就問
+  const RE_WD_OR_HOUR = new RegExp(`(?:下下|下|這|本)?(?:個)?${WK}[一二三四五六]\\s*點(?!名|數|心|子|餐|菜|擊)`);
+  function wdOrHour(s) {
+    const m = s.match(RE_WD_OR_HOUR);
+    return m ? { type: 'task', note: `「${m[0]}」是星期${m[0].slice(-2, -1)}還是${m[0].slice(-2)}？請寫清楚；先當成待辦`, uncertain: true } : null;
+  }
+
   function parseReminder(s, now) {
     const rel = parseRelative(s, now, RE_REL);
     if (rel && rel.r && rel.after) return rel.r;
@@ -584,6 +602,10 @@
     if (rel && rel.hint) return { type: 'task', note: rel.hint };
     // 完全沒排到，但句子裡有模糊的日期詞：當待辦，並說明為什麼
     const left = residue(s);
+    if (left && left.glued) return { type: 'task', note: `「${left.frag}」數字黏在一起，看不出是哪天幾點，請確認`, uncertain: true };
+    const amb = wdOrHour(s);
+    if (amb) return amb;
+    if (left && /^\d{1,2}-\d{2}$/.test(left.frag)) return { type: 'task', note: `「${left.frag}」看不懂，請確認日期；先當成待辦`, uncertain: true };
     if (left && left.kind === 'date' && /下|隔|年|月[底初中]/.test(left.frag)) return { type: 'task', note: `「${left.frag}」沒說是哪一天，先當成待辦`, uncertain: true };
     return null;
   }

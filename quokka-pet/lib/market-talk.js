@@ -12,8 +12,8 @@
     bigDown: { tag: '大跌', fact: (s) => `今天大跌 ${f1(Math.abs(s.pct))}%`, leaf: '像踩到鬆掉的石頭，滑了好大一跤', sport: '像被對手連得好幾分' },
     newHigh: { tag: '創新高', fact: (s) => `創 ${s.days} 個交易日新高`, leaf: '站上這一季爬過最高的那顆石頭', sport: '刷新本季最高得分' },
     newLow: { tag: '創新低', fact: (s) => `創 ${s.days} 個交易日新低`, leaf: '鑽到這一季到過最深的樹洞', sport: '本季最低分的一場' },
-    gapUp: { tag: '跳空開高', fact: (s) => `開盤就跳空高 ${f1(s.gap)}%`, leaf: '一出洞就直接蹦上石頭，中間那段沒有踩', sport: '開賽第一球就得分' },
-    gapDown: { tag: '跳空開低', fact: (s) => `開盤就跳空低 ${f1(Math.abs(s.gap))}%`, leaf: '一出洞就踩空，直接掉一階', sport: '開賽第一球就失分' },
+    gapUp: { tag: '跳空開高', fact: (s) => `跳空開高 ${f1(s.gap)}%`, leaf: '一出洞就直接蹦上石頭，中間那段沒有踩', sport: '開賽第一球就得分' },
+    gapDown: { tag: '跳空開低', fact: (s) => `跳空開低 ${f1(Math.abs(s.gap))}%`, leaf: '一出洞就踩空，直接掉一階', sport: '開賽第一球就失分' },
     streakUp: { tag: '連漲', fact: (s) => `已經連漲 ${s.n} 天`, leaf: '這幾天一跳比一跳高', sport: '這幾場都贏' },
     streakDown: { tag: '連跌', fact: (s) => `已經連跌 ${s.n} 天`, leaf: '這幾天一天比一天蹲得低', sport: '這幾場都輸' },
     goldenCross: { tag: '黃金交叉', fact: () => '5 日線往上穿過 20 日線（黃金交叉）', leaf: '最近幾天的腳步，跑贏了這個月的平均速度', sport: '短線節奏追過了中線' },
@@ -22,8 +22,8 @@
     belowMa20: { tag: '跌破月線', fact: () => '收盤跌破 20 日線（月線）', leaf: '躲回灌木叢的陰影下面', sport: '被對手反超' },
     bullAlign: { tag: '多頭排列', fact: () => '均線多頭排列（5 日 > 20 日 > 60 日）', leaf: '短、中、長期的平均一層比一層高，這一段走的是上坡', sport: '三條線都站在進攻位置' },
     bearAlign: { tag: '空頭排列', fact: () => '均線空頭排列（5 日 < 20 日 < 60 日）', leaf: '短、中、長期的平均一層比一層低，這一段走的是下坡', sport: '三條線都退在防守位置' },
-    rsiHot: { tag: 'RSI 偏高', fact: (s) => `RSI ${f0(s.rsi)}，超過 70`, leaf: '最近買的人比賣的人多很多，樹下擠滿了搶葉子的', sport: '最近幾乎都是進攻方在得分' },
-    rsiCold: { tag: 'RSI 偏低', fact: (s) => `RSI ${f0(s.rsi)}，低於 30`, leaf: '最近賣的人比買的人多很多，葉子堆了一地沒人撿', sport: '最近幾乎都是被壓著打' },
+    rsiHot: { tag: 'RSI 偏高', fact: (s) => `RSI ${f0(s.rsi)}，超過 70`, leaf: '最近往上跳的步子，比往下滑的大很多', sport: '最近幾乎都是進攻方在得分' },
+    rsiCold: { tag: 'RSI 偏低', fact: (s) => `RSI ${f0(s.rsi)}，低於 30`, leaf: '最近往下滑的步子，比往上跳的大很多', sport: '最近幾乎都是被壓著打' },
     macdUp: { tag: 'MACD 翻多', fact: () => 'MACD 黃金交叉（DIF 穿過訊號線往上）', leaf: '這陣子的風向從逆風轉成順風', sport: '這陣子的氣勢轉到我方' },
     macdDown: { tag: 'MACD 翻空', fact: () => 'MACD 死亡交叉（DIF 穿過訊號線往下）', leaf: '這陣子的風向從順風轉成逆風', sport: '這陣子的氣勢轉到對手那邊' },
     kdUpLow: { tag: 'KD 低檔交叉', fact: (s) => `KD 在低檔黃金交叉（K 值 ${f0(s.k)}）`, leaf: '在蹲得很低的位置，短線的腳步轉成往上', sport: '在落後的時候拿下一分' },
@@ -43,14 +43,24 @@
     still: { tag: '沒動靜', fact: () => '價格和上一個交易日一樣，沒有變動', leaf: '大家都趴著沒動', sport: '今天場上沒有人跑動' }
   };
   // 個性：開場（依多空）、收尾、語氣
+  // 個性：開場（bull／bear＝跟著當天方向；flat＝漲跌不大但有訊號；calm＝沒有特別的訊號；
+  //        still＝價格完全沒動；mixed(當天, 訊號)＝當天方向和訊號相反時的中性開場）、收尾、語氣
+  //   下跌的日子不用驚嘆號和歡樂的語助詞（bear 開場本身就不寫，其他句子在 describe() 統一收掉）
   const VOICE = {
-    athlete: { bull: ['得分！', '這球漂亮！'], bear: ['失分了，沒關係，我陪你看！', '被打回來了。'], flat: ['今天是拉鋸戰。'], end: ['報告完畢，我去熱身了！', '就這樣，今天的比賽紀錄報告完畢！'], use: 'sport' },
-    clingy: { bull: ['你看你看！', '我一直幫你盯著喔！'], bear: ['嗚……先抱一下再說。', '別難過，我陪你。'], flat: ['今天沒什麼事，可以多摸我一下嗎？'], end: ['我會繼續幫你看著，最喜歡你了！', '有變化我第一個跑來跟你說！'], use: 'leaf' },
-    shy: { bull: ['那、那個……今天是漲的。'], bear: ['那個……有點不太好意思說……'], flat: ['那個……今天沒什麼特別的。'], end: ['……我說完了。（小聲）', '如、如果說錯了請不要生氣……'], use: 'leaf', soft: true },
-    explorer: { bull: ['我發現了！', '快來看這個！'], bear: ['我去看過了，今天這段路是下坡。', '咦，這邊地形變了。'], flat: ['我繞了一圈，沒發現新東西。'], end: ['我再去別的地方繞繞！', '還有好多線想去看看！'], use: 'leaf' },
-    sleepy: { bull: ['呼啊……今天漲了。'], bear: ['嗯……跌了啊……'], flat: ['呼……今天很安靜，好睡。'], end: ['我講完了……可以回去睡了嗎……', '呼……有事再叫我……'], use: 'leaf', short: true },
-    cool: { bull: ['漲了。'], bear: ['跌了。'], flat: ['沒事。'], end: ['就這樣。', '以上。'], use: 'fact', short: true },
-    easy: { bull: ['今天是漲的！', '今天不錯喔！'], bear: ['今天辛苦一點。', '嗯，今天是下坡。'], flat: ['今天平平的。'], end: ['大概是這樣，我們慢慢看。', '有變化我再跟你說～'], use: 'leaf' }
+    athlete: { bull: ['得分！', '這球漂亮！'], bear: ['失分了，沒關係，我陪你看。', '被打回來了。'], flat: ['今天是拉鋸戰。'], calm: ['今天是練習日。'], still: ['今天球場一片安靜。'],
+      mixed: (d, l) => `${d}，但${l}，這場還在拉鋸。`, end: ['報告完畢，我去熱身了！', '就這樣，今天的比賽紀錄報告完畢！'], use: 'sport' },
+    clingy: { bull: ['你看你看！', '我一直幫你盯著喔！'], bear: ['嗚……先抱一下再說。', '別難過，我陪你。'], flat: ['今天漲跌不大，我還是一直幫你盯著。'], calm: ['今天沒什麼事，可以多摸我一下嗎？'], still: ['今天停在原地，我陪你等。'],
+      mixed: (d, l) => `${d}，但${l}，我陪你一起看。`, end: ['我會繼續幫你看著，最喜歡你了！', '有變化我第一個跑來跟你說！'], use: 'leaf' },
+    shy: { bull: ['那、那個……今天是漲的。'], bear: ['那個……有點不太好意思說……'], flat: ['那個……今天漲跌不大。'], calm: ['那個……今天沒什麼特別的。'], still: ['那個……今天一動也沒動。'],
+      mixed: (d, l) => `那個……${d}，但${l}。`, end: ['……我說完了。（小聲）', '如、如果說錯了請不要生氣……'], use: 'leaf', soft: true },
+    explorer: { bull: ['我發現了！', '快來看這個！'], bear: ['我去看過了，今天這段路是下坡。', '咦，這邊地形變了。'], flat: ['我繞了一圈，今天漲跌不大，但有幾個地方變了。'], calm: ['我繞了一圈，沒發現新東西。'], still: ['我繞了一圈，價格都停在原地。'],
+      mixed: (d, l) => `我看了一圈：${d}，但${l}。`, end: ['我再去別的地方繞繞！', '還有好多線想去看看！'], use: 'leaf' },
+    sleepy: { bull: ['呼啊……今天漲了。'], bear: ['嗯……跌了啊……'], flat: ['呼……今天漲跌不大。'], calm: ['呼……今天很安靜，好睡。'], still: ['呼……一動也沒動，好睡。'],
+      mixed: (d, l) => `呼……${d}，但${l}。`, end: ['我講完了……可以回去睡了嗎……', '呼……有事再叫我……'], use: 'leaf', short: true },
+    cool: { bull: ['漲了。'], bear: ['跌了。'], flat: ['小幅波動。'], calm: ['沒事。'], still: ['沒變。'],
+      mixed: (d, l) => `${d}，但${l}。`, end: ['就這樣。', '以上。'], use: 'fact', short: true },
+    easy: { bull: ['今天是漲的！', '今天不錯喔！'], bear: ['今天辛苦一點。', '嗯，今天是下坡。'], flat: ['今天平平的。'], calm: ['今天沒什麼特別的，慢慢看。'], still: ['今天就停在原地。'],
+      mixed: (d, l) => `${d}，但${l}，我們慢慢看。`, end: ['大概是這樣，我們慢慢看。', '有變化我再跟你說～'], use: 'leaf' }
   };
   // 句數上限（lines 的長度）：酷酷派最多 2 句、慵懶睡神 3 句（兩句訊號＋想睡的收尾）、其他 7 句
   const MAX_LINES = { cool: 2, sleepy: 3 }, MAX_DEFAULT = 7;
@@ -67,7 +77,7 @@
   //   嗜好：收尾說講完要去做什麼；年紀：小的驚呼、年長的提「我看過的線多了」
   const SPORT_WORD = { badminton: { bull: '殺球得分！', bear: '這球掛網了。' }, volleyball: { bull: '扣球得分！', bear: '這球沒接起來。' }, basketball: { bull: '空心進球！', bear: '這球被蓋掉了。' } };
   // 不確定的語氣只加在「解讀（比喻）」前面，不加在數字事實前面
-  const HEDGE = ['好像', '看起來', '感覺'];
+  const HEDGE = ['好像', '看起來，', '感覺'];
   function personalize(base, P, extra, seed) {
     if (!P) return base;
     let { opener, closer, n, use } = base;
@@ -77,11 +87,12 @@
     if (P.curiosity > 0.7) n += 1; else if (P.curiosity < 0.3) n = Math.max(1, n - 1);
     if (P.activity < 0.3) n = Math.max(1, n - 1);
     const hedge = P.boldness < 0.35 ? pick(HEDGE, seed) : P.boldness > 0.75 ? '我敢說，' : '';
-    const punct = (t) => (P.activity > 0.7 ? t.replace(/。$/, '！') : P.activity < 0.3 ? t.replace(/。$/, '……') : t);
+    const punct = (t) => (P.activity > 0.7 && base.mood !== 'bear' ? t.replace(/。$/, '！') : P.activity < 0.3 ? t.replace(/。$/, '……') : t);
     const tail = [];
     if (P.affection > 0.7) tail.push(base.mood === 'bear' ? '你不要太擔心，我會一直幫你盯著。' : '我會一直幫你盯著，有變化馬上跟你說。');
     if (P.sociability > 0.75) tail.push('等一下我也去跟其他庫卡說。');
-    if (extra.stage === 'juvenile') opener = '哇！' + opener;
+    // 年紀小的會先叫一聲；下跌的日子不驚呼，開場已經是語助詞開頭的就不再疊
+    if (extra.stage === 'juvenile' && !/^[咦嗯嗚那欸呼]/.test(opener)) opener = (base.mood === 'bull' ? '哇！' : base.mood === 'bear' ? '欸……' : '咦？') + opener;
     else if (extra.stage === 'senior') tail.push('這種線我以前也看過。');
     const hobby = (extra.hobbies || [])[seed % Math.max(1, (extra.hobbies || []).length)];
     if (hobby && P.affection <= 0.7 && use !== 'fact') closer = `講完了，我要去${hobby}了。`;
@@ -90,30 +101,39 @@
 
   // 當天漲跌和技術訊號方向相反時的中性開場：「今天小漲，但均線轉弱。」
   const LEAN_WORD = { goldenCross: '均線轉強', aboveMa20: '均線轉強', bullAlign: '均線仍是多頭排列', deathCross: '均線轉弱', belowMa20: '均線轉弱', bearAlign: '均線仍是空頭排列' };
-  function mixedOpener(a) {
-    const p = Math.abs(a.v.pct), day = !a.dayDir ? '今天平盤' : `今天${p < 1 ? '小' : p < 3 ? '上' : '大'}${a.dayDir > 0 ? '漲' : '跌'}`.replace('上跌', '下跌');
+  function mixedOpener(a, V) {
+    const p = Math.abs(a.v.pct) || 0, day = !a.dayDir ? '今天平盤' : `今天${p < 1 ? '小' : p < 3 ? '上' : '大'}${a.dayDir > 0 ? '漲' : '跌'}`.replace('上跌', '下跌');
     const top = a.signals.find((s) => s.dir === a.lean);
     const lean = (top && LEAN_WORD[top.id]) || (a.lean > 0 ? '其他指標偏強' : '其他指標偏弱');
-    return `${day}，但${lean}。`;
+    return V.mixed ? V.mixed(day, lean) : `${day}，但${lean}。`;
   }
 
   // analysis：indicators.analyze() 的結果；回傳 { headline, lines[], tags[], mood, disclaimer }
   // who：archetype（七種個性類型）＋ 這一隻自己的 personality（五項數值）、likes、hobbies、stage
   function describe(analysis, { name = '', symbol = '', archetype = 'easy', maxLines, personality, likes, hobbies, stage } = {}) {
-    if (!analysis || !analysis.ok) return { headline: `${name || symbol}：資料還不夠，我再多看幾天。`, lines: [], tags: [], mood: 'flat', disclaimer: DISCLAIMER };
-    const V = VOICE[archetype] || VOICE.easy, v = analysis.v, seed = hash(symbol + '|' + (v.date || '') + '|' + archetype);
-    const still = analysis.signals[0].id === 'still';
-    // 開場講的是「今天」：和當天方向矛盾時用中性說法；完全沒動時固定說沒動靜
-    const mood = V[analysis.mood] ? analysis.mood : 'flat';
-    const opener0 = still ? '今天沒什麼動靜。' : analysis.mixed ? mixedOpener(analysis) : pick(V[mood], seed);
+    const label = name || symbol;
+    if (!analysis || !analysis.ok) return { headline: `${label ? label + '：' : ''}資料還不夠，我再多看幾天。`, lines: [], tags: [], mood: 'flat', disclaimer: DISCLAIMER };
+    // 欄位缺了也不丟例外：沒有數值就當平盤、沒有可講的訊號就說「沒有特別的訊號」
+    const v0 = analysis.v && typeof analysis.v === 'object' ? analysis.v : {};
+    const v = { ...v0, pct: Number.isFinite(v0.pct) ? v0.pct : 0 };
+    let signals = (Array.isArray(analysis.signals) ? analysis.signals : []).filter((s) => s && SIG[s.id]);
+    if (!signals.length) signals = [{ id: 'quiet', dir: 0 }];
+    analysis = { ...analysis, v, signals, dayDir: Number.isFinite(analysis.dayDir) ? analysis.dayDir : Math.round(Math.abs(v.pct) * 10) === 0 ? 0 : Math.sign(v.pct) };
+    const V = VOICE[archetype] || VOICE.easy, seed = hash(symbol + '|' + (v.date || '') + '|' + archetype);
+    const still = signals[0].id === 'still', calm = signals[0].id === 'quiet';
+    // 開場講的是「今天」：和當天方向矛盾時用中性說法；完全沒動、沒有訊號時各用各的說法（不會說「沒什麼事」卻列出一堆訊號）
+    const mood = analysis.mood === 'bull' || analysis.mood === 'bear' ? analysis.mood : 'flat';
+    const opener0 = still ? pick(V.still, seed) : analysis.mixed ? mixedOpener(analysis, V) : calm && mood === 'flat' ? pick(V.calm, seed) : pick(V[mood], seed);
+    const down = mood === 'bear' || analysis.dayDir < 0;
     const who = personalize({ opener: opener0, n: V.short ? 2 : 4, use: V.use, mood: still || analysis.mixed ? 'flat' : mood, closer: pick(V.end, seed >>> 3) }, personality, { likes, hobbies, stage }, seed);
     const cap = MAX_LINES[archetype] || MAX_DEFAULT;
     const n = Math.max(1, Math.min(maxLines || who.n, V.short ? 2 : 5)), use = who.use;
-    const sigs = analysis.signals.filter((s) => SIG[s.id]).slice(0, n);
+    const sigs = signals.slice(0, n);
     const flatDay = Math.round(Math.abs(v.pct) * 10) === 0;
     const pctTxt = flatDay ? '平盤' : `${v.pct > 0 ? '▲' : '▼'}${f1(Math.abs(v.pct))}%`;
     // 盤中（當天還沒收盤）不說「收盤」
-    const live = (t) => (v.partial ? t.replace(/收盤/g, '目前').replace('而且收漲', '目前上漲').replace('而且收跌', '目前下跌').replace('留了一根', '目前留著一根') : t);
+    const live = (t) => (v.partial ? t.replace(/收盤/g, '目前').replace('而且收漲', '目前上漲').replace('而且收跌', '目前下跌').replace('留了一根', '目前留著一根')
+      .replace('漲停鎖住了', '目前漲到漲停價').replace('跌停鎖住了', '目前跌到跌停價') : t);     // 盤中還沒收，不能說「鎖住」
     const say = (s, i) => {
       const d = SIG[s.id];
       const fact = live(d.fact(s)), extra = use === 'fact' ? '' : (use === 'sport' && d.sport) || d.leaf;
@@ -124,10 +144,11 @@
     };
     const sigLines = sigs.map(say);
     const top = SIG[sigs[0].id];
-    const headline = `${name || symbol} ${pctTxt}，${top.tag}。${who.opener}`;
+    // 「平盤，沒動靜。」已經說了沒動，開場就不再重複
+    const headline = `${label ? label + " " : ""}${pctTxt}，${top.tag}。${who.opener}`;
     // 位置說明：離月線多遠（一句話交代現在的位置）
     const extra = [];
-    if (!V.short && !still && v.ma20) {
+    if (!V.short && !still && Number.isFinite(v.ma20) && v.ma20 > 0 && Number.isFinite(v.close)) {
       const off = (v.close - v.ma20) / v.ma20 * 100, near = Math.round(Math.abs(off) * 10) === 0;
       const now = `現在${v.partial ? '' : '收'} ${fmtPrice(v.close)}`;
       extra.push(near ? `${now}，貼著月線。`
@@ -142,7 +163,9 @@
       const room = Math.max(0, cap - 1 - lines.length);
       lines = lines.slice(0, cap - 1).concat(tails.slice(0, room), [who.closer]);
     }
-    return { headline, lines, tags: sigs.map((s) => SIG[s.id].tag), mood: analysis.mood, disclaimer: DISCLAIMER };
+    // 下跌的日子：不用驚嘆號、不用「～」這種開心的語助詞
+    const calmDown = (t) => (down ? t.replace(/！/g, '。').replace(/～/g, '。') : t);
+    return { headline: calmDown(headline), lines: lines.map(calmDown), tags: sigs.map((s) => SIG[s.id].tag), mood: analysis.mood || 'flat', disclaimer: DISCLAIMER };
   }
   const fmtPrice = (p) => (p >= 100 ? f1(p).replace(/\.0$/, '') : (Math.round(p * 100) / 100).toString());
   const DISCLAIMER = '我只是看圖說故事，不是投資建議喔。';
