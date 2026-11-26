@@ -75,13 +75,14 @@ function start() {
   let stageReady = false; const stageBacklog = [];
   const toStage = (ch, payload) => { if (!stageReady && (ch === 'q:event' || ch === 'presence')) { if (stageBacklog.length < 50) stageBacklog.push([ch, payload]); return; } stage.send(ch, payload); };
   const stageQ = (q) => ({ id: q.id, name: q.name, traits: q.traits, pos: q.home || null, stage: q.stage || 'adult', mom: q.mom || null, dad: q.dad || null,
-    growScale: (q.traits && q.traits.growScale) || null, pregnant: !!q.pregnancy, hasJoey: q.joey ? q.joey.id : null, partner: partnerId(q.id), crush: crushId(q.id) });
+    growScale: (q.traits && q.traits.growScale) || null, pregnant: !!q.pregnancy, hasJoey: q.joey ? q.joey.id : null, partner: partnerId(q.id), crush: crushId(q.id), flirt: flirtId(q.id) });
   function partnerId(qid) { try { return romance.partnerOf(qid) || null; } catch (e) { return null; } }
   function crushId(qid) { try { return romance.crushOf(qid) || null; } catch (e) { return null; } }
+  function flirtId(qid) { try { return romance.flirtOf(qid) || null; } catch (e) { return null; } }
   // 喜歡的對象變了（好感度變動後）：舞台要知道才會偷看對方；面板顯示也跟著更新
   let crushSig = '';
   function syncCrush() {
-    const sig = data.quokkas.map((q) => q.id + ':' + (crushId(q.id) || '')).join('|');
+    const sig = data.quokkas.map((q) => q.id + ':' + (crushId(q.id) || '') + ':' + (flirtId(q.id) || '')).join('|');   // 喜歡的人或曖昧對象變了
     if (sig === crushSig) return;
     crushSig = sig;
     toStage('stage:quokkas', data.quokkas.map(stageQ));
@@ -170,7 +171,7 @@ function start() {
   const quotes = {};                 // symbol → 最新報價
   function snapshot() {
     return { quokkas: data.quokkas, tasks: data.tasks, reminders: data.reminders, stocks: data.stocks, folders: data.folders,
-      relations: data.relations, postcards: (data.postcards || []).filter((c) => c.sent).slice(-20), crushes: Object.fromEntries(data.quokkas.map((q) => [q.id, crushId(q.id)])), settings: data.settings, quotes, ringing: data.reminders.filter((r) => r.ringing).map((r) => r.id),
+      relations: data.relations, postcards: (data.postcards || []).filter((c) => c.sent).slice(-20), crushes: Object.fromEntries(data.quokkas.map((q) => [q.id, crushId(q.id)])), flirts: Object.fromEntries(data.quokkas.map((q) => [q.id, flirtId(q.id)])), settings: data.settings, quotes, ringing: data.reminders.filter((r) => r.ringing).map((r) => r.id),
       folderChanges: folderWatch.recentAll() };
   }
   function changed({ quokkas = false } = {}) {

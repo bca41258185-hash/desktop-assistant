@@ -532,3 +532,32 @@ test('回來：放回名單、恢復放生前的友情和愛情；伴侶還單�
   assert.equal(w2.R.partnerOf('m'), null);
   assert.equal(w2.R.relation('m', 'f').love, 100);
 });
+
+test('曖昧：互相有感覺、愛情 ≥ 60、兩隻都單身；有伴侶的不算；親人不算', () => {
+  const w = world([(n) => mk(n, 'a', 'male'), (n) => mk(n, 'b', 'female'), (n) => mk(n, 'c', 'female'), (n) => mk(n, 'd', 'male')]);
+  setLove(w, 'a', 'b', 59);
+  assert.equal(w.R.flirtOf('a'), null);
+  setLove(w, 'a', 'b', 60);
+  assert.equal(w.R.flirtOf('a'), 'b'); assert.equal(w.R.flirtOf('b'), 'a');
+  setLove(w, 'a', 'c', 80);
+  assert.equal(w.R.flirtOf('a'), 'c');                       // 愛情最高的那隻
+  setAff(w, 'c', 'd', 95);
+  assert.equal(w.R.flirtOf('d'), null);                      // 只有友情不算
+  w.data.relations[pairKey('c', 'd')] = { ...w.data.relations[pairKey('c', 'd')], love: 100, attracted: true, couple: true };
+  assert.equal(w.R.flirtOf('a'), 'b');                       // c 已經有伴侶：不算曖昧
+});
+
+test('伴侶被放生（刪除）後，留下的那隻可以有新的感情、和別隻成為一對；舊伴侶回來時不拆散', () => {
+  const w = couple();
+  w.data.quokkas.push(mk(w.now, 'm2', 'male'));
+  setLove(w, 'f', 'm2', 70);
+  assert.equal(w.R.flirtOf('f'), null);                      // 有伴侶時不會曖昧
+  const snap = JSON.parse(JSON.stringify(w.q('m'))), rels = [{ other: 'f', affinity: 70, love: 100, couple: true, attracted: true }];
+  w.R.onDelete('m'); w.data.quokkas = w.data.quokkas.filter((q) => q.id !== 'm');
+  assert.equal(w.R.flirtOf('f'), 'm2');                      // 單身了：和 m2 曖昧
+  assert.equal(w.R.crushOf('f'), 'm2');
+  w.data.relations[pairKey('f', 'm2')].love = 100;
+  assert.ok(w.R.onTogether('f', 'm2').couple);               // 新的一對
+  w.R.onReturn(snap, rels);
+  assert.equal(w.R.partnerOf('f'), 'm2');                    // 舊伴侶回來也不拆散
+});

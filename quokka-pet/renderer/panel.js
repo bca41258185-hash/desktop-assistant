@@ -101,6 +101,7 @@
   }
   const hasCouple = (qid) => relationsOf(qid).some((r) => r.couple);
   const hasFriend = (qid) => relationsOf(qid).some((r) => r.friend && !r.couple);
+  const flirtWith = (qid) => (S.flirts && S.flirts[qid]) || null;           // 曖昧中（愛情 ≥ 60）：公開
   function ageMonths(q) {
     if (q.birthAt) { const d = (Date.now() - new Date(q.birthAt).getTime()) / 86400000; if (isFinite(d)) return Math.max(0, Math.floor(d)); }
     return (q.traits && q.traits.ageMonths) || 0;
@@ -295,6 +296,7 @@
     const sel = ui.sel === q.id;
     const marks = [];
     if (hasCouple(q.id)) marks.push('<span class="mark heart" aria-hidden="true">♥</span>');
+    else if (flirtWith(q.id)) marks.push('<span class="mark flirt" aria-hidden="true">♡</span>');
     else if (hasFriend(q.id)) marks.push('<span class="mark star" aria-hidden="true">★</span>');
     let preg = '';
     if (q.pregnancy) {
@@ -303,7 +305,7 @@
     }
     const label = small
       ? `小袋鼠 ${q.name}（點一下取名字）`
-      : `${q.name}${c ? `，盯著 ${c} 件事` : ''}${hasCouple(q.id) ? '，有伴侶' : hasFriend(q.id) ? '，有好朋友' : ''}${q.pregnancy ? '，懷孕中' : ''}`;
+      : `${q.name}${c ? `，盯著 ${c} 件事` : ''}${hasCouple(q.id) ? '，有伴侶' : flirtWith(q.id) ? '，曖昧中' : hasFriend(q.id) ? '，有好朋友' : ''}${q.pregnancy ? '，懷孕中' : ''}`;
     return `<button type="button" class="chip${small ? ' joey' : ''}${sel ? ' sel' : ''}" data-act="sel" data-q="${esc(q.id)}"
       ${small ? '' : `data-drop="${esc(q.id)}"`} data-fk="chip:${esc(q.id)}" aria-pressed="${sel}" aria-label="${esc(label)}" title="${esc(label)}">
       <span class="chip-av">${avatar(q)}${!small && c ? `<span class="badge" aria-hidden="true">${c > 99 ? '99+' : c}</span>` : ''}${marks.join('')}${preg}</span>
@@ -631,9 +633,12 @@
       .map((o) => ({ o, r: rels.get(o.id) || { affinity: 0, love: 0 } }))
       .sort((x, y) => ((y.r.love || 0) + (y.r.affinity || 0)) - ((x.r.love || 0) + (x.r.affinity || 0)));
     const tag = (o, r) => [r.couple && '<span class="itag heart">♥ 伴侶</span>', !r.couple && r.friend && '<span class="itag star">★ 好朋友</span>',
-      !r.couple && likes && likes.id === o.id && '<span class="itag crush">偷偷喜歡</span>', crushes[o.id] === q.id && !r.couple && '<span class="itag crush">喜歡牠</span>',
+      !r.couple && flirt && flirt.id === o.id && '<span class="itag flirt">💗 曖昧中</span>',
+      !r.couple && !(flirt && flirt.id === o.id) && likes && likes.id === o.id && '<span class="itag crush">偷偷喜歡</span>', crushes[o.id] === q.id && !r.couple && '<span class="itag crush">喜歡牠</span>',
       kin(o) && '<span class="itag">家人</span>'].filter(Boolean).join('');
+    const flirt = !partner && flirtWith(q.id) ? qById(flirtWith(q.id)) : null;
     const likeLine = partner ? `和${esc(qName(partner.other))}是一對 ♥`
+      : flirt ? `和${esc(flirt.name)}曖昧中 💗`
       : likes ? `偷偷喜歡${esc(likes.name)}${likedBy.some((o) => o.id === likes.id) ? '（對方也喜歡牠！）' : ''}`
       : '還沒有特別喜歡誰';
     const open = !!ui.infoOpen;

@@ -20,6 +20,7 @@
     decayPerDay: 2,              // 之後每天 −2
     friendAt: 80,
     crushAt: 20,                 // 愛情達 20 才會「偷偷喜歡」（有伴侶就是伴侶；好朋友不算）
+    flirtAt: 60,                 // 愛情達 60（互相有感覺、兩隻都單身）＝曖昧：公開（面板粉紅心）、常走在一起、不會分開太遠
     // 友情（affinity）和愛情（love）分開：每次互動都加友情；愛情只在「對牠有感覺」的一對之間累積
     loveP: 0.75,                 // 異性：成年後第一次一起互動時，有 75% 會對彼此有感覺
     sameSexLoveP: 0.12,          // 同性：也可能相愛，但機率低（12%）；大多是友情
@@ -249,6 +250,20 @@
         if (!v || !v.attracted || !((v.love || 0) > top)) continue;
         const [a, b] = k.split('|'), o = a === qid ? b : b === qid ? a : null;
         if (!o || isKid(byId(o)) || isKin(qid, o)) continue;
+        best = o; top = v.love;
+      }
+      return best;
+    }
+    // 曖昧的對象：兩隻都單身、互相有感覺、愛情 ≥ flirtAt；有好幾個就取愛情最高的
+    function flirtOf(qid) {
+      const me = byId(qid);
+      if (!me || me.stage === 'pouch' || me.stage === 'follow' || partnerOf(qid)) return null;
+      let best = null, top = C.flirtAt - 1e-9;
+      for (const [k, v] of Object.entries(data.relations)) {
+        if (!v || v.couple || !v.attracted || !((v.love || 0) > top)) continue;
+        const [a, b] = k.split('|'), o = a === qid ? b : b === qid ? a : null;
+        const oq = o && byId(o);
+        if (!oq || oq.stage === 'pouch' || oq.stage === 'follow' || partnerOf(o) || isKin(qid, o)) continue;
         best = o; top = v.love;
       }
       return best;
@@ -591,7 +606,7 @@
 
     return {
       onTogether, onInterrupted, onPass, dailyDecay, canPair, tickClock, ageMonths, onDelete, deleteWarning,
-      canRegenerate, onRegenerate, onReturn, refreshAges, isKin, partnerOf, crushOf, isCouple, isFriend, guardianOf, canOwnTasks,
+      canRegenerate, onRegenerate, onReturn, refreshAges, isKin, partnerOf, crushOf, flirtOf, isCouple, isFriend, guardianOf, canOwnTasks,
       tempName, resolveNameClash, relation: (a, b) => rel(a, b, false), pairKey, constants: C
     };
   }

@@ -472,3 +472,6 @@ body.dragging .chip[data-drop] { background: var(--surface-2); border-style: das
 .pc-cell figcaption { font-size: 11px; text-align: center; padding: 2px 2px; border-top: 1.5px solid #3e3127; background: #fffaf0; color: #3e3127; line-height: 1.35; }
 .postcard { flex-direction: column; }
 .postcard .pc-stamp { display: none; }
+
+.itag.flirt { color: #c2407a; border-color: #f5c6da; background: #fff2f8; }
+.mark.flirt { color: #e86aa0; }

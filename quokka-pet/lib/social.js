@@ -18,6 +18,7 @@
     nearDelayK: 0.5,             // 同伴在身邊：下一次檢查提早一半（8–15 秒）
     friendMult: 1.5,             // 好朋友互動頻率 ×1.5
     coupleMult: 2,               // 情侶互動頻率加倍
+    flirtMult: 1.8,              // 曖昧（互相有感覺、愛情 ≥ 60、還不是一對）×1.8
     dadNoseChance: 0.35,         // 爸爸每輪過來碰鼻的機率
     passWaveK: 0.5               // 散步經過時順便打招呼的機率係數（× 平均主動性）
   };
@@ -81,6 +82,7 @@
     const relOf = (a, b) => relations()[pairKey(a, b)] || null;
     const isCouple = (a, b) => { const r = relOf(a, b); return !!(r && r.couple); };
     const isFriend = (a, b) => { const r = relOf(a, b); return !!(r && r.friend); };
+    const isFlirt = (a, b) => { const r = relOf(a, b); return !!(r && !r.couple && r.attracted && (r.love || 0) >= 60); };
     const posOf = (qid) => (getPos ? getPos(qid) : null);
     const layerOf = (qid) => layerNum(getLayer ? getLayer(qid) : 8);
 
@@ -190,7 +192,7 @@
         if (!available(a)) continue;
         const cands = list.filter((b) => b.id !== a.id && !isFollowJoey(b) && available(b) && nearEnough(a.id, b.id));
         if (!cands.length) continue;
-        const mult = (b) => (isCouple(a.id, b.id) ? C.coupleMult : isFriend(a.id, b.id) ? C.friendMult : 1) * (besides(a.id, b.id) ? C.nearMult : 1);
+        const mult = (b) => (isCouple(a.id, b.id) ? C.coupleMult : isFlirt(a.id, b.id) ? C.flirtMult : isFriend(a.id, b.id) ? C.friendMult : 1) * (besides(a.id, b.id) ? C.nearMult : 1);
         const best = Math.max(...cands.map(mult));
         const pa = P(a);
         if (random() >= clamp(pa.initiative * best, 0, 0.95)) continue;
@@ -201,7 +203,7 @@
         }));
         if (!pick) continue;
         const b = pick.b, pb = P(b), k = pairKey(a.id, b.id);
-        const close = isCouple(a.id, b.id) || isFriend(a.id, b.id);
+        const close = isCouple(a.id, b.id) || isFlirt(a.id, b.id) || isFriend(a.id, b.id);
         // 膽小的先觀察，延後一輪
         if (!close && pb.boldness < 0.3 && !watching.has(k)) { watching.add(k); continue; }
         // 對方越愛社交越容易答應

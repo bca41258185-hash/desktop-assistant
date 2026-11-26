@@ -558,7 +558,8 @@
   const joeysOf = (m) => [...S.actors.values()].filter((j) => j.isFollow && momOf(j) === m);
   F.partnerOf = (a) => (a.attach.partner ? S.actors.get(a.attach.partner) || null : null);
   // 不用保持禮貌距離的對象：伴侶、自己跟隨期的小袋鼠和媽媽
-  F.close = (a, o) => a.attach.partner === o.id || o.attach.partner === a.id || (a.isFollow && momOf(a) === o) || (o.isFollow && momOf(o) === a);
+  F.flirtOf = (a) => (a.attach.flirt && !a.attach.partner ? S.actors.get(a.attach.flirt) || null : null);
+  F.close = (a, o) => a.attach.partner === o.id || o.attach.partner === a.id || a.attach.flirt === o.id || o.attach.flirt === a.id || (a.isFollow && momOf(a) === o) || (o.isFollow && momOf(o) === a);
   F.setPouch = function (list) {
     const old = new Map(pouchJoeys); pouchJoeys.clear();
     for (const q of list) if (q && q.mom) pouchJoeys.set(q.mom, q);
@@ -816,15 +817,16 @@
     a.waitT = setTimeout(poll, 500);
   };
   // 情侶待機：自己靠過去站在一起（約 70 px）、偶爾冒愛心
+  // 曖昧（愛情 ≥ 60、還不是一對）：也常靠過去，但站得稍遠（約 95 px）、比較少冒愛心
   F.coupleIdle = function (a, now) {
-    const P = F.partnerOf(a);
+    const mate = F.partnerOf(a), P = mate || F.flirtOf(a), flirt = !mate;
     if (!P || P.inPouch || P.mode !== 'awake' || Math.abs(P.y - a.y) > 40) return false;
-    const d = Math.abs(P.x - a.x), near = 72 * (a.k + P.k) / 2 / S.SCALE;
+    const d = Math.abs(P.x - a.x), near = (flirt ? 95 : 72) * (a.k + P.k) / 2 / S.SCALE;
     if (d <= near + 26) {
-      if (Math.random() < .4 && !P.job) { const p = { x: (a.x + P.x) / 2, y: a.y - 170 * a.k }; S.burst(p.x, p.y, 'heart1'); a.nextAt = now + a.restGap() * .5; return true; }
+      if (Math.random() < (flirt ? .2 : .4) && !P.job) { const p = { x: (a.x + P.x) / 2, y: a.y - 170 * a.k }; S.burst(p.x, p.y, 'heart1'); a.nextAt = now + a.restGap() * .5; return true; }
       return false;
     }
-    if (d > 700 || P.job || Math.random() > .65 || S.settings.walk === 'off') return false;
+    if (d > 2400 || P.job || (d <= 300 && Math.random() > (flirt ? .5 : .65)) || S.settings.walk === 'off') return false;   // 超過 300 px 一定走回去
     // 站在伴侶旁邊有空位的那一側（那邊已經站著別隻就換另一側；兩側都沒位置就不過去）
     const spotOk = (x) => x > 44 && x < innerWidth - 44 && S.politeOk(a, x, { ignore: new Set([P]) });     // 和別隻（非伴侶）保持禮貌距離（和散步挑目的地用同一個標準）
     // 靠近自己這一側被別隻佔住：改站伴侶的另一側，從伴侶前面繞過去（情侶可以靠近、畫在前面經過）

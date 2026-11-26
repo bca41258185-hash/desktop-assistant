@@ -331,3 +331,18 @@ test('使用者剛離開：保底提早到 20 秒、互動比較多，但仍然�
   const ten = perWindow(simulate(Array.from({ length: 10 }, (_, i) => mk('q' + i, i % 2 ? 'female' : 'male')), 30, 5, { isAway: () => true }), 30);
   assert.ok(Math.max(...ten) <= 10);
 });
+
+test('曖昧的一對（愛情 ≥ 60）比普通朋友更常互動', () => {
+  const count = (rel) => {
+    let n = 0;
+    for (let s = 1; s <= 40; s++) {
+      const w = setup([mk('a', 'male', { initiative: 0.25 }), mk('b', 'female', { initiative: 0.25 })], { seed: s });
+      w.pos.b.x = w.pos.a.x + 600;
+      w.data.relations['a|b'] = { affinity: 10, couple: false, friend: false, ...rel };
+      n += runRounds(w, 5).length;
+    }
+    return n;
+  };
+  const flirt = count({ love: 70, attracted: true }), plain = count({ love: 0, attracted: false });
+  assert.ok(flirt > plain * 1.3, `flirt ${flirt} plain ${plain}`);
+});

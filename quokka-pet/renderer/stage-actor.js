@@ -134,6 +134,7 @@
       if ('dad' in q) A.dad = q.dad || null;
       if ('partner' in q) A.partner = q.partner || null;
       if ('crush' in q) A.crush = q.crush || null;           // 喜歡的對象（會偷偷看牠）
+      if ('flirt' in q) A.flirt = q.flirt || null;           // 曖昧的對象（愛情 ≥ 60：常走在一起、不分開太遠）
       if ('pregnant' in q) A.pregnant = !!q.pregnant;
       if ('hasJoey' in q) A.hasJoey = q.hasJoey || null;
       A.coupled = !!A.partner;
@@ -353,6 +354,9 @@
       if (this.isFollow) return S.family ? S.family.tick(this, now) : false;
       // 球停了在等主人（名額滿時排隊，L4 優先）
       if (this.ball && this.ball.stopped && !this.ball.picked) { this.startFetch(); return !!(this.job && this.job.ticks); }
+      // 伴侶或曖昧對象離自己超過 300 px：2.5 秒內就走回牠身邊（不等平常的散步間隔）
+      const mate = S.family && (S.family.partnerOf(this) || (S.family.flirtOf && S.family.flirtOf(this)));
+      if (mate && !mate.inPouch && Math.abs(mate.y - this.y) <= 40 && Math.abs(mate.x - this.x) > 300 && this.nextAt - now > 2500) this.nextAt = now + 2500;
       if (now >= this.nextAt) {
         if (this.queue.length || this.alerts.length) { if (this.queue.length && !this.alerts.length && !this.drainTimer) this.scheduleDrain(); this.nextAt = now + 3000; return false; }
         const nearCursor = Math.abs(S.cursor.x - this.x) < 200 && Math.abs(S.cursor.y - (this.y - this.h / 2)) < 260;
@@ -648,7 +652,7 @@
       if (target == null) {
         const backHome = Math.abs(a.x - a.home) > 250 && Math.random() < .6;
         let dir = backHome ? Math.sign(a.home - a.x) : (Math.random() < .5 ? -1 : 1);
-        const P = S.family && S.family.partnerOf(a);                       // 有伴侶：傾向往伴侶那一邊走
+        const P = S.family && (S.family.partnerOf(a) || (S.family.flirtOf && S.family.flirtOf(a)));   // 有伴侶或曖昧對象：傾向往牠那一邊走
         const toP = P && !backHome && Math.random() < .7;
         if (toP) dir = Math.sign(P.x - a.x) || dir;
         const dist = (3 + Math.floor(Math.random() * 6 * (0.5 + a.act))) * (30 + a.act * 15);
@@ -657,6 +661,8 @@
         // 主動走向同伴：越愛社交越常走到最近的同伴身邊（停在禮貌距離），到了之後主行程比較容易安排兩隻互動
         const B = !backHome && !toP && a.buddy(lo, hi);
         if (B && Math.random() < .3 + .5 * a.soc) target = S.clamp(B.x, lo, hi);
+        // 有伴侶或曖昧對象：不會走離牠太遠（目的地在牠 ±300 px 內）
+        if (P && !P.inPouch && Math.abs(P.y - a.y) <= 40) target = S.clamp(target, Math.max(lo, P.x - 300), Math.min(hi, P.x + 300));
       }
       let gait = o.gait || a.pickGait(Math.abs(target - a.x));
       // 目的地要和非伴侶保持禮貌距離（四肢著地走時，前方再多留口鼻伸出去的距離）；放不下就縮短
