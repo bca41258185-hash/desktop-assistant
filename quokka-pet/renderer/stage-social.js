@@ -762,7 +762,7 @@
           a.grewMoved = true; a.hs = 1.3; a.sideTo = sp.x;
           const m = a.mover(sp.x, { gait: 'hop', lane: sp.cross ? sp.others : null, speed: 1.1 });
           const clean = () => { a.depth = 0; a.zBoost = 0; a.sideTo = null; a.hs = 1; S.purgeFrames(a.id); };
-          const mv = { name: 'growMove', ticks: true, tick: (now) => m.tick(now), interrupt: clean, endOpts: { rest: false },
+          const mv = { name: 'growMove', x0: a.x, ticks: true, tick: (now) => m.tick(now), interrupt: clean, endOpts: { rest: false },
             end: () => { a.depth = 0; a.zBoost = 0; a.sideTo = null; a.place(); play(); } };          // 接著直接長大（頭的比例到長大動畫開始才換，不閃一格）
           if (a.requestActivity(6, mv)) { S.kick(); return; }
           clean(); a.grewMoved = false;

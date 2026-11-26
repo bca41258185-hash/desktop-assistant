@@ -306,6 +306,7 @@
       if (this.job !== job) return;
       this.job = null;
       if (job.end) job.end();
+      this.lastDone = job;
       this.hideLive();
       this.dy = 0;
       this.setLayer(8);
@@ -323,7 +324,7 @@
       if (!skip && this.mode === 'awake' && !this.alerts.length && !this.queue.length && !(this.ball && this.ball.stopped && !this.ball.picked) && !this.inPouch && !this.duetOn) {
         const r = this.restSpec(), b = this.blendTicker({ th: r.th, pose: r.pose });
         if (b) {
-          const a = this, job = { name: 'settle', ticks: true, layer: 7.9, endOpts: { rest: false } };
+          const a = this, prev = this.lastDone, job = { name: 'settle', ticks: true, layer: 7.9, endOpts: { rest: false }, after: prev && prev.name, other: prev && prev.other };
           job.tick = (now) => b.tick(now);
           job.interrupt = () => { a.hideLive(); };
           job.end = () => { a.skipSettle = true; };
