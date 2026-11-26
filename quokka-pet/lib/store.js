@@ -36,23 +36,50 @@
   }
 
   function createStore(file, { debounceMs = 300 } = {}) {
-    let data = defaults(), timer = null;
+    let data = defaults(), timer = null, readOnly = false;
+    // 把讀不懂的檔案另存一份，絕不直接用預設值蓋掉使用者的資料
+    function quarantine(tag) {
+      try { fs.copyFileSync(file, file.replace(/\.json$/, '') + `.${tag}-${Date.now()}.json`); } catch (e) { /* 備份失敗不阻擋 */ }
+    }
     function load() {
-      let raw = null;
-      try { raw = JSON.parse(fs.readFileSync(file, 'utf-8')); } catch (e) { raw = null; }
-      if (raw && raw.version !== 2) {
-        try { fs.writeFileSync(file.replace(/\.json$/, '.v1.bak.json'), JSON.stringify(raw, null, 2)); } catch (e) { /* 備份失敗不阻擋 */ }
+      let raw = null, text = null;
+      try { text = fs.readFileSync(file, 'utf-8'); }
+      catch (e) {
+        if (e.code !== 'ENOENT') {           // 暫時讀不到（被鎖住、權限）：這次用記憶體中的預設值，但不寫回去
+          console.error('讀取設定失敗:', e.message);
+          readOnly = true; data = defaults(); return data;
+        }
+      }
+      if (text != null) {
+        try { raw = JSON.parse(text); } catch (e) { raw = null; }
+        if (!raw || typeof raw !== 'object') {
+          // 寫到一半斷電留下的暫存檔若還在且完整，優先救回來
+          quarantine('corrupt');
+          try { raw = JSON.parse(fs.readFileSync(file + '.tmp', 'utf-8')); } catch (e) { raw = null; }
+        }
+      }
+      const ver = raw && raw.version;
+      if (raw && ver != null && ver !== 2 && ver !== 1) {   // 比這一版還新的資料：留一份備份，照 v2 的欄位盡量讀
+        quarantine(`v${String(ver).replace(/[^0-9a-z.]/gi, '')}`);
+        raw = { ...raw, version: 2 };
+      }
+      const isV1 = raw && raw.version !== 2;
+      if (isV1) {
+        const bak = file.replace(/\.json$/, '.v1.bak.json');
+        try { if (!fs.existsSync(bak)) fs.writeFileSync(bak, JSON.stringify(raw, null, 2)); } catch (e) { /* 備份失敗不阻擋 */ }
       }
       data = migrate(raw);
-      if (raw && raw.version !== 2) saveNow();
+      if (isV1) saveNow();
       return data;
     }
     function saveNow() {
       if (timer) { clearTimeout(timer); timer = null; }
+      if (readOnly) return;
       try {
         fs.mkdirSync(path.dirname(file), { recursive: true });
         const tmp = file + '.tmp';
-        fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf-8');
+        const fd = fs.openSync(tmp, 'w');
+        try { fs.writeFileSync(fd, JSON.stringify(data, null, 2), 'utf-8'); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
         fs.renameSync(tmp, file);              // 原子取代：不會留下寫一半的檔案
       } catch (e) { console.error('儲存失敗:', e.message); }
     }

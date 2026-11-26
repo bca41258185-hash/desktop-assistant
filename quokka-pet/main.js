@@ -6,7 +6,7 @@ const { app, Menu } = require('electron');
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 else {
   let v2 = null;
-  app.on('second-instance', () => { if (v2) v2.showPanel(); });
+  app.on('second-instance', () => { if (v2) { v2.unhide(); v2.showPanel(); } });   // 再開一次程式＝把藏起來的庫卡叫回來
   app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
     v2 = require('./lib/app-v2').start();

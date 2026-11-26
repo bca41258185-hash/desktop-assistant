@@ -62,7 +62,9 @@ function start() {
 
   // ---- 舞台與面板 ---------------------------------------------------------------
   const stage = createStageManager({ BrowserWindow, screen, ipcMain, path, dir: ROOT });
-  const toStage = (ch, payload) => stage.send(ch, payload);
+  // 舞台頁面載入完成前的事件先存著（例如開機時「錯過的提醒」），ready 後補送
+  let stageReady = false; const stageBacklog = [];
+  const toStage = (ch, payload) => { if (!stageReady && (ch === 'q:event' || ch === 'presence')) { if (stageBacklog.length < 50) stageBacklog.push([ch, payload]); return; } stage.send(ch, payload); };
   const stageQ = (q) => ({ id: q.id, name: q.name, traits: q.traits, pos: q.home || null, stage: q.stage || 'adult', mom: q.mom || null, dad: q.dad || null,
     growScale: (q.traits && q.traits.growScale) || null, pregnant: !!q.pregnancy, hasJoey: q.joey ? q.joey.id : null, partner: partnerId(q.id) });
   function partnerId(qid) { try { return romance.partnerOf(qid) || null; } catch (e) { return null; } }
@@ -109,6 +111,8 @@ function start() {
   setInterval(() => {
     const t = Date.now(), dt = away || !stageVisible ? 0 : Math.min(t - lastTick, 120000);
     lastTick = t;
+    // 保險：互動超過 2 分鐘還沒回報（舞台出錯或重新載入），主行程自己收掉，不讓兩隻永遠卡在「忙碌」
+    try { for (const j of social.activePairs()) if (t - j.startedAt > 120000) { social.abort(j.pairId, null, 'timeout'); toStage('social:abort', { pairId: j.pairId, reason: 'timeout' }); } } catch (e) {}
     // 沒有懷孕、育兒、成長中的庫卡時，每 10 分鐘更新一次年齡就夠了
     const active = data.quokkas.some((q) => q.pregnancy || q.joey || q.growth || (q.stage && q.stage !== 'adult'));
     if (!active && (idleTicks = (idleTicks + 1) % 20) !== 0) return;
@@ -166,7 +170,11 @@ function start() {
         toStage('q:alert', { qid: rem.owner, reminderId: rem.id, text: rem.text, speak: !!data.settings.reminderVoice });
         notify(qById(rem.owner), `⏰ ${rem.text}`, rem.owner);
       }
-      for (const [qid, items] of Object.entries(missed)) event(qid, 'missed', { items });
+      for (const [qid, items] of Object.entries(missed)) {
+        event(qid, 'missed', { items });
+        notify(qById(qid), `錯過的提醒：${items.join('、')}`.slice(0, 200), qid);
+      }
+      if (!stageVisible && due.some((d) => !d.missed)) unhide();     // 提醒優先：藏起來時也要出來響
       changed();
     }
   });
@@ -277,17 +285,20 @@ function start() {
   function unwatchFolder(id) { const st = watchers.get(id); if (st) { st.w.close(); clearTimeout(st.timer); watchers.delete(id); } }
 
   // ---- 離開偵測（PresenceWatch） --------------------------------------------------
-  setInterval(() => {
+  let locked = false;
+  function checkPresence() {
     const mins = Number(data.settings.awayMinutes) || 0;
     const idle = powerMonitor.getSystemIdleTime();
-    const nowAway = mins > 0 && idle >= mins * 60;
+    const nowAway = locked || (mins > 0 && idle >= mins * 60);
     if (nowAway === away) return;
     away = nowAway;
-    stage.pause(away);
-    toStage('presence', { away, digest: away ? null : { ...digest } });
+    stage.pause(away || !stageVisible);
+    toStage('presence', { away, locked, digest: away ? null : { ...digest } });
     if (!away) for (const k of Object.keys(digest)) delete digest[k];
-  }, 5000);
-  powerMonitor.on('lock-screen', () => { stage.pause(true); toStage('presence', { away: true, locked: true }); });
+  }
+  setInterval(checkPresence, 5000);
+  powerMonitor.on('lock-screen', () => { locked = true; checkPresence(); });
+  powerMonitor.on('unlock-screen', () => { locked = false; checkPresence(); });
 
   // ---- 面板 → 主行程 ---------------------------------------------------------------
   const str = (v, n = LIMITS.text) => String(v == null ? '' : v).trim().slice(0, n);
@@ -383,6 +394,9 @@ function start() {
   });
   ipcMain.handle('item:reassign', (e, { kind, id, owner } = {}) => {
     const it = findItem(kind, id); if (!it || !qById(owner)) return { ok: false };
+    if (!romance.canOwnTasks(qById(owner))) return { ok: false, message: '小袋鼠還不能接任務' };
+    if (it.owner === owner) return { ok: true };
+    if (LIM[kind] && countOf(kind, owner) >= LIM[kind]) return { ok: false, message: '牠手上的事已經滿了' };
     if (it.ringing) clearAlert(it);
     it.owner = owner;
     if (kind === 'stock') syncWatchlist();
@@ -436,7 +450,7 @@ function start() {
     const q = qById(qid); if (!q) return { ok: false };
     const owners = data.quokkas.filter((x) => romance.canOwnTasks(x));
     if (owners.length <= 1 && romance.canOwnTasks(q)) return { ok: false, message: '最後一隻不能刪除' };
-    const to = transferTo === 'delete' ? null : qById(transferTo) && transferTo !== qid ? transferTo : (owners.find((x) => x.id !== qid) || {}).id;
+    const to = transferTo === 'delete' ? null : qById(transferTo) && transferTo !== qid && romance.canOwnTasks(qById(transferTo)) ? transferTo : (owners.find((x) => x.id !== qid) || {}).id;
     for (const k of Object.values(KINDS)) {
       if (to) data[k].forEach((x) => { if (x.owner === qid) x.owner = to; });
       else { data[k].filter((x) => x.owner === qid && k === 'folders').forEach((f) => unwatchFolder(f.id)); data[k] = data[k].filter((x) => x.owner !== qid); }
@@ -445,7 +459,9 @@ function start() {
     const famEvents = romance.onDelete(qid);                   // 墓碑紀錄、伴侶恢復單身、小袋鼠交給爸爸
     data.quokkas = data.quokkas.filter((x) => x.id !== qid);
     onRomanceEvents(famEvents);
-    if (data.settings.defaultOwner === qid) data.settings.defaultOwner = data.quokkas[0].id;
+    if (data.settings.defaultOwner === qid) data.settings.defaultOwner = (data.quokkas.find((x) => romance.canOwnTasks(x)) || data.quokkas[0]).id;
+    // 正在響的提醒換了主人：請新主人接著響
+    if (to) for (const r of data.reminders) if (r.owner === to && r.ringing) toStage('q:alert', { qid: to, reminderId: r.id, text: r.text });
     syncWatchlist(); clock.schedule(); changed({ quokkas: true });
     return { ok: true };
   });
@@ -497,6 +513,9 @@ function start() {
     e.sender.send('stage:quokkas', data.quokkas.map(stageQ));
     e.sender.send('stage:settings', data.settings);
     for (const r of data.reminders) if (r.ringing) e.sender.send('q:alert', { qid: r.owner, reminderId: r.id, text: r.text });
+    stageReady = true;
+    for (const [ch, payload] of stageBacklog.splice(0)) e.sender.send(ch, payload);
+    if (hiddenUntil > Date.now()) e.sender.send('stage:hide', { until: hiddenUntil });
   });
   const savePos = (e, { id, qid, pos, x, y } = {}) => {
     const q = qById(qid || id), px = pos ? pos.x : x, py = pos ? pos.y : y;
@@ -531,10 +550,21 @@ function start() {
     ]).popup();
   });
   ipcMain.on('perf:stats', () => {});
+  let hideTimer = null, hiddenUntil = 0;
+  function unhide() {
+    clearTimeout(hideTimer); hideTimer = null; hiddenUntil = 0;
+    if (stageVisible) return;
+    for (const st of stage.stages.values()) if (!st.win.isDestroyed()) st.win.showInactive();
+    stageVisible = true; stage.pause(away);
+    toStage('stage:hide', { hide: false });
+  }
   function hideAll(mins) {
+    clearTimeout(hideTimer);
+    hiddenUntil = Date.now() + mins * 60000;
+    toStage('stage:hide', { until: hiddenUntil });               // 舞台停下動畫與計時器（看不到就停）
     for (const st of stage.stages.values()) if (!st.win.isDestroyed()) st.win.hide();
-    stage.pause(true); stageVisible = false;
-    setTimeout(() => { for (const st of stage.stages.values()) if (!st.win.isDestroyed()) st.win.showInactive(); stage.pause(false); stageVisible = true; }, mins * 60000);
+    stageVisible = false; stage.pause(true);
+    hideTimer = setTimeout(unhide, mins * 60000);
   }
 
   // ---- 啟動 ------------------------------------------------------------------------
@@ -545,7 +575,7 @@ function start() {
   try { romance.refreshAges(); romance.dailyDecay(); } catch (e) {}
   scheduleSocial(90000);               // 開機 1.5 分鐘後才開始安排互動
   app.on('before-quit', () => { app.isQuitting = true; clearTimeout(socialTimer); stocks.stop(); clock.stop(); store.saveNow(); });
-  return { store, stage, data, showPanel };
+  return { store, stage, data, showPanel, unhide };
 }
 
 module.exports = { start };

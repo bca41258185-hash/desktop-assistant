@@ -52,7 +52,7 @@
       }
       cursorTimer = setTimeout(poll, near ? 50 : look ? 120 : 400);
     }
-    ipcMain.on('stage:rects', (e, { rects, dragging }) => {
+    ipcMain.on('stage:rects', (e, { rects, dragging } = {}) => {
       for (const st of stages.values()) {
         if (st.win.isDestroyed() || st.win.webContents.id !== e.sender.id) continue;
         const ox = st.display.workArea.x, oy = st.display.workArea.y;
@@ -63,7 +63,24 @@
     });
     function start() { primary(); if (!cursorTimer) poll(); }
     function send(channel, payload) { for (const st of stages.values()) if (!st.win.isDestroyed()) st.win.webContents.send(channel, payload); }
-    function pause(v) { paused = !!v; }
+    // 暫停（離開、鎖定、隱藏）時一律先恢復穿透，不能讓透明舞台擋住桌面
+    function pause(v) {
+      paused = !!v;
+      if (paused) for (const st of stages.values()) { st.dragging = false; setIgnore(st, true); }
+      else if (cursorTimer) { clearTimeout(cursorTimer); poll(); }
+    }
+    // 解析度、工作列、外接螢幕變動：舞台跟著工作區重新對齊
+    function refit() {
+      const d = screen.getPrimaryDisplay();
+      for (const [id, st] of [...stages]) {
+        if (st.win.isDestroyed()) { stages.delete(id); continue; }
+        st.display = d; st.rects = [];
+        const wa = d.workArea;
+        st.win.setBounds({ x: wa.x, y: wa.y, width: wa.width, height: wa.height });
+        if (id !== d.id) { stages.delete(id); stages.set(d.id, st); }
+      }
+    }
+    for (const ev of ['display-metrics-changed', 'display-added', 'display-removed']) screen.on(ev, refit);
     return { start, send, pause, stages, primary };
   }
   module.exports = { createStageManager };

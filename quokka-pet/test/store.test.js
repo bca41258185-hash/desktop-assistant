@@ -40,3 +40,26 @@ test('壞掉的設定檔不會讓程式掛掉', () => {
   assert.equal(d.version, 2);
   assert.deepEqual(d.quokkas, []);
 });
+
+test('壞掉的設定檔會先備份，不會被預設值蓋掉', () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const { createStore } = require('../lib/store');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qk-'));
+  const file = path.join(dir, 'config.json');
+  fs.writeFileSync(file, '{"version":2,"tasks":[{"id":1');
+  const s = createStore(file); s.load(); s.saveNow();
+  const bak = fs.readdirSync(dir).find((n) => n.startsWith('config.corrupt-'));
+  assert.ok(bak, '要留下備份');
+  assert.equal(fs.readFileSync(path.join(dir, bak), 'utf-8'), '{"version":2,"tasks":[{"id":1');
+});
+
+test('比較新的版本不會被當成 v1 清空', () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const { createStore } = require('../lib/store');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qk-'));
+  const file = path.join(dir, 'config.json');
+  fs.writeFileSync(file, JSON.stringify({ version: 3, reminders: [{ id: 'r1', owner: 'q1', text: 'x' }], quokkas: [{ id: 'q1', name: 'A' }] }));
+  const d = createStore(file).load();
+  assert.equal(d.reminders.length, 1);
+  assert.equal(d.quokkas.length, 1);
+});
