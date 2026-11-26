@@ -304,3 +304,76 @@ test('帽子：同一頂帽子在站、蹲、前傾放球、抬頭、正面、�
     }
   } finally { AC.draw = orig; }
 });
+
+// 每 1/60 秒相鄰兩格的關節變化（角度、位置、手）
+function stepDelta(a, b) {
+  const W = (p) => A.mix(p, p, 0), L = A.BLEND_LIMIT, out = {};
+  const g = (p, k, d) => (p[k] == null ? d : p[k]);
+  out.th = Math.abs(a.th - b.th) / L.th;
+  for (const [k, d] of [['lean', 0], ['roll', 0], ['x', 0], ['y', 0], ['sq', 1], ['tailUp', 0]]) out[k] = Math.abs(g(a.pose, k, d) - g(b.pose, k, d)) / L[k];
+  for (const k of ['yaw', 'pitch', 'roll']) out['head.' + k] = Math.abs(((a.pose.head || {})[k] || 0) - ((b.pose.head || {})[k] || 0)) / L.head;
+  for (const k of ['L', 'R']) { const ha = a.pose.arms && a.pose.arms[k] && a.pose.arms[k].hand, hb = b.pose.arms && b.pose.arms[k] && b.pose.arms[k].hand; if (ha && hb) out['hand.' + k] = Math.hypot(ha[0] - hb[0], ha[1] - hb[1], ha[2] - hb[2]) / L.hand; }
+  void W;
+  return out;
+}
+function maxStep(anim, from = 0, to = anim.dur) {
+  let worst = { v: 0 };
+  let prev = A.sampleRaw(anim, from);
+  for (let t = from + 1 / 60; t <= to + 1e-9; t += 1 / 60) {
+    const cur = A.sampleRaw(anim, Math.min(t, to)), d = stepDelta(prev, cur);
+    for (const [k, v] of Object.entries(d)) if (v > worst.v) worst = { v, k, t };
+    prev = cur;
+  }
+  return worst;
+}
+
+test('姿勢混合：動作結束回待機、走完站起來、撿完球坐著 → 站著，每 1/60 秒各關節變化都不超過上限', () => {
+  const F = A.FETCH2, rest = { th: -15, pose: {} };
+  const ends = [
+    ['四肢著地走路的最後一格 → 站著轉回來', A.GAIT.walk(23.5 / 24), { th: -30, pose: {} }],
+    ['四肢著地走路（往右）→ 站著', A.mirrorFrame(A.GAIT.walk(23.5 / 24)), { th: 30, pose: {} }],
+    ['小跳的最後一格 → 站著', A.GAIT.hop(11.5 / 12), { th: -30, pose: {} }],
+    ['衝刺的最後一格 → 站著', A.GAIT.dash(9.5 / 10), rest],
+    ['排球放到腳邊、拍一拍（homeV 最後）→ 待機', F.homeV(1), rest],
+    ['抱著球坐著（homeHug 最後）→ 待機', F.homeHug(1), rest],
+    ['籃球捧在胸前（homeB 最後）→ 待機', F.homeB(1), rest],
+    ['撈球（scoop 最後，彎腰）→ 待機', F.scoop(1, 'vball'), rest],
+    ['拎起來 → 輕輕放下的第一格', { th: 0, pose: A.STILL.lift }, A.REACT.land.keys[0]],
+    ['拎起來 → 頭暈的第一格', { th: 0, pose: A.STILL.lift }, A.REACT.dizzy.keys[0]],
+    ['響鈴（指氣泡）→ 待機', A.sampleRaw(A.ALERT.ring, 1.5), rest],
+    ['打盹最後 → 待機', A.sampleRaw(A.REACT.nap, 5.2), rest]
+  ];
+  for (const [name, from, to] of ends) {
+    const b = A.blendAnim(from, to);
+    if (!b) { assert.ok(A.poseDelta(from, to) <= 2, `${name}：差距 ${A.poseDelta(from, to).toFixed(1)} 卻沒有過渡`); continue; }
+    const w = maxStep(b);
+    assert.ok(w.v <= 1.02, `${name}：${w.k} 在 ${w.t && w.t.toFixed(3)} 秒一格變了上限的 ${w.v.toFixed(2)} 倍`);
+    // 對照：不混合（直接跳）一定超過上限
+    assert.ok(A.poseDelta(from, to) > 1, `${name}：這個例子本來就沒有跳格（測試沒意義）`);
+  }
+});
+
+test('姿勢混合：接在動畫前面（withLeadIn）時間、事件、道具都往後挪，接縫不跳', () => {
+  const lift = { th: 0, pose: A.STILL.lift }, land = A.withLeadIn(A.REACT.land, lift);
+  assert.ok(land.leadIn > 0 && Math.abs(land.dur - (A.REACT.land.dur + land.leadIn)) < 1e-9);
+  const w = maxStep(land, 0, land.leadIn + 2 / 60);                     // 過渡那一段＋接上原本動畫的接縫
+  assert.ok(w.v <= 1.02, `拎起來 → 放下：${w.k} 在 ${w.t.toFixed(3)} 秒變了上限的 ${w.v.toFixed(2)} 倍`);
+  const bad = A.ANIMS.volleyball, lb = A.withLeadIn(bad, { th: 90, pose: { lean: 50 } });
+  assert.ok(bad.events && bad.events.length, '排球有丟球事件');
+  assert.deepStrictEqual(lb.events.map((e) => +(e.t - lb.leadIn).toFixed(6)), bad.events.map((e) => +e.t.toFixed(6)));
+  const r6 = (o) => JSON.stringify(o, (k, v) => (typeof v === 'number' ? +v.toFixed(6) : v));
+  if (bad.props) assert.strictEqual(r6(lb.props(lb.leadIn + .5, {})), r6(bad.props(.5, {})));
+});
+
+test('撿回排球放下（homeHug → homeV）：每 1/60 秒的變化有上限，球從胸口慢慢放到地上（不會一格掉下去）', () => {
+  const F = A.FETCH2, N = 1600 / 1000 * 60;
+  let prev = F.homeHug(1), prevBall = null, worst = 0;
+  for (let i = 0; i <= N; i++) {
+    const fr = F.homeV(i / N), d = stepDelta(prev, fr), v = Math.max(...Object.values(d));
+    worst = Math.max(worst, v);
+    const ball = (fr.pose.props || []).find((p) => p.t === 'vball');
+    if (ball && prevBall) assert.ok(Math.hypot(ball.off[0] - prevBall.off[0], ball.off[1] - prevBall.off[1]) < 4, `homeV(${(i / N).toFixed(2)}) 球一格移動太多`);
+    prevBall = ball || null; prev = fr;
+  }
+  assert.ok(worst <= 1.05, `homeV 相鄰兩格變化為上限的 ${worst.toFixed(2)} 倍`);
+});

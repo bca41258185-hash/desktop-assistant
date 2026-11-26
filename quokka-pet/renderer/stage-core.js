@@ -161,6 +161,13 @@
     }).replace(/<defs>\s*<\/defs>/g, '');
   };
   S.slimInfo = () => ({ hoisted: hoisted.size, dyn: dynId.size, fur: furIds.size });
+  // 互動結束：那一輪用的共用定義（id 以 suffix 結尾）拿掉，不會越積越多
+  S.unslim = function (suffixes) {
+    const hit = (id) => suffixes.some((x) => id.endsWith(x));
+    for (const [id, h] of [...hoisted]) if (hit(id)) { h.el.remove(); hoisted.delete(id); }
+    for (const id of [...dynId]) if (hit(id)) dynId.delete(id);
+    for (const id of [...seenDef.keys()]) if (hit(id)) seenDef.delete(id);
+  };
   // 先把某一格畫好放進快取（眨眼、耳朵抖這種只出現 0.1 秒的畫格，要用的時候才不會來不及）
   S.warm = (a, key, th, pose, wide) => { S.frameURL(a, key, th, pose, wide); };
   // 圖片（獨立 SVG 文件）用嚴格 XML 解析：同一個標籤有兩個 style 屬性會整張讀不出來（某些飾品會這樣）→ 合併成一個

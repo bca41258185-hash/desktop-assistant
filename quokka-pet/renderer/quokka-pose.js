@@ -320,6 +320,8 @@
     }
   }
 
+  // 腳下的影子（跳起來時變小變淡）
+  const shadowSvg = (dx, dy) => `<ellipse cx="${f1(80 + dx)}" cy="183" rx="${f1(30 - Math.min(16, -dy * .4))}" ry="4" fill="#000" opacity="${f1(Math.max(.04, .12 + dy * .002))}"/>`;
   // ---- 主繪製 ---------------------------------------------------------------
   const BALLS = new Set(['vball', 'bball']);
   function render(th, id, pose = {}) {
@@ -549,7 +551,7 @@
       if (p.t === 'racket') {
         // 握把畫在那隻手的下面：手掌握在握把上
         const key = p.hand || 'R', h = hands[key], it = armItems.find((q) => q.key === key);
-        if (h && it) it.pre.push(racket(id, h.palm[0], h.palm[1], p.ang || 0, p.len || 1, p.hit, p.swoosh));
+        if (h && it) { const r = racket(id, h.palm[0], h.palm[1], p.ang || 0, p.len || 1, p.hit, p.swoosh); it.pre.push(p.o != null && p.o < 1 ? `<g opacity="${Math.max(0, p.o).toFixed(2)}">${r}</g>` : r); }
         return;
       }
       // 道具可以黏在手上：hand＝'L'／'R'／'both'（兩手中間），off＝相對位移
@@ -565,6 +567,7 @@
       else if (p.t === 'leaf') svg = p.kind === 'big' ? bigLeaf(id, x, y, p.rot, p.s) : leaf(id, x, y, p.rot, p.s);
       else if (p.t === 'hoop') svg = hoop(id, x, y, p.s, !!p.flip);
       else if (p.t === 'fx') svg = fx(id, p.kind, x, y, p.rot, p.s);
+      if (svg && p.o != null && p.o < 1) svg = `<g opacity="${Math.max(0, p.o).toFixed(2)}">${svg}</g>`;     // 道具淡出（收起來的最後一下）
       const layer = p.layer || (p.behind ? 'back' : (held && p.hand === 'both' && BALLS.has(p.t)) ? 'between' : 'front');
       if (held) chr[layer === 'back' ? 'back' : layer === 'between' ? 'between' : 'front'].push(svg);
       else abs[layer === 'back' ? 'back' : 'front'].push(svg);
@@ -588,7 +591,7 @@
     const defs = I.DEFS(id).replace(/<linearGradient id="bg[^>]*>/, `<linearGradient id="bg${id}" gradientUnits="userSpaceOnUse" x1="${f1(80 + (g0.X - 80) * .8)}" y1="${f1(Math.min(g0.Y, 60))}" x2="80" y2="176">`)
       .replace(/<filter id="b6[^"]*" filterUnits="userSpaceOnUse" x="-120" y="-120" width="440" height="480"><feGaussianBlur stdDeviation="6"\/><\/filter>/, (m) => b6 || m)
       .replace('</defs>', `${PROP_DEFS(id)}${AC ? AC.defs(id) : ''}<clipPath id="cb${id}"><path d="${bodyD}"/></clipPath></defs>`);
-    const shadow = `<ellipse cx="${f1(80 + dx)}" cy="183" rx="${f1(30 - Math.min(16, -dy * .4))}" ry="4" fill="#000" opacity="${f1(Math.max(.04, .12 + dy * .002))}"/>`;
+    const shadow = shadowSvg(dx, dy);
     // 位移用外層 <g transform>：裡面的座標（與毛邊雜訊的相對位置）不變，移動時毛邊不會「沸騰」
     const G = (inner) => (inner ? ((dx || dy) ? `<g transform="translate(${f1(dx)} ${f1(dy)})">${inner}</g>` : inner) : '');
     const rel = {
@@ -622,7 +625,7 @@
     const body = kind === 'bball' ? bball(id, 0, 0, rot, 1) : vball(id, 0, 0, rot, 1);
     return `<svg viewBox="-16 -16 32 32" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;overflow:visible"><defs>${PROP_DEFS(id)}</defs>${body}</svg>`;
   }
-  const api = { render, svg, ballSVG };
+  const api = { render, svg, ballSVG, shadowSvg };
   if (typeof window !== 'undefined') window.QuokkaPose = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

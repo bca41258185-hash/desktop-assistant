@@ -22,10 +22,14 @@
       this.el.addEventListener('mousedown', (e) => e.stopPropagation());
       this.el.addEventListener('click', (e) => {
         if (this.kind !== 'alert') return;
-        const b = e.target.closest('button');
-        const act = b ? b.dataset.act : 'ack';                     // 點氣泡本體＝知道了
-        this.a.answerAlert(this.alertId, act);
         e.stopPropagation();
+        const b = e.target.closest('button');
+        if (b && b.dataset.act === 'more') return;
+        const row = e.target.closest('[data-rid]');
+        // 按鈕＝那一則的「知道了／5 分後」；點某一則的文字＝那一則知道了；只有一則時點氣泡任何地方＝知道了
+        const rid = b && b.dataset.rid ? b.dataset.rid : row ? row.dataset.rid : (this.list && this.list.length === 1 ? this.list[0].reminderId : null);
+        if (rid == null) return;
+        this.a.answerAlert(rid, b ? b.dataset.act : 'ack');
       });
     }
     // 說一句：text 可以帶顏色（台股漲紅跌綠）
@@ -50,28 +54,51 @@
       this.measure(); this.place();
       this.timer = setTimeout(() => this.hide('say'), ms);
     }
-    alert(reminderId, text) {
+    // 提醒氣泡（規格 4.1）：同一隻同時有好幾個提醒在響 → 全部列出來，每一則各自有「知道了／5 分後」；
+    // 太多時列前 MAX_ROWS 則，最後一行顯示「還有 N 則」（前面的按掉，後面的就遞補上來）
+    alerts(list) {
+      list = (list || []).slice();
+      if (!list.length) { this.hide('alert'); return; }
       clearTimeout(this.timer);
-      this.kind = 'alert'; this.alertId = reminderId;
-      this.el.className = 'bubble alert show';
+      const MAX_ROWS = 3, shown = list.slice(0, MAX_ROWS), more = list.length - shown.length;
+      this.kind = 'alert'; this.alertId = shown[0].reminderId; this.list = list;
+      this.el.className = 'bubble alert show' + (list.length > 1 ? ' multi' : '');
       this.el.setAttribute('role', 'alertdialog');
       this.el.setAttribute('aria-live', 'assertive');
-      this.el.setAttribute('aria-label', '提醒：' + S.str(text));
-      this.textEl.textContent = '⏰ ' + S.str(text);
-      this.btns.innerHTML = '';
-      for (const [act, label] of [['ack', '知道了'], ['snooze', '5 分後']]) {
-        const b = document.createElement('button'); b.type = 'button'; b.dataset.act = act; b.textContent = label;
-        this.btns.appendChild(b);
+      this.el.setAttribute('aria-label', '提醒：' + list.map((x) => S.str(x.text)).join('；'));
+      this.textEl.textContent = ''; this.btns.textContent = '';
+      const mkBtns = (rid, box) => {
+        for (const [act, label] of [['ack', '知道了'], ['snooze', '5 分後']]) {
+          const b = document.createElement('button'); b.type = 'button'; b.dataset.act = act; b.dataset.rid = rid; b.textContent = label;
+          b.setAttribute('aria-label', label + '：' + S.str(this.list.find((x) => x.reminderId === rid).text, 60));
+          box.appendChild(b);
+        }
+      };
+      if (list.length === 1) {                                     // 只有一則：和以前一樣（文字＋一排按鈕）
+        const row = document.createElement('div'); row.dataset.rid = shown[0].reminderId; row.textContent = '⏰ ' + S.str(shown[0].text);
+        this.textEl.appendChild(row);
+        mkBtns(shown[0].reminderId, this.btns);
+      } else {
+        for (const al of shown) {
+          const row = document.createElement('div'); row.className = 'alert-row';
+          const t = document.createElement('div'); t.className = 'alert-text'; t.dataset.rid = al.reminderId; t.textContent = '⏰ ' + S.str(al.text);
+          const bx = document.createElement('div'); bx.className = 'bubble-btns small';
+          mkBtns(al.reminderId, bx);
+          row.append(t, bx); this.textEl.appendChild(row);
+        }
+        if (more > 0) { const m = document.createElement('div'); m.className = 'alert-more'; m.textContent = `還有 ${more} 則`; this.textEl.appendChild(m); }
       }
       this.measure(); this.place();
       S.reportRects();
     }
+    // 舊介面：一則
+    alert(reminderId, text) { this.alerts([{ reminderId, text }]); }
     hide(kind) {
       if (kind && this.kind !== kind) return;
       clearTimeout(this.timer);
       const wasAlert = this.kind === 'alert';
-      this.kind = null; this.alertId = null;
-      this.el.classList.remove('show', 'alert');
+      this.kind = null; this.alertId = null; this.list = null;
+      this.el.classList.remove('show', 'alert', 'multi');
       this.btns.textContent = '';
       if (wasAlert) S.reportRects();
     }

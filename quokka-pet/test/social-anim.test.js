@@ -38,12 +38,14 @@ test('15 種互動：兩個方向都建得起來，每一格姿勢與場景都�
   }
 });
 
-test('碰鼻：鼻尖留 2–3 單位、其中一隻歪頭 8°；身高不同也對得上', () => {
+test('碰鼻：鼻頭之間留一點距離（鼻尖相距 7–12 單位，鼻頭本身半徑約 3，看起來不會疊在一起）、其中一隻歪頭 8°；身高不同也對得上', () => {
   for (const [sa, sb] of [[8, 4], [2, 9], [5, 11]]) {
     const { ctx, sc, gap } = play('nose', sa, sb, false, 3);
     const fr = sc.at(2.4), na = SOC.noseOf(ctx.a, fr.a), nb = SOC.noseOf(ctx.b, fr.b);
     const sep = (gap - na.f - nb.f) / ctx.kk;
-    assert.ok(sep > 1.5 && sep < 4.5, `鼻尖距離 ${sep.toFixed(1)} 單位`);
+    assert.ok(sep > 7 && sep < 12, `鼻尖距離 ${sep.toFixed(1)} 單位`);
+    // 碰鼻那一整段（含歪頭晃動）鼻尖都不會更靠近
+    for (let t = 1.5; t <= 3.2; t += .05) { const f2 = sc.at(t), a2 = SOC.noseOf(ctx.a, f2.a), b2 = SOC.noseOf(ctx.b, f2.b); assert.ok((gap - a2.f - b2.f) / ctx.kk > 6.5, `${t.toFixed(2)} 秒鼻尖距離 ${((gap - a2.f - b2.f) / ctx.kk).toFixed(1)} 單位`); }
     assert.ok(Math.abs(na.h - nb.h) < 5, `鼻尖高度差 ${(na.h - nb.h).toFixed(1)} px`);
     assert.ok(Math.abs((fr.a.pose.head.roll || 0) - (fr.b.pose.head.roll || 0)) >= 5, '其中一隻歪頭（另一隻不歪）');
   }

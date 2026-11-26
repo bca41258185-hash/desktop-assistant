@@ -32,13 +32,17 @@
   const isPouch = (q) => q && (q.stage === 'pouch' || (q.traits && q.traits.stage === 'pouch'));
   let pouchList = [];
   const setPouch = (list) => { pouchList = list; S.family.setPouch(list); };
-  // 剛出袋（變成跟隨期）的小袋鼠：從媽媽腳邊冒出來
+  // 剛出袋（變成跟隨期）的小袋鼠：從媽媽的育兒袋口跳出來、落在媽媽後面（不是直接出現在腳邊）
   function addNear(q) {
     const mom = actorOf(q.mom) || actorOf(q.dad);
     if (mom && (q.stage === 'follow' || !q.pos)) q.pos = { x: Math.round(mom.x + (mom.faceDir > 0 ? -1 : 1) * 16), y: Math.round(mom.y) };
     add(q);
     const a = actorOf(q.id);
-    if (a && mom && q.stage === 'follow') { const p = a.toStage(80, 60); S.burst(p.x, p.y, 'stars'); }
+    if (!a || !mom || q.stage !== 'follow') return;
+    if (mom === actorOf(q.mom) && !mom.inPouch && S.family && S.family.outOfPouch) {
+      a.inPouch = true; a.el.style.display = 'none'; a.place();                   // 先當作還在袋裡，再播爬出來（從袋口跳下來）
+      S.family.outOfPouch(a, mom);
+    } else { const p = a.toStage(80, 60); S.burst(p.x, p.y, 'stars'); }
   }
   function setList(list) {
     if (!Array.isArray(list)) return;

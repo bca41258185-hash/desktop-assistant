@@ -174,6 +174,7 @@
   function composeParts(ctx, fr, opts = {}) {
     const gy = opts.ground != null ? opts.ground : 0, parts = {}, pos = {};
     for (const key of ['a', 'b']) {
+      if (opts.only && opts.only !== key) { const mv = composeMove(ctx, { a: fr.a, b: fr.b }, opts); parts[key] = mv.parts[key]; pos[key] = mv.pos[key]; continue; }   // 這一格只重建另一隻的圖形
       const o = ctx[key], c = real(ctx, key, fr[key]);
       const x = o.x0 + ctx.side * (fr[key].dx || 0);
       const pose = { ...c.pose, split: true };
@@ -182,9 +183,22 @@
       const r = POSE.render(c.th, (opts.id || 'D') + key + (o.uid || ''), pose);
       ART.configure(null);
       const L = r.layers, deco = o.deco ? o.deco(c.th, { ...pose, split: undefined }) : '';
-      parts[key] = { T: `translate(${f1(x)} ${f1(gy + (o.oy || 0))}) scale(${o.k.toFixed(4)}) translate(-80 -183)`, band: (o.tr && o.tr.band) || '#e5533d', dx: L.dx || 0, dy: L.dy || 0,
+      parts[key] = { shape: true, X: x, Y: gy + (o.oy || 0), k: o.k, T: `translate(${f1(x)} ${f1(gy + (o.oy || 0))}) scale(${o.k.toFixed(4)}) translate(-80 -183)`, band: (o.tr && o.tr.band) || '#e5533d', dx: L.dx || 0, dy: L.dy || 0,
         defs: L.defs, shadow: L.shadow, back: L.back, backAbs: L.backAbs, body: L.body, bodyAbs: deco, front: L.front, frontAbs: L.frontAbs };
       pos[key] = { x, th: c.th, hands: r.hands };
+    }
+    const near = fr.near === 'a' ? 'a' : 'b', far = near === 'a' ? 'b' : 'a', ox = ctx.a.x0, wk = ctx.kk, world = fr.world || [];
+    return { parts, near, far, pos, world: world.length > 0,
+      wBack: world.filter((w) => w.back).map((w) => worldItem(w, ox, gy, wk, ctx.side)).join(''),
+      wFront: world.filter((w) => !w.back).map((w) => worldItem(w, ox, gy, wk, ctx.side)).join('') };
+  }
+  // 只算位移（不畫圖形）：兩次重建圖形之間的格用，每隻的外層 transform、dx、dy、影子、場景道具照樣每格更新
+  function composeMove(ctx, fr, opts = {}) {
+    const gy = opts.ground != null ? opts.ground : 0, parts = {}, pos = {};
+    for (const key of ['a', 'b']) {
+      const o = ctx[key], c = real(ctx, key, fr[key]), x = o.x0 + ctx.side * (fr[key].dx || 0), dx = c.pose.x || 0, dy = c.pose.y || 0;
+      parts[key] = { X: x, Y: gy + (o.oy || 0), k: o.k, T: `translate(${f1(x)} ${f1(gy + (o.oy || 0))}) scale(${o.k.toFixed(4)}) translate(-80 -183)`, dx, dy, shadow: POSE.shadowSvg(dx, dy) };
+      pos[key] = { x, th: c.th };
     }
     const near = fr.near === 'a' ? 'a' : 'b', far = near === 'a' ? 'b' : 'a', ox = ctx.a.x0, wk = ctx.kk, world = fr.world || [];
     return { parts, near, far, pos, world: world.length > 0,
@@ -254,8 +268,8 @@
     }
   };
 
-  // ---- 碰鼻：伸長脖子輕碰、瞇眼、冒小星星。鼻尖留 2–3 單位，a 歪頭 8° -------------------------
-  function noseFit(ctx, base, sep = 2.6) {
+  // ---- 碰鼻：伸長脖子輕碰、瞇眼、冒小星星。鼻頭之間留 2–3 單位（鼻尖相距 9），a 歪頭 8° -------------------------
+  function noseFit(ctx, base, sep = 9) {                         // 鼻尖相距 9 單位：鼻頭（半徑約 3）之間留 2–3 單位，看得出沒碰在一起
     // 兩隻身高不同：高的多低一點頭、矮的抬一點頭，讓鼻尖一樣高
     const mkP = (adj, roll) => ({ th: 75, pose: { ...base, head: { pitch: (base.head ? base.head.pitch || 0 : 4) + adj, roll } } });
     let adj = 0;
@@ -351,7 +365,7 @@
   // ---- 追逐跳跳：a 壓低身體邀玩 → b 嚇一跳、轉身跑、回頭笑 → a 追 → 停下來面對面喘氣笑 ----------
   const HOP = (u) => ANIM.FETCH.hop(u);
   TYPES.chase = {
-    gap: (ctx) => polite(ctx, 142),
+    gap: (ctx) => polite(ctx, 172),                                     // 轉身逃跑時尾巴甩向對方：多留距離，尾巴碰不到對方的腳
     build(ctx) {
       // 先跑的那隻（R）往自己背後有空間的方向跑、另一隻（C）追；追到了換 C 轉身跑回來、R 追回來 → 來回一趟，回到原位
       const step = 42 * ctx.kk, bRuns = ctx.room.b >= step * 3 || ctx.room.b >= ctx.room.a;
@@ -400,6 +414,9 @@
           ...floatUp('star', t, tTag + .05, (ru + cu) / 2, 150 * ctx.kk, .6, .8, 16),
           ...floatUp('sweat', t, tEnd + .5, cu - away * 16, 150 * Cz.k, 1, 1, -18), ...floatUp('sparkle', t, tEnd + .6, (ru + cu) / 2, 156 * ctx.kk, .8, 1.2, 18), ...floatUp('note', t, tEnd + .9, ru, 172 * R.k, .9, 1.1, 18)];
         fr.moves = true;
+        // 轉身的那隻畫在後面（尾巴從對方後面甩過，不會蓋在對方的腳上）
+        const rKey = bRuns ? 'b' : 'a', cKey = bRuns ? 'a' : 'b';
+        if (t > .8 && t < t0 + .1) fr.near = cKey; else if (t > t1 - .55 && t < t1 + .1) fr.near = rKey; else if (t > tEnd - .05 && t < tEnd + .4) fr.near = cKey;
         return fr;
       });
     }
@@ -565,7 +582,7 @@
     let lean = 30, D;
     for (let i = 0; i < 14; i++) { D = { th: 74, pose: { lean, sq: .93, head: { pitch: 16, roll: 8 } } }; const nd = noseOf(ctx.a, D); lean = clamp(lean + (nd.h - nj.h) / ctx.a.k * .6, 0, 66); }
     const nd = noseOf(ctx.a, D);
-    return { J, D, nj, nd, gap: nd.f + nj.f + 4.5 * ctx.b.k };
+    return { J, D, nj, nd, gap: nd.f + nj.f + 8 * ctx.b.k };                    // 鼻頭之間留一點距離（不疊在一起）
   }
   TYPES.dadNose = {
     family: true,
@@ -666,7 +683,7 @@
         hits.push({ p, T, kind, st, c: { u: base[p] + sg[p] * (st + o.f), h: o.h } });
       }
       // 最後一球：落在輸的那隻前面，牠往前撲但來不及
-      const last = hits[n - 1], smash = last.kind === 'smash', landU = base[L] + sg[L] * 50 * pl[L].k, Fl = smash ? .36 : F * 1.05, tL = last.T + Fl;
+      const last = hits[n - 1], smash = last.kind === 'smash', landU = base[L] + sg[L] * 66 * pl[L].k, Fl = smash ? .36 : F * 1.05, tL = last.T + Fl;
       const segs = [];
       for (let i = 0; i < n - 1; i++) segs.push({ t0: hits[i].T, t1: hits[i + 1].T, f: flight(hits[i].c, hits[i + 1].c, hits[i].T, F, GRAV, 1.45) });
       segs.push({ t0: last.T, t1: tL, f: flight(last.c, { u: landU, h: 4 }, last.T, Fl, smash ? 260 : GRAV, smash ? 1 : 1.45) });
@@ -710,13 +727,14 @@
           if (mv) { c.pose.y = (c.pose.y || 0) - 6; c.pose.tailUp = .4; }
           if (t > .5 && t < tL + .2 && ball.show) watch(c, pl[p], base[p] + sg[p] * dx, sg[p], ball, .65);
           const hitNow = P[p].flags.some((T) => t >= T - .02 && t < T + .1), sw = P[p].flags.some((T) => t >= T - .1 && t < T + .16);
-          if (t > .4 && t < end - .35) c.pose.props = [RK(P[p].ang(t), hitNow, sw)];
+          // 收拍：最後 0.8 秒把拍子垂下來、慢慢收起來（淡出），不會在最後一格突然消失
+          if (t > .4 && t < end - .05) { const rk = RK(P[p].ang(t), hitNow, sw), fo = clamp((t - (end - .8)) / .7, 0, 1); if (fo > 0) { rk.ang = lerp(rk.ang, sg[p] > 0 ? 160 : 160, EASE.io(fo)); rk.o = 1 - EASE.io(fo); } c.pose.props = [rk]; }
           c.dx = sg[p] * dx; fr[key] = c;
         });
         if (ball.show) fr.world.push({ k: 'shuttle', u: ball.u, h: ball.h, rot: ball.ang, s: 1.45 });
         if (smash && t > last.T + .03 && t < tL) fr.world.push({ k: 'speed', u: ball.u - sg[W] * 22, h: ball.h + 16, rot: ball.ang, s: .9 });
         if (t >= tL && t < tL + .25) fr.world.push({ k: 'dust', u: landU, h: 2, s: .45 });
-        if (t >= pick && t < end - .4) { /* 撿起來拿在手上：畫在輸的那隻的手邊 */ const c = fr[L ? 'b' : 'a']; c.pose.props = (c.pose.props || []).concat([{ t: 'shuttle', hand: 'R', off: [0, -8], rot: -90, s: 1.3 }]); }
+        if (t >= pick && t < end - .05) { /* 撿起來拿在手上：畫在輸的那隻的手邊；最後和拍子一起收起來 */ const c = fr[L ? 'b' : 'a'], fo = clamp((t - (end - .8)) / .7, 0, 1); c.pose.props = (c.pose.props || []).concat([{ t: 'shuttle', hand: 'R', off: [0, -8], rot: -90, s: 1.3, o: 1 - EASE.io(fo) }]); }
         for (const tt of [.42, end - .36]) fr.world.push(...floatUp('sparkle', t, tt, 20, 110 * ctx.kk, .7, .5, 10), ...floatUp('sparkle', t, tt, ctx.d - 20, 110 * ctx.kk, .7, .5, 10));
         fr.world.push(...floatUp('star', t, tL + .5, base[W] + sg[W] * 10, 190 * pl[W].k, .7, 1.2, 20), ...floatUp('sparkle', t, tL + .9, base[W] - sg[W] * 14, 196 * pl[W].k, .8, 1.2, 20), ...floatUp('sweat', t, tL + .5, base[L] + sg[L] * 20, 150 * pl[L].k, 1, 1, -16));
         return fr;
@@ -945,7 +963,7 @@
     }
   };
 
-  const api = { TYPES, flight, watch, context, compose, composeParts, real, mirrorPose, persona, pt, noseOf, handsOf, crownOf, mouthOf, yFor, K, track, pw, bump, floatUp, finish, styled, polite, tpl, worldItem, TH0, HOP, FOOT, NOSE, BELLY, worldDefs: () => { tpl('heart'); return worldDefs; } };
+  const api = { TYPES, flight, watch, context, compose, composeParts, composeMove, real, mirrorPose, persona, pt, noseOf, handsOf, crownOf, mouthOf, yFor, K, track, pw, bump, floatUp, finish, styled, polite, tpl, worldItem, TH0, HOP, FOOT, NOSE, BELLY, worldDefs: () => { tpl('heart'); return worldDefs; } };
   if (!isNode) window.QuokkaSocial = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

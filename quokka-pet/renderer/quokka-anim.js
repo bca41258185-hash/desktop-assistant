@@ -474,6 +474,29 @@
       p.props = u > .5 ? [{ t: 'fx', kind: 'heart', at: [118, 140 - (u - .5) * 30], s: .8 }] : [];
       return { th: -20, pose: p };
     },
+    // 9 收起來：抱著球轉過身（背對時球被身體擋住）→ 蹲低把球放到身後 → 站直、空著手轉回正面。
+    //   球離手是在背對、被身體完全擋住的時候（u≈.62），所以畫面上看到的是「轉身把球收到後面」，不是球憑空消失
+    //   接在 homeHug（th −20、抱著球）或 homeToss（th −30）後面；最後一格是待機姿勢（th −15）
+    stashRelease: .62,
+    stash: (u, kind, th0 = -20) => {
+      kind = kind || 'vball';
+      const TB = 165, holdP = { ...P_SIT, mouth: 'smile', blush: 1.2 };
+      if (u < .34) {                                                        // 抱著球轉過身
+        const e = EASE.io(u / .34);
+        return { th: lerp(th0, TB, e), pose: { ...holdP, props: [ballHeld(kind)] } };
+      }
+      if (u < .62) {                                                        // 蹲低、手往下送（背對，球被身體擋住）
+        const e = EASE.io((u - .34) / .28), down = Math.sin(Math.PI * e);
+        const p = mixP(holdP, { sq: .9, head: { pitch: 16 }, eyes: 'happy', mouth: 'smile', arms: { L: { hand: [-9, 140, 34] }, R: { hand: [9, 141, 34] } } }, e);
+        return { th: TB, pose: { ...p, sq: p.sq - .02 * down, props: [ballHeld(kind, [0, -4 + 8 * e])] } };
+      }
+      if (u < .74) {                                                        // 放好了，站直（空手）
+        const e = EASE.io((u - .62) / .12);
+        return { th: TB, pose: mixP({ sq: .9, head: { pitch: 16 }, eyes: 'happy', mouth: 'smile', arms: { L: { hand: [-9, 140, 34] }, R: { hand: [9, 141, 34] } } }, { eyes: 'happy', mouth: 'smile' }, e) };
+      }
+      const e = EASE.io((u - .74) / .26);                                   // 空著手轉回正面
+      return { th: lerp(TB, -15, e), pose: { eyes: 'happy', mouth: 'smile', blush: lerp(1, 1.2, e) } };
+    },
     // （舊流程保留）用鼻子推回來的排球：現在和抱回來一樣，輕拋慶祝
     homeVNudge: (u) => { const fr = FETCH2.homeToss(u, 'vball'); return { th: 90, pose: fr.pose }; }
   };
@@ -1068,7 +1091,44 @@
     shy: { head: { pitch: 8, roll: -6 }, eyes: 'happy', mouth: 'smile', blush: 1.5 }
   };
 
-  const api = { sample, sampleRaw, mix, EASE, ANIMS, FETCH, FETCH2, GAIT, mirrorFrame, REACT, STILL, ALERT, IDLE, IDLE_HINT, HOOP,
+  // ---------------------------------------------------------------------------
+  // 姿勢混合：一個動作結束（或被接上另一個動作）時，從「畫面上最後一格」平順過渡到下一個姿勢，不會一格跳過去。
+  //   BLEND_LIMIT：每 1/60 秒各關節最多變多少（角度＝度、位置＝姿勢單位）；blendAnim() 依兩個姿勢的差距算出夠長的時間，
+  //   保證緩入緩出（最大斜率 2）時每一格都不超過上限。舞台：動作結束回待機、走路停下站起來、拎起來放下、動作的開頭都用這個。
+  // ---------------------------------------------------------------------------
+  const BLEND_LIMIT = { th: 12, lean: 4, roll: 3, x: 4, y: 4, sq: .03, tailUp: .08, head: 5, hand: 6, look: .6 };
+  const handDist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  // 兩個姿勢每個關節的差距（各自除以每格上限）中最大的那個＝至少要幾格的「上限」
+  function poseDelta(a, b) {
+    const A = withArms(a.pose || {}), B = withArms(b.pose || {}), L = BLEND_LIMIT;
+    let m = Math.abs((a.th || 0) - (b.th || 0)) / L.th;
+    for (const k of ['lean', 'roll', 'x', 'y', 'sq', 'tailUp']) m = Math.max(m, Math.abs((A[k] == null ? NEUTRAL[k] : A[k]) - (B[k] == null ? NEUTRAL[k] : B[k])) / L[k]);
+    for (const k of ['yaw', 'pitch', 'roll']) m = Math.max(m, Math.abs((A.head[k] || 0) - (B.head[k] || 0)) / L.head);
+    for (const k of ['L', 'R']) if (A.arms[k] && B.arms[k] && A.arms[k].hand && B.arms[k].hand) m = Math.max(m, handDist(A.arms[k].hand, B.arms[k].hand) / L.hand);
+    m = Math.max(m, Math.hypot(A.look[0] - B.look[0], A.look[1] - B.look[1]) / L.look);
+    return m;
+  }
+  // from → to 的過渡動畫；差距很小（2 格以內就到）回傳 null。maxDur 封頂（真的差很多時，寧可稍微超過每格上限也不拖太久）
+  function blendAnim(from, to, opts = {}) {
+    const d = poseDelta(from, to);
+    if (d <= (opts.min == null ? 2 : opts.min)) return null;
+    const dur = clamp(d * 2 / 60 * 1.06, opts.minDur || .1, opts.maxDur || .8);
+    const strip = (p) => { const o = { ...(p || {}) }; delete o.props; delete o.feet; return o; };
+    return { dur, follow: false, blend: true, keys: [{ t: 0, th: from.th || 0, pose: strip(from.pose) }, { t: dur, th: to.th || 0, pose: strip(to.pose) }] };
+  }
+  // 在一段動畫前面接上過渡（from＝畫面上最後一格）：回傳新的動畫，時間、事件、道具都往後挪
+  function withLeadIn(anim, from, opts) {
+    const k0 = anim.keys[0], b = blendAnim(from, { th: k0.th, pose: k0.pose }, opts);
+    if (!b) return anim;
+    const d = b.dur, out = { ...anim, dur: anim.dur + d, leadIn: d, keys: [b.keys[0], ...anim.keys.map((k) => ({ ...k, t: k.t + d }))] };
+    out.keys[1] = { ...out.keys[1], ease: 'io' };
+    if (anim.props) out.props = (t, st) => anim.props(Math.max(0, t - d), st);
+    if (anim.events) out.events = anim.events.map((e) => ({ ...e, t: e.t + d }));
+    delete out._hasY; delete out._hasTail; delete out._hands;
+    return out;
+  }
+
+  const api = { sample, sampleRaw, mix, EASE, BLEND_LIMIT, poseDelta, blendAnim, withLeadIn, ANIMS, FETCH, FETCH2, GAIT, mirrorFrame, REACT, STILL, ALERT, IDLE, IDLE_HINT, HOOP,
     ambient, ambientNext, applyAmbient, scaleByPersonality, arc };
   if (typeof window !== 'undefined') window.QuokkaAnim = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

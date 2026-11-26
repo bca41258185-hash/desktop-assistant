@@ -11,6 +11,86 @@
   let duetSeq = 0;
   S.duets = new Set();
 
+  // ---- 雙人互動的畫面：每隻每層（影子、back、body、front）各自一個小 SVG 圖層（will-change: transform） -------
+  //   · 位移（走位、跳起來的高度）只改圖層的 CSS transform，交給合成器，不重畫、不重新點陣化
+  //   · 圖形（姿勢）有變才換那一層的內容；畫面吃力時兩隻輪流重建（每隻每秒 30 次），位移照樣每格
+  //   · 疊放順序和 SOC.compose() 一樣：影子（遠、近）→ 場景後層 → back（遠、近）→ body → front → 場景前層
+  //   · 會變的漸層、裁切（defs）放在一個看不見的 SVG 裡，同一份文件內各圖層用 url(#id) 引用
+  const NS = 'http://www.w3.org/2000/svg';
+  const BOX = { x: -110, y: -100, w: 380, h: 300 };                  // 每層圖的範圍（姿勢單位；含伸出去的手、球拍、尾巴）
+  class DuetView {
+    constructor(el) {
+      this.el = el;
+      const mk = (cls, full) => {
+        const d = document.createElement('div'); d.className = 'dl ' + cls;
+        const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('aria-hidden', 'true');
+        const g = document.createElementNS(NS, 'g'); svg.appendChild(g); d.appendChild(svg);
+        return { d, svg, g, full };
+      };
+      this.defs = mk('defs'); this.defs.d.style.cssText = 'width:0;height:0;overflow:hidden';
+      this.wdefs = document.createElementNS(NS, 'g'); this.defs.g.appendChild(this.wdefs);
+      this.wBack = mk('world', true); this.wFront = mk('world', true);
+      this.slot = {};
+      for (const k of ['a', 'b']) {
+        const L = this.slot[k] = { defs: document.createElementNS(NS, 'g') };
+        this.defs.g.appendChild(L.defs);
+        for (const ly of ['shadow', 'back', 'body', 'front']) {
+          const o = mk('part', false);
+          if (ly !== 'shadow') { o.abs = document.createElementNS(NS, 'g'); o.rel = o.g; if (ly === 'back') o.svg.insertBefore(o.abs, o.g); else o.svg.appendChild(o.abs); }
+          L[ly] = o;
+        }
+      }
+      el.appendChild(this.defs.d);
+      this.cache = new Map(); this.near = null; this.W = 0; this.H = 0; this.k = {};
+    }
+    set(node, key, str) { if (this.cache.get(key) === str) return; this.cache.set(key, str); node.innerHTML = str; }
+    order(near, far) {
+      if (this.near === near) return;
+      this.near = near;
+      const N = this.slot[near], F = this.slot[far];
+      this.el.append(this.defs.d, F.shadow.d, N.shadow.d, this.wBack.d, F.back.d, N.back.d, F.body.d, N.body.d, F.front.d, N.front.d, this.wFront.d);
+    }
+    // 每隻圖層的大小（跟著體型）
+    size(k, kk) {
+      if (this.k[k] === kk) return;
+      this.k[k] = kk;
+      for (const ly of ['shadow', 'back', 'body', 'front']) {
+        const o = this.slot[k][ly];
+        o.svg.setAttribute('viewBox', `${BOX.x} ${BOX.y} ${BOX.w} ${BOX.h}`);
+        o.svg.setAttribute('width', (BOX.w * kk).toFixed(2)); o.svg.setAttribute('height', (BOX.h * kk).toFixed(2));
+      }
+    }
+    move(o, key, x, y) { const v = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0)`; if (this.cache.get(key) !== v) { this.cache.set(key, v); o.d.style.transform = v; } }
+    draw(res) {
+      if (this.W !== innerWidth || this.H !== innerHeight) {
+        this.W = innerWidth; this.H = innerHeight;
+        for (const w of [this.wBack, this.wFront]) { w.svg.setAttribute('viewBox', `0 0 ${this.W} ${this.H}`); w.svg.setAttribute('width', this.W); w.svg.setAttribute('height', this.H); }
+      }
+      this.order(res.near, res.far);
+      if (res.world && !this.cache.has('wd')) this.set(this.wdefs, 'wd', S.slim(SOC.worldDefs()));
+      this.set(this.wBack.g, 'wb', res.wBack); this.set(this.wFront.g, 'wf', res.wFront);
+      for (const k of ['a', 'b']) {
+        const p = res.parts[k], L = this.slot[k], kk = p.k;
+        this.size(k, kk);
+        // 姿勢座標 (u, v) → 舞台：(X + (u − 80)·k, Y + (v − 183)·k)；圖層左上角是 (BOX.x, BOX.y)
+        const bx = p.X + (BOX.x - 80) * kk, by = p.Y + (BOX.y - 183) * kk;
+        this.move(L.shadow, k + 'sh', bx, by);
+        this.set(L.shadow.g, k + 'shS', p.shadow);
+        for (const ly of ['back', 'body', 'front']) this.move(L[ly], k + ly, bx + p.dx * kk, by + p.dy * kk);
+        if (p.shape) {
+          for (const ly of ['back', 'body', 'front']) { const o = L[ly]; if (o.band !== p.band) { o.band = p.band; o.svg.style.setProperty('--band', p.band); } }
+          this.set(L.defs, k + 'defs', S.slim(p.defs));
+          for (const ly of ['back', 'body', 'front']) {
+            this.set(L[ly].rel, k + ly + 'R', S.slim(p[ly] || ''));
+            // 場景座標的道具（球拍…）不跟著 dx、dy：在圖層裡反向抵銷
+            const abs = p[ly + 'Abs'] || '';
+            this.set(L[ly].abs, k + ly + 'A', abs ? `<g transform="translate(${(-p.dx).toFixed(1)} ${(-p.dy).toFixed(1)})">${S.slim(abs)}</g>` : '');
+          }
+        }
+      }
+    }
+  }
+
   class Duet {
     constructor(soc, I, O) {
       this.soc = soc; this.I = I; this.O = O; this.type = SOC.TYPES[soc.type] ? soc.type : 'wave';
@@ -56,7 +136,7 @@
       if (ox < 40 || ox > W - 40) return false;
       // 任何走位都不穿過第三隻：兩隻要走的路上（含站位）有別隻 → 先請待機的那隻讓路（跳到這一段的外側；
       // 要越過這兩隻其中一隻時走靠鏡頭那一道、畫在前面繞過去）；正在忙的就等牠；等太久（7 秒）才取消
-      const lo = Math.min(I.x, O.x, ix, ox) - 70, hi = Math.max(I.x, O.x, ix, ox) + 70;
+      const lo = Math.min(I.x, O.x, ix, ox) - S.POLITE - 4, hi = Math.max(I.x, O.x, ix, ox) + S.POLITE + 4;   // 路上和兩隻的站位附近（禮貌距離內）有別隻：請牠讓開
       const all = [...S.actors.values()].filter((o) => !o.inPouch && Math.abs(o.y - I.y) <= 40);
       let blocked = false, n = 0;
       for (const o of all) {
@@ -79,7 +159,7 @@
       const chk = (who) => (nx, d) => !who.blocked(nx, d, new Set([I, O, ...(laneFor ? [laneFor] : [])]));   // 走到一半有別隻走進來擋路：停下、取消
       this.mI = Math.abs(ix - I.x) > 3 ? I.mover(ix, { ignore: ig, tol: 1.5, check: chk(I), gait: (rem) => (rem < 64 * I.k ? 'walk' : 'hop') }) : null;
       this.mO = Math.abs(ox - O.x) > 3 ? O.mover(ox, { ignore: ig, tol: 1.5, gait: 'hop', lane: laneFor ? [laneFor] : null }) : null;
-      this.waitTurn = this.mO ? null : O.turner(-side * 60, 280);
+      this.waitTurn = this.mO ? null : O.smoothTo(-side * 60, {}, 280);
       return true;
     }
     step(now) {
@@ -105,7 +185,7 @@
         if (a || b) return;
         O.depth = 0; O.zBoost = 0; O.place();
         const side = O.x >= I.x ? 1 : -1;
-        this.tI = I.turner(side * SOC.TH0, 300); this.tO = O.turner(-side * SOC.TH0, 300);
+        this.tI = I.smoothTo(side * SOC.TH0, {}, 300); this.tO = O.smoothTo(-side * SOC.TH0, {}, 300);
         this.phase = 'turn';
       }
       if (this.phase === 'turn') {
@@ -122,6 +202,7 @@
       this.phase = 'play'; this.p0 = now; this.lastDraw = 0; this.frames = 0;
       this.el = document.createElement('div'); this.el.className = 'duet';
       S.stageEl.appendChild(this.el);
+      this.view = new DuetView(this.el); this.lastShape = 0; this.slowN = 0; this.throttle = false; this.lastTickAt = 0;
       for (const a of [I, O]) { a.hideLive(); a.duetOn = true; a.el.classList.add('in-duet'); }
       S.duets.add(this);
     }
@@ -133,26 +214,31 @@
         const c0 = performance.now();
         const fr = sc.at(Math.min(t, sc.dur));
         this.lastFr = fr;
-        if (this.handed && fr.world) fr.world = fr.world.filter((w) => w.k !== 'vball' && w.k !== 'bball');
+        if (this.handed && fr.world) fr.world = fr.world.filter((w) => w.k !== 'vball' && w.k !== 'bball').map((w) => (w.k === 'hoop' ? { ...w, o: Math.min(1, t * 3) } : w));   // 球交給舞台後籃框不淡出：等撿完球才收
         // 常駐層：眨眼
         if (ANIM.ambient) for (const [key, a] of [['a', I], ['b', O]]) { const am = ANIM.ambient(now / 1000, a.seed, { still: false }); if (am.blink) fr[key].pose.blink = Math.max(fr[key].pose.blink || 0, am.blink); }
         this.ctx.b.oy = O.y - I.y;
-        const res = SOC.compose(this.ctx, fr, { ground: I.y, id: 'D' + this.uid }), c1 = performance.now();
-        S.prof('duet.pose+svg', c1 - c0);
-        const x0 = Math.min(res.pos.a.x, res.pos.b.x) - 230, x1 = Math.max(res.pos.a.x, res.pos.b.x) + 230, y0 = Math.max(0, I.y - 440), y1 = I.y + 24;
-        const st = this.el.style;
-        st.left = x0 + 'px'; st.top = y0 + 'px'; st.width = (x1 - x0) + 'px'; st.height = (y1 - y0) + 'px'; st.zIndex = Math.round(Math.max(I.y, O.y)) + 1;
-        const html = `<svg viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${S.slim(res.svg)}</svg>`;
-        if (html !== this.lastHtml) { this.lastHtml = html; this.el.innerHTML = html; }
-        this.pos = res.pos;
-        S.prof('duet.dom', performance.now() - c1);
+        // 畫面吃力（最近幾格平均超過 18.5 ms）：圖形改成每 33 ms 重建一次，位移照樣每格（之後這一輪都維持，不來回切）
+        const gapMs = this.lastTickAt ? Math.min(100, now - this.lastTickAt) : 16.7; this.lastTickAt = now;
+        this.gapAvg = this.gapAvg == null ? 16.7 : this.gapAvg * .85 + gapMs * .15;
+        if (++this.frames > 6 && this.gapAvg > 18.5 && S.fps >= 45 && !S.duetFull) this.throttle = true;
+        // 吃力時：兩隻輪流重建圖形（每隻每 2 格一次＝每秒 30 次），每一格的工作量減半；位移、球、影子照樣每格更新
+        const shape = true, opts = { ground: I.y, id: 'D' + this.uid };
+        if (this.throttle && t < sc.dur) { this.turnKey = this.turnKey === 'a' ? 'b' : 'a'; opts.only = this.turnKey; }
+        const res = SOC.composeParts(this.ctx, fr, opts), c1 = performance.now();
+        S.prof(opts.only ? 'duet.pose+svg(1隻)' : 'duet.pose+svg', c1 - c0);
+        const st = this.el.style, z = String(Math.round(Math.max(I.y, O.y)) + 1);
+        if (st.zIndex !== z) { st.zIndex = z; st.left = '0px'; st.top = '0px'; st.width = innerWidth + 'px'; st.height = innerHeight + 'px'; }
+        this.view.draw(res);
+        this.pos = this.pos || {};
+        for (const k of ['a', 'b']) this.pos[k] = res.parts[k].shape ? res.pos[k] : { ...(this.pos[k] || {}), x: res.pos[k].x, th: res.pos[k].th };
+        S.prof(opts.only ? 'duet.dom(1隻)' : 'duet.dom', performance.now() - c1);
         for (const [key, a] of [['a', I], ['b', O]]) {
           const nx = res.pos[key].x;
           a.x = nx; a.place();
         }
         const cost = performance.now() - c0;
         this.cost = this.cost == null ? cost : this.cost * .9 + cost * .1;
-        this.frames++;
       }
       if (t >= sc.dur) this.finish();
     }
@@ -168,6 +254,7 @@
     }
     teardown() {
       if (this.el) { this.el.remove(); this.el = null; }
+      if (S.unslim) S.unslim(['D' + this.uid + 'a' + this.I.uid, 'D' + this.uid + 'b' + this.O.uid]);
       S.duets.delete(this);
       for (const a of [this.I, this.O]) { a.duetOn = false; a.el.classList.remove('in-duet'); }
     }
@@ -178,6 +265,9 @@
       for (const [key, a] of [['a', I], ['b', O]]) { const th = this.endTh(key); if (th != null) a.th = S.clamp(th, -90, 90); a.nextAt = Math.max(a.nextAt, performance.now() + 6000 + Math.random() * 6000); }
       this.teardown();
       if (this.ball && !this.ball.gone) this.ball.owner.throwX = this.ball.owner.x;       // 撿完球回到互動結束時站的地方
+      // 球還在外面（要去撿）：籃框留在原地，等撿完、收好球才淡出（不會比球先消失）
+      const hoop = this.ball && !this.ball.gone && this.lastFr && (this.lastFr.world || []).find((w) => w.k === 'hoop');
+      if (hoop) keepProp(SOC.worldItem({ ...hoop, o: 1 }, this.ctx.a.x0, I.y, this.ctx.kk, this.ctx.side), Math.round(Math.min(I.y, O.y)) - 60, this.ball);
       S.api.socialDone(this.soc.pairId, true, this.soc.type);
       for (const [a, job] of [[O, this.jobO], [I, this.jobI]]) if (a.job === job) a.finish(job, { rest: true });
     }
@@ -246,6 +336,20 @@
       return t < o.anim.dur;
     }
   }
+  // 場景道具（籃框）在互動結束後留在舞台上：球被撿回來收好（或球不見了）之後 0.7 秒淡出
+  function keepProp(svg, z, ball) {
+    const d = document.createElement('div'); d.className = 'kept-prop';
+    d.style.cssText = `position:absolute;left:0;top:0;width:${innerWidth}px;height:${innerHeight}px;pointer-events:none;z-index:${z};transition:opacity .7s ease`;
+    d.innerHTML = `<svg viewBox="0 0 ${innerWidth} ${innerHeight}" width="${innerWidth}" height="${innerHeight}" aria-hidden="true">${SOC.worldDefs()}${svg}</svg>`;
+    S.stageEl.appendChild(d);
+    const t0 = performance.now();
+    const poll = () => {
+      const o = ball.owner, busy = !ball.gone || (o && o.job && o.job.name === 'fetch');
+      if (busy && performance.now() - t0 < 60000 && S.actors.has(o.id)) { setTimeout(poll, 250); return; }
+      d.style.opacity = '0'; setTimeout(() => d.remove(), 800);
+    };
+    setTimeout(poll, 250);
+  }
   S.Duet = Duet;
   S.COUPLE_TYPES = COUPLE;
 
@@ -268,66 +372,77 @@
 
   // =====================================================================================
   // 避讓（規格 6.3）：有誰要從 x0 走到 x1（撿球），路上站著別隻 →
-  //   待機中的那隻「往後退一小步」（往畫面裡退一點、畫在後面；離球太近就順便往旁邊挪一點，不踩到球、不貼到別隻），
-  //   撿球的從牠前面經過；撿球結束後牠再跳回原來那條地面線。正在忙的（響鈴、拖曳…）讓不了，撿球的就停下來等。
-  //   回傳 true＝路是空的可以走了。
+  //   待機中的那隻「橫向跳開」到整條路線（去撿球＋抱回來）的外側、和撿球的保持禮貌距離，撿球的不會穿過牠的身體；
+  //   兩側都沒有空間（螢幕邊、別隻佔住）才退而求其次：往畫面裡退一大步（畫在後面），撿球的從牠前面經過、撿完再跳回地面線。
+  //   正在忙的（響鈴、拖曳…）讓不了，撿球的就停下來等。回傳 true＝路是空的可以走了。
   // =====================================================================================
   S.avoid = null;
-  S.clearPath = function (mover, x0, x1, pad = 50) {
+  S.clearPath = function (mover, x0, x1, pad = 50, route) {
     const dir = Math.sign(x1 - x0) || 1, lo = Math.min(x0 + dir * 24, x1 + dir * pad), hi = Math.max(x0 + dir * 24, x1 + dir * pad);
     let clear = true;
     const all = [...S.actors.values()].filter((o) => o !== mover && !o.inPouch && Math.abs(o.y - mover.y) <= 40);
     const ballX = mover.ball && !mover.ball.gone ? mover.ball.x : x1;
     for (const o of all) {
       if (o.isFollow && momOf(o) === mover) continue;
+      if (o.job && o.job.name === 'yield' && o.job.mover === mover) { if (!o.job.ready) clear = false; continue; }   // 已經讓開了（跳到路線外，或退到後面）
       if (o.x < lo || o.x > hi) continue;
-      if (o.job && o.job.name === 'yield' && o.job.mover === mover) { if (!o.job.ready) clear = false; continue; }   // 已經退到後面：可以從牠前面過
       clear = false;
       if (o.job || o.mode !== 'awake' || o.isFollow) continue;                            // 正在忙：等牠
-      o.requestActivity(6, yieldJob(o, mover, ballX, x0));
+      o.requestActivity(6, yieldJob(o, mover, ballX, x0, { route: route || [Math.min(x0, x1), Math.max(x0, x1)] }));
     }
     return clear;
   };
-  // 往後退一小步讓路：看一眼 → 小跳往後（depth）、必要時往旁邊挪一點 → 回頭看撿球的 → 等撿完 → 跳回地面線
+  // 讓路：看一眼 → 橫向小跳到路線外（一兩步）→ 轉頭看撿球的；沒空間時改成往後退一大步（depth）→ 等撿完 → 跳回地面線
   function yieldJob(o, mover, ballX, fromX, opt = {}) {
-    const k = o.k, D = 38 * k, HOP = 460;
-    const politeOk = (x) => [...S.actors.values()].every((q) => q === o || q === mover || q.inPouch || Math.abs(q.y - o.y) > 40 || F.close(o, q) || Math.abs((q.sideTo != null ? q.sideTo : q.x) - x) >= 92 * (q.k + k) / 2 / S.SCALE);
-    // 撿球的會停在球前面 88 單位（站位）；退的那一步要離球和站位都有一個身體的距離、離別隻保持禮貌距離
+    const k = o.k, D = 64 * k, HOP = 460;
+    const gapM = S.politeGap(o, mover) + 6;
+    // 撿球的會停在球前面 88 單位（站位）
     const standX = ballX == null ? null : ballX - (Math.sign(ballX - fromX) || 1) * 88 * mover.k;
-    let dx = 0;
-    for (const c of [0, 24, -24, 48, -48, 72, -72, 96, -96]) {
-      const x = o.x + c * k;
-      if (x < 44 || x > innerWidth - 44) continue;
-      if (ballX != null && (Math.abs(x - ballX) < 70 * k || Math.abs(x - standX) < 60 * k)) continue;
-      if ((opt.avoid || []).some((v) => Math.abs(x - v) < 60 * k)) continue;
-      if (!politeOk(x)) continue;
-      dx = c * k; break;
+    const r0 = Math.min(...[fromX, standX, ...(opt.route || []), ...(opt.avoid || [])].filter((v) => v != null)), r1 = Math.max(...[fromX, standX, ...(opt.route || []), ...(opt.avoid || [])].filter((v) => v != null));
+    const ign = new Set([mover]);
+    // 橫向：路線兩側各往外找，不能越過任何一隻（不從別隻身上穿過去；地上的球可以跳過去）、要在螢幕內、和其他隻保持禮貌距離；挑要跳最近的
+    let side = null;
+    const bodies = [...S.actors.values()].filter((q) => q !== o && !q.inPouch && Math.abs(q.y - o.y) <= 40);
+    for (const c of [r0 - gapM, r1 + gapM]) {
+      const sgn = c < r0 ? -1 : 1;
+      for (let x = c; x > 44 && x < innerWidth - 44 && Math.abs(x - o.x) < 420; x += sgn * 8) {
+        if (bodies.some((q) => (q.x - o.x) * (q.x - x) < 0)) break;                         // 要越過別隻：這一側不行
+        if (ballX != null && Math.abs(x - ballX) < 60 * k) continue;
+        if (!S.politeOk(o, x, { ignore: ign })) continue;
+        if (!side || Math.abs(x - o.x) < Math.abs(side - o.x)) side = x;
+        break;
+      }
     }
-    const job = { name: 'yield', ticks: true, mover, ready: false, phase: 'look' };
-    let p0 = 0, x0 = 0, d0 = 0, sub = null;
-    const hopDir = dx ? Math.sign(dx) : (Math.sign(o.x - mover.x) || 1);
-    job.start = (now) => { p0 = now; o.sideTo = o.x + dx; o.lookBucket = mover.x < o.x ? 'L' : 'R'; o.showRest(); o.lookBucket = null; };
+    const job = { name: 'yield', ticks: true, mover, ready: false, phase: 'look', lateral: side != null };
+    let p0 = 0, x0 = 0, d0 = 0, sub = null, m = null;
+    const hopDir = side != null ? Math.sign(side - o.x) || 1 : (Math.sign(o.x - mover.x) || 1);
+    job.start = (now) => { p0 = now; o.sideTo = side != null ? side : o.x; o.lookBucket = mover.x < o.x ? 'L' : 'R'; o.showRest(); o.lookBucket = null; };
     job.tick = (now) => {
       switch (job.phase) {
-        case 'look': if (now - p0 > 200) { job.phase = 'hop'; p0 = now; x0 = o.x; d0 = o.depth; } return true;
-        case 'hop': {                                                     // 往後跳一小步
+        case 'look': if (now - p0 > 200) { job.phase = side != null ? 'side' : 'hop'; p0 = now; x0 = o.x; d0 = o.depth; if (side != null) m = o.mover(side, { gait: 'hop', tol: 2, speed: 1.15, ignore: ign }); } return true;
+        case 'side': {                                                    // 橫向跳開（一步一步，不滑步）
+          if (m.tick(now)) return true;
+          job.ready = true; job.phase = 'turn'; o.home = o.x; sub = o.smoothTo((mover.x < o.x ? -1 : 1) * 30, {}, 200); return true;
+        }
+        case 'hop': {                                                     // 沒有空間：往後退一大步（畫在後面）
           const u = Math.min(1, (now - p0) / HOP), e = EASE.io(u);
           o.gaitFrame('hop', hopDir, u);
-          o.x = x0 + dx * e; o.depth = d0 + (D - d0) * e; o.zBoost = -40; o.place();
-          if (u >= 1) { job.ready = true; job.phase = 'turn'; sub = o.turner((mover.x < o.x ? -1 : 1) * 30, 200); }
+          o.depth = d0 + (D - d0) * e; o.zBoost = -40; o.place();
+          if (u >= 1) { job.ready = true; job.phase = 'turn'; sub = o.smoothTo((mover.x < o.x ? -1 : 1) * 30, {}, 200); }
           return true;
         }
         case 'turn': if (sub.tick(now)) return true; job.phase = 'wait'; p0 = now; return true;
-        case 'wait': {                                                    // 撿完（或放棄）才回去
+        case 'wait': {                                                    // 撿完（或放棄）才結束；往後退的才跳回地面線
           const busy = opt.busy ? opt.busy() : mover.job && mover.job.name === 'fetch' && S.actors.has(mover.id);
           if (busy && now - p0 < 25000) return true;
+          if (side != null) { sub = o.smoothTo(-15, {}, 200); job.phase = 'end'; return true; }
           job.phase = 'back'; p0 = now; x0 = o.x; d0 = o.depth; return true;
         }
         case 'back': {                                                    // 跳回地面線
           const u = Math.min(1, (now - p0) / HOP), e = EASE.io(u);
           o.gaitFrame('hop', -hopDir, u);
           o.depth = d0 * (1 - e); o.place();
-          if (u >= 1) { o.depth = 0; o.zBoost = 0; o.place(); sub = o.turner(-15, 200); job.phase = 'end'; }
+          if (u >= 1) { o.depth = 0; o.zBoost = 0; o.place(); sub = o.smoothTo(-15, {}, 200); job.phase = 'end'; }
           return true;
         }
         case 'end': return sub.tick(now);
@@ -360,7 +475,7 @@
   // =====================================================================================
   let ovT = 0;
   const ovSince = new Map();
-  const OVERLAP = 60;                                           // 腳底相距小於這麼多 px（乘體型）＝身體重疊
+  const OVERLAP = 92;                                           // 腳底相距小於這麼多 px（乘體型）＝太近（禮貌距離 S.POLITE）
   S.checkOverlapSoon = function (ms = 1100) { if (!ovT) ovT = setTimeout(checkOverlap, ms); };
   function checkOverlap() {
     ovT = 0;
@@ -371,7 +486,7 @@
     for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
       const a = list[i], b = list[j];
       if (Math.abs(a.y - b.y) > 40 || F.close(a, b)) continue;
-      if (Math.abs(a.x - b.x) >= OVERLAP * (a.k + b.k) / 2 / S.SCALE) continue;
+      if (Math.abs(a.x - b.x) >= S.politeGap(a, b, OVERLAP)) continue;
       if (a.job && b.job && a.job.duet && a.job.duet === b.job.duet) continue;             // 正在一起互動：由劇本決定距離
       const key = a.id + '|' + b.id;
       seen.add(key); again = true;
@@ -382,7 +497,7 @@
       // 兩隻都閒：讓離空位比較近的那隻走
       const dist = (x) => { const sp = x.freeSpot(100); return sp ? Math.abs(sp.x - x.x) + (sp.cross ? 200 : 0) : 1e9; };
       free.sort((p, q) => dist(p) - dist(q));
-      if (free[0].stepAway(OVERLAP * 1.2)) ovSince.delete(key);
+      if (free[0].stepAway(OVERLAP)) ovSince.delete(key);
     }
     for (const k of [...ovSince.keys()]) if (!seen.has(k)) ovSince.delete(k);
     if (again) ovT = setTimeout(checkOverlap, 700);
@@ -491,7 +606,7 @@
   };
   // 跳進／跳出育兒袋的小跳（快取的跳躍畫格＋拋物線位移；袋口跟著媽媽移動，被拖著走也追得上）
   F.pouchJob = function (j, mom, way) {
-    const into = way === 'in', dur = into ? 520 : 600;
+    const into = way === 'in', dur = into ? 760 : 720;
     const pouch = () => { const p = mom.toStage(80, 150); return { x: p.x, y: p.y + 64 * j.k }; };   // 小袋鼠腳底的位置：身體在袋口
     const job = { name: 'pouch', ticks: true, joeyOk: true, endOpts: { rest: false } };
     let x0, y0, ox, oy;
@@ -502,15 +617,21 @@
       ox = x0; oy = y0;
       j.zBoost = 10200; j.place();                                                   // 畫在媽媽前面（袋口在肚子前面）：看得到牠跳上來、鑽進去
     };
+    // 鑽進去：先蹲一下（看著媽媽）→ 往上跳、抓著袋口（袋口跟著被拎起來的媽媽移動，跳的弧線也跟著）→ 頭朝下鑽進袋裡
+    // 爬出來：從袋口探出身體 → 跳下來落地（一開始只露出上半身，像是從袋口出來）
+    const CROUCH = .16, DIVE = .82;
     job.tick = (now) => {
-      const u = Math.min(1, (now - job.p0) / dur), e = EASE.io(u);
+      const u = Math.min(1, (now - job.p0) / dur);
       const tgt = into ? pouch() : { x: F.target(j, mom), y: mom.y };
       const from = into ? { x: ox, y: oy } : pouch();
       const dir = Math.sign(tgt.x - from.x) || (mom.x > j.x ? 1 : -1);
-      j.gaitFrame('hop', dir, u);
+      if (into && u < CROUCH) { j.gaitFrame('hop', dir, 0); j.x = from.x; j.y = from.y; j.place(); return true; }   // 蹲下準備跳（不動）
+      const v = into ? (u - CROUCH) / (1 - CROUCH) : u, e = EASE.io(Math.min(1, into ? v / DIVE : v));
+      j.gaitFrame('hop', dir, Math.min(1, into ? v / DIVE : v));
       j.x = from.x + (tgt.x - from.x) * e;
-      j.y = from.y + (tgt.y - from.y) * e - Math.sin(Math.PI * u) * 34 * j.k / .5;
-      j.el.style.opacity = into ? String(S.clamp(1 - .6 * (u - .7) / .3, .4, 1)) : String(S.clamp(u / .25, 0, 1));
+      const arc = Math.sin(Math.PI * Math.min(1, into ? v / DIVE : v)) * (into ? 46 : 30) * j.k / .5;
+      j.y = from.y + (tgt.y - from.y) * e - arc + (into && v > DIVE ? (v - DIVE) / (1 - DIVE) * 14 * j.k / .5 : 0);   // 最後往下鑽進袋口
+      j.el.style.opacity = into ? String(v < DIVE ? 1 : S.clamp(1 - (v - DIVE) / (1 - DIVE), 0, 1)) : String(S.clamp(u / .2, 0, 1));
       j.place();
       return u < 1;
     };
@@ -581,7 +702,7 @@
     job.tick = (now) => {
       if (mom.dragging) { F.intoPouch(j, mom); return false; }
       if (!sub && m.tick(now)) return true;
-      if (!sub) { j.y = mom.y; j.depth = 0; j.zBoost = 0; j.place(); sub = j.turner((mom.x > j.x ? 1 : -1) * 45, 200); }   // 停下：轉向媽媽
+      if (!sub) { j.y = mom.y; j.depth = 0; j.zBoost = 0; j.place(); sub = j.smoothTo((mom.x > j.x ? 1 : -1) * 45, {}, 200); }   // 停下：轉向媽媽
       return sub.tick(now);
     };
     job.interrupt = () => { j.depth = 0; j.zBoost = 0; };
