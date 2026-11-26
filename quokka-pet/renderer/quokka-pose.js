@@ -69,15 +69,24 @@
     };
     // 腳掌與尾巴用：只壓扁，不跟著身體前傾／側傾（前傾時後腳仍貼地、尾巴仍沿地面往後）
     const F = (p) => [p[0] * k, FEET_Y + (p[1] - FEET_Y) * sq, p[2] * k];
-    const H = (p) => {
+    const Hq = (p, pitch) => {
       // 頭放大時口鼻（z>14 的部分）不跟著拉長
       let q = hs === 1 ? p : [NECK[0] + (p[0] - NECK[0]) * hs, NECK[1] + (p[1] - NECK[1]) * hs, NECK[2] + (Math.min(p[2], 14) - NECK[2]) * hs + Math.max(0, p[2] - 14)];
       if (h.roll) q = rotZ(q, h.roll, NECK);
-      if (h.pitch) q = rotX(q, h.pitch, NECK);          // 正＝低頭（口鼻往下）
+      if (pitch) q = rotX(q, pitch, NECK);              // 正＝低頭（口鼻往下）
       if (h.yaw) q = rotY(q, h.yaw, NECK);
-      return B(q, 1);
+      return q;
     };
-    return { B, H, F, sq, k, yaw: h.yaw || 0, hs, lean, leanAt: (y) => l1 + l2 * wUp(y), pitch: (h.pitch || 0) + lean };
+    const H = (p) => B(Hq(p, h.pitch || 0), 1);
+    // 只轉不壓：和 B 一樣的前傾／側傾，但不做 sq 的壓扁拉長（帽子用：剛體，蹲下時不會變寬變扁）
+    const pivR = rotX(WAIST, l1, FEET);
+    const R = (q) => { if (l1) q = rotX(q, l1, FEET); if (l2) q = rotX(q, l2, pivR); if (pose.roll) q = rotZ(q, pose.roll, FEET); return q; };
+    // 帽子：位置跟著頭（c＝頭的中心，照 H 算），形狀只跟著旋轉（dPitch＝正面時少轉的點頭角度）、跟著頭的放大倍率
+    const HA = (p, c, dPitch = 0) => {
+      const pc = H(c), ap = (h.pitch || 0) - dPitch, rc = R(Hq(c, ap)), rp = R(Hq(p, ap));
+      return [pc[0] + rp[0] - rc[0], pc[1] + rp[1] - rc[1], pc[2] + rp[2] - rc[2]];
+    };
+    return { B, H, HA, F, sq, k, yaw: h.yaw || 0, hs, lean, leanAt: (y) => l1 + l2 * wUp(y), pitch: (h.pitch || 0) + lean };
   }
 
   // ---- 手臂：固定長度的上臂＋前臂（兩段骨架反向運動學），手肘自然往外下方彎；目標太遠就伸直（最多拉長 12%）
@@ -415,8 +424,13 @@
 
     // 飾品：全部在頭部／身體的 3D 座標裡定位，前後遮擋用頭部本身的座標判斷（見 quokka-acc.js）
     const AC = ACC();
+    // 帽子用的投影：正面看時，點頭／前傾超過 ±12° 的部分不再讓帽子往前翻（頭本身是 2D 橢圓、看不出那麼大的翻轉，
+    // 帽子照 3D 翻過去會整片帽頂朝向觀者、看起來突然變大）；側面看時照常轉（那時是畫面內的旋轉）
+    const hatC = (parts.find((p) => p[0] === 'head') || ['head', 0, 45, 3]).slice(1, 4);
+    const tot = T.pitch, hatPitch = tot - (tot - clamp(tot, -12, 12)) * aC;
+    const PHhat = (p) => P(T.HA(p, hatC, tot - hatPitch));
     const accL = AC ? AC.draw(AC.resolve(pose.accessory, tr), {
-      id, th, PH, PB, hs: T.hs,
+      id, th, PH, PB, PHhat, hs: T.hs,
       head: parts.filter((p) => HEAD.has(p[0])).map((p) => p.slice(1)),
       body: parts.filter((p) => !HEAD.has(p[0])).map((p) => p.slice(1))
     }) : { back: [], ear: [], front: [], top: [], earsOver: false };

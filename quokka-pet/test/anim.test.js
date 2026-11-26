@@ -279,3 +279,29 @@ test('排球撿回來：說「撿回來了」那一段（homeHug）球一直抱�
   assert.strictEqual(c.th, d.th, '說完 → 放到腳邊：角度接得上');
   assert.deepStrictEqual(c.pose.arms.L.hand, d.pose.arms.L.hand, '說完 → 放到腳邊：手的位置接得上');
 });
+
+test('帽子：同一頂帽子在站、蹲、前傾放球、抬頭、正面、坐著抱球時，畫面上的大小一致、不會整片翻過來', () => {
+  const AC = require('../renderer/quokka-acc.js'), F = A.FETCH2;
+  const orig = AC.draw;
+  let ctx = null;
+  AC.draw = (list, c) => { ctx = c; return orig(list, c); };
+  try {
+    // 帽緣：頭部座標裡頭頂上方一圈（半徑 30）投影到畫面上的寬和高
+    const brim = (th, pose) => {
+      ctx = null; Q.render(th, 'hat', { ...pose, props: [], accessory: 'straw' });
+      assert.ok(ctx && ctx.PHhat, '繪製時有傳帽子專用的投影');
+      const xs = [], ys = [];
+      for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2, q = ctx.PHhat([30 * Math.sin(a), 12, 3 + 30 * Math.cos(a)]); xs.push(q.X); ys.push(q.Y); }
+      return { w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+    };
+    const poses = [['站', -15, {}], ['正面', 0, {}], ['蹲（sq .82）', -15, { sq: .82 }], ['伸展（sq 1.08）', -15, { sq: 1.08 }], ['坐著抱球', F.homeHug(1).th, F.homeHug(1).pose],
+      ['彎腰放球', F.homeV(.2).th, F.homeV(.2).pose], ['拍球', F.homeV(.6).th, F.homeV(.6).pose], ['抬頭看球', -20, { head: { pitch: -32 } }], ['低頭', -10, { head: { pitch: 24 }, lean: 10 }]];
+    const ref = brim(-15, {});
+    for (const [name, th, pose] of poses) {
+      const b = brim(th, pose);
+      assert.ok(Math.abs(b.w / ref.w - 1) < .06, `${name}：帽寬 ${b.w.toFixed(1)}（站姿 ${ref.w.toFixed(1)}）差超過 6%`);
+      assert.ok(b.h / b.w < .42, `${name}：帽緣看起來翻過來了（高／寬＝${(b.h / b.w).toFixed(2)}）`);
+      assert.ok(Math.abs(b.h - ref.h) < 8, `${name}：帽緣高度 ${b.h.toFixed(1)} 和站姿 ${ref.h.toFixed(1)} 差太多`);
+    }
+  } finally { AC.draw = orig; }
+});

@@ -552,6 +552,7 @@
 
   const DRAW = { band, bow, flower, straw, beanie, glasses, scarf, bandana, collar, wreath, hardhat, beret };
   const BODY_TYPES = new Set(['scarf', 'bandana', 'collar']);
+  const HAT_TYPES = new Set(['straw', 'beanie', 'hardhat', 'beret', 'wreath']);
 
   // 規格整理：pose.accessory／traits.accessory 可以是字串、物件、陣列或 { type, color, extra }；
   // 沒有資料時預設頭帶（舊存檔）；'none'／false／[] 表示不戴
@@ -577,12 +578,14 @@
     if (ctx.head && ctx.head[0]) HE = ctx.head[0];
     if (!list || !list.length) return L;
     const H = space(ctx.PH, ctx.head), B = space(ctx.PB, ctx.body);
+    // 帽子類：用剛體的投影（不跟著蹲／伸壓扁拉長、正面不過度前翻），任何姿勢下大小和畫法都一樣
+    const Hh = ctx.PHhat ? space(ctx.PHhat, ctx.head) : H;
     const c2 = { hs: 1, ...ctx };
     // 帽子類先畫、頸部再畫；同一層內依清單順序
     list.forEach((a) => {
       const def = TYPES[a.type], col = def.color;
       const sub = { back: [], ear: [], front: [], overEars: [], top: [], earsOver: false };
-      DRAW[a.type](BODY_TYPES.has(a.type) ? B : H, sub, c2, col);
+      DRAW[a.type](BODY_TYPES.has(a.type) ? B : HAT_TYPES.has(a.type) ? Hh : H, sub, c2, col);
       const wrap = (s) => (a.color ? `<g style="--acc:${a.color}">${s}</g>` : s);
       ['back', 'front', 'overEars', 'top'].forEach((k) => { const s = sub[k].join(''); if (s.trim()) L[k].push(wrap(s)); });
       sub.ear.forEach((e) => L.ear.push({ z: e.z, svg: wrap(e.svg) }));
