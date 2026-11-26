@@ -68,11 +68,11 @@ test('地面高度差超過 40 px 不配對；剛好 40 可以', () => {
   assert.ok(runRounds(w, 30).length > 0);
 });
 
-test('距離超過 700 px 不配對', () => {
+test('距離超過 1000 px 不配對', () => {
   const w = setup([mk('a'), mk('b')]);
-  w.pos.b.x = w.pos.a.x + 701;
+  w.pos.b.x = w.pos.a.x + 1001;
   assert.equal(runRounds(w, 30).length, 0);
-  w.pos.b.x = w.pos.a.x + 690;
+  w.pos.b.x = w.pos.a.x + 990;
   assert.ok(runRounds(w, 30).length > 0);
 });
 
@@ -113,15 +113,16 @@ test('情侶專屬互動只給情侶；情侶也會用到情侶互動', () => {
   assert.ok(coupleTypes > 0);
 });
 
-test('依個性選種類：慵懶的常並排曬太陽，愛社交又膽大的常碰鼻／擊掌／羽球', () => {
+test('依個性選種類：慵懶的常並排曬太陽，愛社交又膽大的常碰鼻／擊掌／打球／追逐；誰都常打球', () => {
   const lazy = setup([mk('a', 'male', { activity: 0.05, sociability: 0.6, boldness: 0.5 }), mk('b', 'female', { activity: 0.1, sociability: 0.6, boldness: 0.5 })]);
   const lt = runRounds(lazy, 300).map((j) => j.type);
   assert.ok(lt.filter((t) => t === 'sunbathe').length > lt.length * 0.3);
-  assert.ok(!lt.includes('chase'));
+  assert.ok(lt.filter((t) => t === 'chase').length < lt.length * 0.05);
+  assert.ok(lt.filter((t) => ['badminton', 'volleyball', 'basketball'].includes(t)).length > lt.length * 0.1);   // 慵懶的也會打球
   const bold = setup([mk('a', 'male', { activity: 0.8 }), mk('b', 'female', { activity: 0.8 })]);
   const bt = runRounds(bold, 300).map((j) => j.type);
-  const n = bt.filter((t) => ['nose', 'paw', 'badminton', 'chase'].includes(t)).length;
-  assert.ok(n > bt.length * 0.5);
+  const n = bt.filter((t) => ['nose', 'paw', 'badminton', 'volleyball', 'basketball', 'chase'].includes(t)).length;
+  assert.ok(n > bt.length * 0.6);
   assert.ok(bt.filter((t) => t === 'sunbathe').length < bt.length * 0.1);
 });
 
@@ -148,7 +149,7 @@ test('性別不影響社交主動性：只換性別，配對與種類完全一�
   const build = (flip) => {
     seedN = 9000;
     const qs = ['a', 'b', 'c', 'd', 'e'].map((id, i) => mk(id, (i % 2 === 0) !== flip ? 'male' : 'female', { initiative: 0.2 + i * 0.15, sociability: 0.3 + i * 0.1, boldness: 0.5 }));
-    const w = setup(qs, { seed: 77 });
+    const w = setup(qs, { seed: 77, constants: { maxPerMinute: Infinity } });   // 時鐘不動：關掉每分鐘上限
     w.pos.e.x = 300;
     return runRounds(w, 200).map((j) => `${j.a}>${j.b}:${j.type}`);
   };
@@ -172,25 +173,25 @@ test('膽小的對象先觀察，延後一輪', () => {
   assert.ok(w.started.length > 0);
 });
 
-test('下一次 tick 延遲 1–2 分鐘，越愛社交越短', () => {
+test('下一次 tick 延遲 15–30 秒，越愛社交越短', () => {
   const social = setup([mk('a', 'male', { sociability: 1 }), mk('b', 'male', { sociability: 1 })]);
   const shy = setup([mk('a', 'male', { sociability: 0, initiative: 0 }), mk('b', 'male', { sociability: 0, initiative: 0 })]);
   for (const w of [social, shy]) w.pos.b.x = w.pos.a.x + 600;          // 不在身邊（250 px 以外）
   let s1 = 0, s2 = 0;
   for (let i = 0; i < 50; i++) {
     const d1 = social.S.tick(), d2 = shy.S.tick();
-    for (const d of [d1, d2]) assert.ok(d >= 60000 && d <= 120000, `delay ${d}`);
+    for (const d of [d1, d2]) assert.ok(d >= 15000 && d <= 30000, `delay ${d}`);
     s1 += d1; s2 += d2;
     for (const j of social.S.activePairs()) social.S.done(j.pairId);
   }
   assert.ok(s1 < s2);
 });
 
-test('同伴在身邊（250 px 內）：下一次檢查提早到 30–60 秒', () => {
+test('同伴在身邊（250 px 內）：下一次檢查提早一半（7.5–15 秒）', () => {
   const w = setup([mk('a', 'male', { initiative: 0 }), mk('b', 'male', { initiative: 0 })]);   // 不主動：互動不會開始，兩隻一直閒著
-  for (let i = 0; i < 30; i++) { const d = w.S.tick(); assert.ok(d >= 30000 && d <= 60000, `delay ${d}`); }
+  for (let i = 0; i < 30; i++) { const d = w.S.tick(); assert.ok(d >= 7500 && d <= 15000, `delay ${d}`); }
   w.pos.b.x = w.pos.a.x + 600;
-  for (let i = 0; i < 30; i++) { const d = w.S.tick(); assert.ok(d >= 60000 && d <= 120000, `delay ${d}`); }
+  for (let i = 0; i < 30; i++) { const d = w.S.tick(); assert.ok(d >= 15000 && d <= 30000, `delay ${d}`); }
 });
 
 test('同伴在身邊：比距離遠時更常發起互動', () => {
@@ -205,6 +206,21 @@ test('同伴在身邊：比距離遠時更常發起互動', () => {
   };
   const near = count(150), far = count(600);
   assert.ok(near > far * 1.4, `near ${near} far ${far}`);
+});
+
+test('保底：很害羞（不主動）也會在 40 秒內開始一次互動；下一次檢查準時回來', () => {
+  const w = setup([mk('a', 'male', { initiative: 0, sociability: 0, boldness: 0.1 }), mk('b', 'female', { initiative: 0, sociability: 0, boldness: 0.1 })]);
+  w.pos.b.x = w.pos.a.x + 600;
+  assert.equal(runRounds(w, 5).length, 0);                // 時間還沒到：不發起
+  w.advance(30000);
+  const d = w.S.tick();
+  assert.ok(d <= 10000, `delay ${d}`);                     // 保底快到了：10 秒內回來
+  w.advance(d);
+  w.S.tick();
+  assert.equal(w.started.length, 1);                       // 到了 40 秒：一定開始一次
+  for (const j of w.S.activePairs()) w.S.done(j.pairId);
+  w.S.tick();
+  assert.equal(w.started.length, 1);                       // 剛開始過：不會馬上再保底
 });
 
 test('done：一起完成加好感；abort：工作反應 +1、響鈴與拖曳不變', () => {
@@ -256,4 +272,45 @@ test('刪除：先中止互動；散步經過 +1 每天一次', () => {
   w2.advance(DAY_MS);
   w2.S.passBy('a', 'b');
   assert.equal(w2.romance.relation('a', 'b').affinity, 2);
+});
+
+// 模擬：照主行程的排程方式跑 30 分鐘（每次 tick 回傳下一次延遲；互動 6–20 秒後完成），量每個 60 秒區間開始幾次
+function simulate(qs, minutes, seed) {
+  const w = setup(qs, { seed });
+  const rnd = seeded(seed + 99);
+  const ends = [];                                         // [時間, pairId]
+  let t = 0, nextTick = 15000;
+  const starts = [];
+  w.S._onStartTimes = starts;
+  const total = minutes * 60000;
+  while (t < total) {
+    const nextEnd = ends.length ? Math.min(...ends.map((e) => e[0])) : Infinity;
+    const step = Math.min(nextTick, nextEnd) - t;
+    w.advance(step); t += step;
+    for (const e of ends.filter((e) => e[0] <= t)) { w.S.done(e[1]); ends.splice(ends.indexOf(e), 1); }
+    if (t >= nextTick) {
+      const before = w.started.length;
+      nextTick = t + w.S.tick();
+      for (const j of w.started.slice(before)) { starts.push(t); ends.push([t + 6000 + rnd() * 14000, j.pairId]); }
+    }
+  }
+  return starts;
+}
+const perWindow = (starts, minutes) => { const out = []; for (let s = 60000; s + 60000 <= minutes * 60000; s += 1000) out.push(starts.filter((x) => x >= s && x < s + 60000).length); return out; };
+
+test('頻率：害羞的 4 隻（像使用者的設定）每 60 秒至少 1 次、最多 10 次', () => {
+  for (const seed of [1, 2, 3]) {
+    const qs = [mk('a', 'male', { sociability: 0.14, initiative: 0.14, boldness: 0.48, activity: 0.5 }), mk('b', 'male', { sociability: 0.06, initiative: 0.05, boldness: 0.3, activity: 0.23 }),
+      mk('c', 'female', { sociability: 0.56, initiative: 0.5, boldness: 0.27, activity: 0.14 }), mk('d', 'female', { sociability: 0.36, initiative: 0.44, boldness: 0.95, activity: 0.56 })];
+    const win = perWindow(simulate(qs, 30, seed), 30);
+    assert.ok(Math.min(...win) >= 1, `seed ${seed} min ${Math.min(...win)}`);
+    assert.ok(Math.max(...win) <= 10, `seed ${seed} max ${Math.max(...win)}`);
+  }
+});
+
+test('頻率：10 隻都很愛社交也不超過每 60 秒 10 次', () => {
+  const qs = Array.from({ length: 10 }, (_, i) => mk('q' + i, i % 2 ? 'female' : 'male'));
+  const win = perWindow(simulate(qs, 30, 5), 30);
+  assert.ok(Math.max(...win) <= 10, `max ${Math.max(...win)}`);
+  assert.ok(Math.min(...win) >= 1);
 });

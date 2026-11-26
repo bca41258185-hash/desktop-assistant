@@ -705,7 +705,7 @@ function start() {
   boot('資料夾', () => { data.folders.forEach((f) => boot('資料夾 ' + f.path, () => watchFolder(f))); folderWatch.startLoop(); });
   boot('股價', () => { syncWatchlist(); stocks.start(); });
   try { romance.refreshAges(); romance.dailyDecay(); sweepReminders(); } catch (e) {}
-  scheduleSocial(30000);               // 開機 30 秒後開始安排互動
+  scheduleSocial(15000);               // 開機 15 秒後開始安排互動
   app.on('before-quit', () => { app.isQuitting = true; clearTimeout(socialTimer); clearTimeout(affTimer); stocks.stop(); clock.stop(); folderWatch.stop(); reminderNotes.flush(); posSaver.flush(); store.saveNow(); });
   return { store, stage, data, showPanel, unhide, stocks, quotes, layers, positions, folderWatch, posSaver, perf };
 }

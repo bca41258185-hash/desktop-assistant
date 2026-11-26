@@ -4,15 +4,17 @@
 (function () {
   const MIN_MS = 60 * 1000;
   const DEFAULTS = {
-    maxDistance: 700,            // 社交候選範圍
+    maxDistance: 1000,           // 社交候選範圍
     groundDiff: 40,              // 同一地面高度差
-    minDelayMs: 1 * MIN_MS,      // 每 1–2 分鐘檢查一次
-    maxDelayMs: 2 * MIN_MS,
+    minDelayMs: 15 * 1000,       // 每 15–30 秒檢查一次
+    maxDelayMs: 30 * 1000,
+    maxPerMinute: 10,            // 上限：任何 60 秒內最多開始 10 次互動
+    guaranteeMs: 40 * 1000,      // 保底：超過 40 秒沒有任何互動開始，就挑最合適的一對直接開始（不看主動性、不用對方答應）
     maxActive: 3,                // 同時進行的互動上限（一對算 1 個名額，另可用 freeSlots() 限制）
     maxStartsPerTick: 2,         // 每次 tick 最多發起幾對
     nearDistance: 250,           // 同伴在身邊（約兩個身長內）
     nearMult: 2,                 // 同伴在身邊：發起機率與被挑中的權重 ×2
-    nearDelayK: 0.5,             // 同伴在身邊：下一次檢查提早一半（30–60 秒）
+    nearDelayK: 0.5,             // 同伴在身邊：下一次檢查提早一半（8–15 秒）
     friendMult: 1.5,             // 好朋友互動頻率 ×1.5
     coupleMult: 2,               // 情侶互動頻率加倍
     dadNoseChance: 0.35,         // 爸爸每輪過來碰鼻的機率
@@ -68,6 +70,8 @@
     const busy = new Map();            // qid → pairId
     const watching = new Set();        // 膽小的「先觀察」：pairKey，下一輪才答應
     let seq = 0;
+    let lastStartAt = now();           // 最近一次有互動開始的時間（保底用）
+    let recentStarts = [];             // 最近 60 秒內開始的時間（上限用）
 
     const quokkas = () => (getQuokkas ? getQuokkas() : []) || [];
     const byId = (id) => quokkas().find((q) => q.id === id) || null;
@@ -78,7 +82,7 @@
     const posOf = (qid) => (getPos ? getPos(qid) : null);
     const layerOf = (qid) => layerNum(getLayer ? getLayer(qid) : 8);
 
-    // 雙方位置條件：同螢幕、同一地面（高度差 ≤ 40）、距離 ≤ 700
+    // 雙方位置條件：同螢幕、同一地面（高度差 ≤ 40）、距離 ≤ 1000
     function nearEnough(aId, bId) {
       const pa = posOf(aId), pb = posOf(bId);
       if (!pa || !pb) return false;
@@ -120,11 +124,12 @@
         { type: 'leaf', w: 1.0 },
         { type: 'nose', w: 0.2 + 1.6 * outgoing },
         { type: 'paw', w: 0.1 + 1.4 * outgoing },
-        { type: 'badminton', w: (0.05 + 1.2 * outgoing) * (act > 0.4 ? 1 : 0.3) * (likes('badminton') ? 2 : 1) },
+        // 打球、追逐：就算不太外向也常玩（看得到的熱鬧互動），外向、活潑、最愛那種球時更常
+        { type: 'badminton', w: (0.7 + 1.2 * outgoing) * (act > 0.4 ? 1 : 0.6) * (likes('badminton') ? 2 : 1) },
         // 一起打排球（互相墊球）、打籃球（傳球、投籃）：其中一隻最愛那種球時更常出現
-        { type: 'volleyball', w: (0.05 + 1.0 * outgoing) * (act > 0.4 ? 1 : 0.3) * (likes('volleyball') ? 2.2 : 1) },
-        { type: 'basketball', w: (0.05 + 1.0 * outgoing) * (act > 0.4 ? 1 : 0.3) * (likes('basketball') ? 2.2 : 1) },
-        { type: 'chase', w: (0.05 + outgoing) * clamp((act - 0.35) * 2.5, 0, 1.2) },
+        { type: 'volleyball', w: (0.7 + 1.0 * outgoing) * (act > 0.4 ? 1 : 0.6) * (likes('volleyball') ? 2.2 : 1) },
+        { type: 'basketball', w: (0.7 + 1.0 * outgoing) * (act > 0.4 ? 1 : 0.6) * (likes('basketball') ? 2.2 : 1) },
+        { type: 'chase', w: (0.3 + outgoing) * clamp((act - 0.2) * 2.5, 0.3, 1.2) },
         { type: 'sunbathe', w: 0.1 + 2.5 * lazy }
       ];
       if (isCouple(a.id, b.id)) {
@@ -146,6 +151,7 @@
       const pairId = 's' + (++seq).toString(36) + '-' + now().toString(36);
       const job = { pairId, a: a.id, b: b.id, type, initiator: a.id, startedAt: now(), ...(extra || {}) };
       active.set(pairId, job);
+      lastStartAt = now(); recentStarts.push(lastStartAt);
       busy.set(a.id, pairId); busy.set(b.id, pairId);
       watching.delete(pairKey(a.id, b.id));
       if (onStart) onStart({ ...job });
@@ -164,11 +170,12 @@
       return null;
     }
 
-    // 主排程：回傳下一次 tick 的建議延遲（毫秒，1–2 分鐘，越愛社交越常；同伴在身邊時 30–60 秒）
+    // 主排程：回傳下一次 tick 的建議延遲（毫秒，15–30 秒，越愛社交越常；同伴在身邊時減半；保底 40 秒內一定有一次互動開始）
     function tick() {
       const list = quokkas();
       const started = [];
-      let room = Math.min(slotsLeft(), C.maxStartsPerTick);
+      recentStarts = recentStarts.filter((t) => now() - t < 60000);
+      let room = Math.min(slotsLeft(), C.maxStartsPerTick, C.maxPerMinute - recentStarts.length);
       if (room > 0) {
         const fam = tryDadNose(list);
         if (fam) { started.push(fam); room--; }
@@ -201,15 +208,35 @@
         started.push(start(a, b, chooseType(a, b)));
         room--;
       }
+      // 保底：太久沒有互動（個性都很害羞時也一樣），挑最合適的一對直接開始
+      if (!started.length && room > 0 && now() - lastStartAt >= C.guaranteeMs) {
+        const g = guaranteedPair(list);
+        if (g) started.push(start(g.a, g.b, chooseType(g.a, g.b)));
+      }
       // 下一次延遲：大家越愛社交越短
       const others = list.filter((q) => !isFollowJoey(q) && q.stage !== 'pouch');
       const soc = others.length ? others.reduce((s, q) => s + P(q).sociability, 0) / others.length : 0.5;
-      const jitter = (random() - 0.5) * 40 * 1000;
+      const jitter = (random() - 0.5) * 0.4 * (C.maxDelayMs - C.minDelayMs);
       let delay = clamp(lerp(C.maxDelayMs, C.minDelayMs, soc) + jitter, C.minDelayMs, C.maxDelayMs);
       // 有兩隻閒著的同伴就在身邊：提早再檢查
       const idle = others.filter(available);
       if (idle.some((a, i) => idle.some((b, j) => j > i && besides(a.id, b.id)))) delay *= C.nearDelayK;
+      // 保底時間快到了：準時回來檢查
+      if (idle.length >= 2) delay = Math.min(delay, Math.max(2000, C.guaranteeMs - (now() - lastStartAt)));
       return Math.round(delay);
+    }
+    // 保底的那一對：都閒著、距離夠近；好感越高、越近越優先（同分隨機）。主動性高的那隻當發起者
+    function guaranteedPair(list) {
+      const ok = list.filter((q) => !isFollowJoey(q) && available(q));
+      let best = null, top = -Infinity;
+      for (let i = 0; i < ok.length; i++) for (let j = i + 1; j < ok.length; j++) {
+        const a = ok[i], b = ok[j];
+        if (!nearEnough(a.id, b.id)) continue;
+        const r = relOf(a.id, b.id), pa = posOf(a.id), pb = posOf(b.id);
+        const score = ((r && r.affinity) || 0) + (besides(a.id, b.id) ? 30 : 0) - Math.abs(pa.x - pb.x) / 50 + random() * 10;
+        if (score > top) { top = score; best = P(a).initiative >= P(b).initiative ? { a, b } : { a: b, b: a }; }
+      }
+      return best;
     }
 
     function finish(pairId) {
