@@ -454,6 +454,13 @@
       const e = EASE.io((u - .5) / .5);
       return { th: lerp(-30, -42, e), pose: { ...mixP(P_SIT, { sq: .92, lean: 4, eyes: 'focus', mouth: 'smile', head: { pitch: -14 }, look: [-1.5, -2], arms: { R: { hand: [7, 108, 40] }, L: { hand: [-7, 108, 40] } } }, e), props: [ballHeld('bball', mix([0, -4], [-2, -4], e)), HOOP_PROP] } };
     },
+    // 到家（排球）：接住之後抱著球左右晃、開心說話（說「撿回來了！」的時候球在手上）→ 最後回到抱球坐好（接 homeV）
+    homeHug: (u) => {
+      const sw = Math.sin(Math.PI * 2 * clamp(u / .85, 0, 1)) * (1 - clamp((u - .7) / .3, 0, 1)), e = EASE.io(clamp((u - .8) / .2, 0, 1));
+      return { th: lerp(-30, -20, EASE.io(u)), pose: { ...P_SIT, mouth: u < .8 ? 'open' : 'smile', roll: 4 * sw, head: { roll: 6 * sw, pitch: -4 * (1 - e) }, sq: .96 + .02 * Math.abs(sw),
+        arms: { L: { hand: [-8, 112 - 2 * Math.abs(sw), 40] }, R: { hand: [8, 114 - 2 * Math.abs(sw), 40] } },
+        props: [ballHeld('vball', [0, -4 - 2 * Math.abs(sw)]), ...(u > .3 && u < .9 ? [{ t: 'fx', kind: 'heart', at: [124, 70 - (u - .3) * 40], s: .7 }] : [])] } };
+    },
     // 8 到家（排球）：輕拋一下接住 → 把球放在腳邊（之後球由舞台畫在腳邊）→ 伸爪拍一拍、冒小愛心
     homeV: (u) => {
       if (u < .2) {

@@ -69,7 +69,7 @@
   // ---- 一隻庫卡 ------------------------------------------------------------------
   class Actor {
     constructor(q) {
-      this.uid = ++uidSeq;
+      this.uid = ++uidSeq; this.frameGen = 0; this.pendingSrc = null; this.liveShown = false;
       this.id = q.id; this.name = S.str(q.name, 12);
       this.mode = S.mode === 'hidden' ? 'hidden' : 'awake';
       this.job = null; this.queue = []; this.alerts = []; this.ball = null;
@@ -148,11 +148,19 @@
     }
     // SVG 座標 → 舞台座標（腳底 (80,183) 對到 (x, y)）
     toStage(sx, sy) { return { x: this.x + (sx - S.FOOT.x) * this.k, y: this.y + (sy - S.FOOT.y) * this.k }; }
+    // 換畫格：新畫的格子（還沒解碼）先在背景解碼好才換上去；這段時間繼續顯示上一格（或即時 SVG），不會有空白的一格
     setFrame(key, th, pose, wide = false) {
       if (this.liveOn) this.hideLive();
-      const u = S.frameURL(this, key, th, pose, wide);
-      if (wide !== !!this.wideImg) { this.wideImg = wide; this.img.classList.toggle('wide', wide); }
-      if (this.img.src !== u) this.img.src = u;
+      const u = S.frameURL(this, key, th, pose, wide), gen = ++this.frameGen;
+      const apply = () => {
+        if (gen !== this.frameGen) return;
+        if (wide !== !!this.wideImg) { this.wideImg = wide; this.img.classList.toggle('wide', wide); }
+        if (this.img.src !== u) this.img.src = u;
+        this.pendingSrc = null; this.flushLive();
+      };
+      if (this.img.src === u || S.frameReady(u)) { apply(); return; }
+      this.pendingSrc = u;
+      S.decodeFrame(u).then(apply);
     }
     // 依時間取第幾格（快取用），回傳 [格號, 取樣點]
     static q(u, n) { const f = Math.min(n - 1, Math.floor(u * n)); return [f, (f + .5) / n]; }
@@ -206,12 +214,15 @@
     }
     // 即時 SVG（只有播放動作的這隻、只在播的時候）
     drawLive(th, pose) {
-      if (!this.liveOn) { this.liveOn = true; this.el.classList.add('live-on'); }
+      this.liveOn = true; this.frameGen++; this.pendingSrc = null;                 // 取消還在解碼、等著換上去的畫格
+      if (!this.liveShown) { this.liveShown = true; this.el.classList.add('live-on'); }
       // 常駐層（呼吸、眨眼、耳朵抖）也疊到即時繪製的動作上
       if (ANIM.ambient && !pose.noAmbient) { const am = ANIM.ambient(performance.now() / 1000, this.seed, { still: false }); pose = ANIM.applyAmbient(pose, { ...am, look: [0, 0], head: { yaw: 0, pitch: 0 } }); }
       this.live.innerHTML = S.svgFor(this, th, 'L' + this.uid, pose, S.VB_STR);
     }
-    hideLive() { if (!this.liveOn) return; this.liveOn = false; this.live.innerHTML = ''; this.el.classList.remove('live-on'); }
+    // 收掉即時 SVG：狀態馬上改；畫面上等下一張圖解碼好再換（同一個呼叫流程裡接著 setFrame 也一樣），不會空白一格
+    hideLive() { if (!this.liveOn) return; this.liveOn = false; queueMicrotask(() => this.flushLive()); }
+    flushLive() { if (this.liveOn || !this.liveShown || this.pendingSrc) return; this.liveShown = false; this.live.innerHTML = ''; this.el.classList.remove('live-on'); }
     say(text, opts) { this.bubble.say(text, opts); }
 
     // ---- 狀態機核心 ----------------------------------------------------------------
@@ -544,7 +555,7 @@
       const job = { name: o.name || 'walk', ticks: true, phase: 'glance', dir, target, step: GINFO('hop').stride * a.k };
       const gait = o.gait || a.pickGait(Math.abs(target - a.x));
       const pauseAt = !o.noPause && Math.abs(target - a.x) > 110 && Math.random() < .4 ? a.x + (target - a.x) * (.35 + Math.random() * .3) : null;
-      const leg = (tx) => a.mover(tx, { gait, ignore: o.ignore, check: (nx, d) => !a.blocked(nx, d, o.ignore), onStep: () => a.checkPass() });
+      const leg = (tx) => a.mover(tx, { gait, ignore: o.ignore, lane: o.lane || null, check: (nx, d) => !a.blocked(nx, d, o.ignore), onStep: () => a.checkPass() });
       let m = null, sub = null, p0 = 0;
       job.start = (now) => { p0 = now; a.lookBucket = dir < 0 ? 'L' : 'R'; a.showRest(); a.lookBucket = null; };
       job.tick = (now) => {
@@ -569,8 +580,8 @@
         }
         return false;
       };
-      job.interrupt = () => { a.hideLive(); a.afterWalk(); };
-      job.end = () => { a.afterWalk(); };
+      job.interrupt = () => { a.hideLive(); if (o.lane) { a.depth = 0; a.zBoost = 0; } a.afterWalk(); };
+      job.end = () => { if (o.lane) { a.depth = 0; a.zBoost = 0; } a.afterWalk(); };
       return job;
     }
     // 待機小動作（L6）：依個性從小動畫庫挑一個
@@ -704,7 +715,7 @@
       const standX = ball.x - dir * NOSE;
       const P = {                                                        // 各段長度（毫秒）與格數
         discover: [Math.max(600, 250 + (1 - a.act) * 1200), 6], dash: [hopMs, 8], brake: [300, 4], sniff: [600, 8], scoop: [750, 10],
-        sit: [650, 8], turnHome: [400, 6], carry: [GINFO('hop').dur * 1000 * .95, 8], homeToss: [700, 10], turnFront: [340, 6], wait: [1, 1], waitHome: [1, 1], drop: [400, 5], nudge: [600, 8], rescoop: [900, 8], homeB: [1300, 6], homeV: [1600, 12], homeVNudge: [1300, 10]
+        sit: [650, 8], turnHome: [400, 6], carry: [GINFO('hop').dur * 1000 * .95, 8], homeToss: [700, 10], turnFront: [340, 6], wait: [1, 1], waitHome: [1, 1], drop: [400, 5], nudge: [600, 8], rescoop: [900, 8], homeB: [1300, 6], homeHug: [1800, 12], homeV: [1600, 12], homeVNudge: [1300, 10]
       };
       const job = { name: 'fetch', ticks: true, phase: 'discover', mode, ballX: ball.x, homeX: home };
       const go = (ph, now) => { job.phase = ph; job.p0 = now; job.x0 = a.x; };
@@ -770,7 +781,10 @@
           case 'homeToss':                                               // 把球輕拋一下再接住
             frame(ph, u, m2);
             // 一起打籃球撿回來的球：輕拋接住就收尾（不畫單人練投用的籃框）
-            if (u >= 1) { if (kind === 'bball') { job.endOpts = { line: '撿回來了！' }; job.endTh = dir > 0 ? 30 : -30; ball.remove(); return false; } go('homeV', now); }
+            if (u >= 1) {
+              if (kind === 'bball') { job.endOpts = { line: '撿回來了！' }; job.endTh = dir > 0 ? 30 : -30; ball.remove(); return false; }
+              if (F.homeHug) { a.say(ball.coop ? '撿回來了！再來一場～' : '撿到了！下次輕一點墊。', { ms: 1900 }); job.said = true; go('homeHug', now); } else go('homeV', now);   // 抱著球說，球在手上
+            }
             break;
           case 'drop':                                                   // 趴低，球放到鼻子前的地上
             frame(ph, u, mh);
@@ -794,10 +808,11 @@
             frame(ph, u, (fr) => fr);
             if (u >= 1) { job.endOpts = { line: ball.coop ? '撿回來了！' : '撿回來了！再投一次～' }; ball.remove(); return false; }
             break;
+          case 'homeHug': frame(ph, u, m2); if (u >= 1) go('homeV', now); break;
           case 'homeV': {                                                // 排球：放在腳邊、拍一拍、冒愛心，然後球淡出
             frame(ph, u, m2);
             if (ball.held && u > .2) { const p = a.toStage(dir > 0 ? 48 : 112, 170); ball.show(p.x); }
-            if (u >= 1) { ball.fade(); job.endOpts = { line: ball.coop ? '撿回來了！再來一場～' : '撿到了！下次輕一點墊。' }; job.endTh = dir > 0 ? 15 : -15; return false; }
+            if (u >= 1) { ball.fade(); job.endOpts = { line: job.said ? null : ball.coop ? '撿回來了！再來一場～' : '撿到了！下次輕一點墊。' }; job.endTh = dir > 0 ? 15 : -15; return false; }
             break;
           }
           case 'homeVNudge':
@@ -824,32 +839,53 @@
       const el = this.el;
       let down = null, clickTimer = 0, patIdx = Math.floor(Math.random() * 3);
       el.addEventListener('contextmenu', (e) => { e.preventDefault(); S.api.context(this.id); });
+      // 目前這一次按下（拖曳）的收尾函式：mouseup 遺失後再按一下、鎖定、舞台藏起來時，都要先把上一次收乾淨，
+      // 不然 window 上會多掛一組監聽、舊的拖曳永遠不會放手（舞台一直回報 drag=true，整個桌面都點不到）
+      let endDown = null;
+      this.cancelDrag = () => { if (endDown) endDown(); };
+      this.pressing = () => !!endDown;            // 鎖定、離開、舞台藏起來時強制放下（不管有沒有在按）
       el.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
         e.preventDefault();
-        down = { x: e.clientX, y: e.clientY, moved: 0, samples: [{ x: e.clientX, y: e.clientY, t: performance.now() }] };
-        const move = (ev) => {
-          if (!down) return;
-          // 按鍵其實已經放開（mouseup 在視窗外遺失）：當作放手。
-          // 視窗切換穿透時 Chromium 會補一個 buttons=0 的合成 mousemove，所以要連續 3 次、跨 80 ms 以上才算
-          if (ev.buttons === 0) { if (!down.free) down.free = { n: 0, t: performance.now() }; if (++down.free.n >= 3 && performance.now() - down.free.t > 80) { up(); return; } } else down.free = null;
-          const now = performance.now();
-          down.moved = Math.max(down.moved, Math.hypot(ev.clientX - down.x, ev.clientY - down.y));
-          down.samples.push({ x: ev.clientX, y: ev.clientY, t: now });
-          while (down.samples.length > 2 && now - down.samples[0].t > 90) down.samples.shift();
-          if (!down.drag && down.moved >= 5) down.drag = this.startDrag(down.x, down.y);
-          if (down.drag) down.drag.move(ev.clientX, ev.clientY);
-        };
-        const up = () => {
-          window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
-          const d = down; down = null;
-          if (d.drag) { const a0 = d.samples[0], b0 = d.samples[d.samples.length - 1], dt = Math.max(1, b0.t - a0.t); d.drag.release((b0.x - a0.x) / dt, (b0.y - a0.y) / dt); return; }
+        if (endDown) endDown();                                          // 上一次的 mouseup 遺失：先當作在原地放手
+        const cur = { x: e.clientX, y: e.clientY, moved: 0, samples: [{ x: e.clientX, y: e.clientY, t: performance.now() }] };
+        down = cur;
+        let closed = false;
+        const detach = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+        // 結束這一次按下：只會跑一次；放手的動作出錯也一定解除拖曳狀態
+        const finish = (asClick) => {
+          if (closed) return;
+          closed = true; detach();
+          if (endDown === finish) endDown = null;
+          if (down === cur) down = null;
+          if (cur.drag) {
+            const a0 = cur.samples[0], b0 = cur.samples[cur.samples.length - 1], dt = Math.max(1, b0.t - a0.t);
+            try { cur.drag.release(asClick ? (b0.x - a0.x) / dt : 0, asClick ? (b0.y - a0.y) / dt : 0); }
+            catch (err) { console.warn('放手出錯，強制結束拖曳', err); try { cur.drag.held = false; if (this.job === cur.drag) S.failJob(this); } catch (e2) { /* 盡量恢復 */ } this.el.classList.remove('dragging'); S.reportRects(false); }
+            return;
+          }
+          if (!asClick) return;
           // 點擊：0.25 秒內再點一次＝雙擊（開面板），否則＝摸頭
           if (clickTimer) { clearTimeout(clickTimer); clickTimer = 0; S.api.dblclick(this.id); return; }
           clickTimer = setTimeout(() => { clickTimer = 0; patIdx = (patIdx + 1) % 3; this.pat(patIdx); }, 250);
         };
+        const up = () => finish(true);
+        const move = (ev) => {
+          if (closed) return;
+          try {
+            // 按鍵其實已經放開（mouseup 在視窗外遺失）：當作放手。
+            // 視窗切換穿透時 Chromium 會補一個 buttons=0 的合成 mousemove，所以要連續 3 次、跨 80 ms 以上才算
+            if (ev.buttons === 0) { if (!cur.free) cur.free = { n: 0, t: performance.now() }; if (++cur.free.n >= 3 && performance.now() - cur.free.t > 80) { finish(true); return; } } else cur.free = null;
+            const now = performance.now();
+            cur.moved = Math.max(cur.moved, Math.hypot(ev.clientX - cur.x, ev.clientY - cur.y));
+            cur.samples.push({ x: ev.clientX, y: ev.clientY, t: now });
+            while (cur.samples.length > 2 && now - cur.samples[0].t > 90) cur.samples.shift();
+            if (!cur.drag && cur.moved >= 5) cur.drag = this.startDrag(cur.x, cur.y);
+            if (cur.drag) cur.drag.move(ev.clientX, ev.clientY);
+          } catch (err) { console.warn('拖曳出錯，強制放手', err); finish(false); }
+        };
+        endDown = finish;
         window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
-        this.cancelDrag = () => { if (!down) return; if (down.drag) up(); else { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); down = null; } };                     // 鎖定、離開、舞台藏起來時強制放下
       });
       // 長摸：游標在頭上來回移動
       let rev = [], lastDir = 0;
@@ -926,7 +962,6 @@
         end() {
           a.x = S.clamp(a.x, 44, innerWidth - 44); a.y = S.clamp(a.y, Math.min(innerHeight - 4, a.h * .8), innerHeight - 4); a.place();   // 存檔前再夾一次（甩出、被打斷都一樣）
           a.home = a.x; a.th = -15;
-          S.api.drop(a.id, Math.round(window.screenX + a.x), Math.round(window.screenY + a.y));
           S.api.savePos(a.id, { x: Math.round(a.x), y: Math.round(a.y) });
           a.nextAt = performance.now() + 8000;
           a.el.classList.remove('dragging');

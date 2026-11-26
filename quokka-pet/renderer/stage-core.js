@@ -53,9 +53,18 @@
     toPNG(entry, svg);
     while (cacheBytes > CACHE_LIMIT && cache.size) {               // 超過上限：丟掉最久沒用的
       const [ok, ov] = cache.entries().next().value;
-      URL.revokeObjectURL(ov.url); cacheBytes -= ov.bytes; cache.delete(ok);
+      URL.revokeObjectURL(ov.url); ready.delete(ov.url); cacheBytes -= ov.bytes; cache.delete(ok);
     }
     return entry.url;
+  };
+  // 已經解碼過的畫格網址（換上去不會有空白格）；新的先在背景解碼
+  const ready = new Set();
+  S.frameReady = (u) => ready.has(u);
+  S.decodeFrame = function (u) {
+    const im = new Image();
+    im.src = u;
+    const done = () => { ready.add(u); };
+    return (im.decode ? im.decode() : new Promise((r, j) => { im.onload = r; im.onerror = j; })).then(done, done);
   };
   // 畫一隻（含個體特徵、小袋鼠的大頭、媽媽肚子上的育兒袋與探頭的小袋鼠）→ 分層與手掌位置
   S.poseFor = (a, pose) => (a.hs && a.hs !== 1 && pose.headScale == null ? { ...pose, headScale: a.hs } : pose);
@@ -83,7 +92,7 @@
   S.fixDupStyle = fixDupStyle;
   // 某隻的外觀變了或被刪掉：丟掉牠的所有畫格
   S.purgeFrames = function (id) {
-    for (const [k, v] of cache) if (k.startsWith(id + '|')) { URL.revokeObjectURL(v.url); cacheBytes -= v.bytes; cache.delete(k); }
+    for (const [k, v] of cache) if (k.startsWith(id + '|')) { URL.revokeObjectURL(v.url); ready.delete(v.url); cacheBytes -= v.bytes; cache.delete(k); }
   };
   S.cacheInfo = () => ({ n: cache.size, mb: +(cacheBytes / 1048576).toFixed(1) });
 
@@ -102,9 +111,15 @@
       c.toBlob((b) => {
         if (b && cache.get(entry.key) === entry) {
           const old = entry.url, png = URL.createObjectURL(b);
-          for (const a of S.actors.values()) if (a.img.src === old) a.img.src = png;
-          URL.revokeObjectURL(old);
-          cacheBytes += b.size - entry.bytes; entry.url = png; entry.bytes = b.size;
+          // PNG 先解碼好再換（直接換 src 會有一格空白）；舊網址晚一點才釋放（可能還有一張正在等著換上去）
+          S.decodeFrame(png).then(() => {
+            if (cache.get(entry.key) !== entry) { URL.revokeObjectURL(png); return; }
+            for (const a of S.actors.values()) if (a.img.src === old) a.img.src = png;
+            cacheBytes += b.size - entry.bytes; entry.url = png; entry.bytes = b.size;
+            ready.delete(old); setTimeout(() => URL.revokeObjectURL(old), 3000);
+            setTimeout(nextPNG, 0);
+          });
+          return;
         }
         setTimeout(nextPNG, 0);
       }, 'image/png');
@@ -164,6 +179,8 @@
       if (a.rect) rects.push(a.rect);
       const br = a.bubble && a.bubble.clickRect();
       if (br) rects.push(br);
+      // 保險：拎著卻已經沒有按鍵在追蹤（監聽遺失、出錯）→ 當場放下，不讓舞台卡在「拖曳中」
+      if (a.dragging && a.pressing && !a.pressing()) { try { a.job.release(0, 0); } catch (e) { S.failJob(a); } }
       if (a.dragging) drag = true;
     }
     S.api.reportRects(rects, drag);

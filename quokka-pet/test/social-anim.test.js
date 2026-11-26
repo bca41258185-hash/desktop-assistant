@@ -93,3 +93,45 @@ test('理毛：理毛那隻的鼻子不貼到對方的耳朵（鼻尖離耳朵�
     assert.ok(min >= 4, `groom ${sa}/${sb}${flip ? ' flip' : ''}：鼻子離耳朵邊緣 ${min.toFixed(1)} 單位（${at.toFixed(2)} 秒）`);
   }
 });
+
+test('排球：球的整段路徑都不經過臉（球心離鼻尖／嘴、頭的中心都大於安全距離），擊球那一格球在手上', () => {
+  const R = 12, HEADC = [0, 40, 14];
+  const NOSE_SAFE = R + 12, HEAD_SAFE = R + 24 + 8, HAND_MAX = R + 6;        // 單位：SVG 單位（除以各自的 k）；頭的半徑約 24
+  for (const [sa, sb] of [[6, 8], [2, 9], [8, 4], [5, 11], [1, 3]]) for (const seed of [1, 2, 3, 5, 7, 9]) for (const flip of [false, true]) {
+    const { ctx, sc } = play('volleyball', sa, sb, flip, seed), I = sc.info;
+    const where = (p, key, c, P) => { const o = ctx[key], q = SOC.pt(c.th, c.pose, P, true, o.hs); return { u: (p ? ctx.d : 0) + (c.dx || 0) + (p ? -1 : 1) * (q.X - 80) * o.k, h: (183 - q.Y) * o.k }; };
+    for (let t = 0; t < sc.dur; t += 1 / 60) {
+      const b = I.ballAt(t);
+      if (!b.show || b.toss) continue;                                // 還捧在手上（道具跟著手）不算
+      const fr = sc.at(t);
+      for (const [p, key] of [[0, 'a'], [1, 'b']]) {
+        const o = ctx[key], c = fr[key];
+        for (const [P, safe, name] of [[SOC.NOSE, NOSE_SAFE, '鼻尖'], [[0, 64, 30], NOSE_SAFE, '嘴'], [HEADC, HEAD_SAFE, '頭']]) {
+          const w = where(p, key, c, P), d = Math.hypot(b.u - w.u, b.h - w.h) / o.k;
+          assert.ok(d >= safe, `${sa}/${sb} seed ${seed}${flip ? ' flip' : ''}：${t.toFixed(2)} 秒球心離 ${key} 的${name} ${d.toFixed(1)} 單位（要 ≥ ${safe}）`);
+        }
+      }
+    }
+    for (const h of I.hits) {
+      const key = h.p ? 'b' : 'a', o = ctx[key], c = sc.at(h.T)[key], H = SOC.handsOf(o, c), hand = h.kind === 'spike' ? H.L : H.mid, b = I.ballAt(h.T);
+      const d = Math.hypot(b.u - ((h.p ? ctx.d : 0) + (c.dx || 0) + (h.p ? -1 : 1) * hand.f), b.h - hand.h) / o.k;
+      assert.ok(d <= HAND_MAX, `${sa}/${sb} seed ${seed}：第 ${h.T.toFixed(2)} 秒（${h.kind}）球心離手 ${d.toFixed(1)} 單位（要 ≤ ${HAND_MAX}）`);
+    }
+  }
+});
+
+test('籃球沒進：彈出來的球整段拋物線都高過傳球那隻的頭（不穿過頭）', () => {
+  let n = 0;
+  for (const [sa, sb] of [[6, 8], [2, 9], [8, 4], [5, 11]]) for (let i = 1; i <= 60 && n < 24; i++) {
+    const seed = i * 7919 * 4111, { ctx, sc } = play('basketball', sa, sb, false, seed), I = sc.info, h = sc.handoff;
+    if (I.make || h.owner === I.shooter) continue;
+    n++;
+    const P = h.owner === 'a' ? ctx.a : ctx.b, pu = h.owner === 'a' ? 0 : ctx.d, G = 1500 * ctx.kk, top = 180 * P.k + 12 * ctx.kk;   // 頭頂含耳朵約 180 單位
+    for (let t = 0; t < 3; t += 1 / 240) {
+      const u = h.u + h.vu * t, y = h.h + h.vh * t - G * t * t / 2;
+      if (y < 12 * ctx.kk) break;
+      if (Math.abs(u - pu) < 46 * P.k + 12 * ctx.kk) assert.ok(y >= top, `${sa}/${sb} seed ${seed}：球經過傳球那隻頭上時高 ${y.toFixed(0)}，頭頂＋球半徑 ${top.toFixed(0)}`);
+    }
+  }
+  assert.ok(n >= 3, `測到 ${n} 個沒進的情況`);
+});

@@ -335,7 +335,7 @@
       const step = 42 * ctx.kk, bRuns = ctx.room.b >= step * 3 || ctx.room.b >= ctx.room.a;
       const roomRun = bRuns ? ctx.room.b : ctx.room.a, N = clamp(Math.floor((roomRun - 20) / step), 1, 4);
       const R = bRuns ? ctx.b : ctx.a, Cz = bRuns ? ctx.a : ctx.b;
-      const hopT = .36, t0 = 1.15, lag = .46, run = N * hopT, tTag = t0 + lag + run, t1 = tTag + .95, tEnd = t1 + lag + run, dur = tEnd + 2.0;
+      const hopT = .36, t0 = 1.4, lag = .46, run = N * hopT, tTag = t0 + lag + run, t1 = tTag + 1.15, tEnd = t1 + lag + run, dur = tEnd + 2.0;
       const hops = (t, start) => { const v = clamp((t - start) / hopT, 0, N), i = Math.min(N - 1, Math.floor(v)), u = v - i, g = ANIM.GAIT ? ANIM.GAIT.hop(u) : null; return { v: i + (g ? g.advance : EASE.io(u)), u, moving: v > 0 && v < N }; };
       const bow = { lean: 12, sq: .9, tailUp: .9, eyes: 'happy', mouth: 'open', arms: { L: { hand: [-8, 148, 36] }, R: { hand: [8, 148, 36] } } };
       const laugh = (e) => ({ y: -6 * Math.abs(sin(e * 7)) * Math.max(0, 1 - e), sq: 1 - .03 * sin(e * 9), eyes: 'happy', mouth: 'open', blush: 1.3, tailUp: .3 });
@@ -343,7 +343,8 @@
       const runner = (t) => {
         if (t < .55) return { ...tw({ th: TH0 }, { th: 62, pose: { eyes: 'wide', mouth: 'o', head: { pitch: -4 } } }, EASE.io(t / .55)), x: 0 };
         if (t < .85) return { th: 62, x: 0, pose: { y: -12 * sin(PI * (t - .55) / .3), eyes: 'wide', mouth: 'open', tailUp: .7, sq: 1.03 } };
-        if (t < t0) return { th: lerp(62, -90, EASE.io((t - .85) / (t0 - .85))), x: 0, pose: { eyes: 'happy', mouth: 'open', sq: .95 } };
+        // 轉身逃跑：頭先轉過去、身體再跟上（轉身的過程放慢到 0.55 秒，不會看起來像一格突然變正面）
+        if (t < t0) { const e = (t - .85) / (t0 - .85), eb = EASE.io(clamp((e - .15) / .85, 0, 1)), th = lerp(62, -90, eb), hy = clamp(lerp(62, -90, EASE.out(clamp(e / .7, 0, 1))) - th, -40, 40); return { th, x: 0, pose: { eyes: 'happy', mouth: 'open', sq: .95 - .03 * sin(PI * e), head: { yaw: hy } } }; }
         if (t < t0 + run) { const h = hops(t, t0), look = bump(t, t0 + hopT * Math.max(.6, N - 2.6), hopT * 2.2); return { th: -90, x: -h.v * step, pose: { ...HOP(h.u), eyes: 'happy', mouth: 'open', blush: 1.2, head: { yaw: 78 * look, roll: 6 * look } } }; }
         const X = -N * step;
         if (t < t0 + run + .4) { const e = (t - t0 - run) / .4; return { th: lerp(-90, 62, EASE.io(e)), x: X, pose: { eyes: 'happy', mouth: 'open', sq: lerp(.9, 1, e) } }; }
@@ -361,8 +362,8 @@
         if (t < tTag) { const h = hops(t, t0 + lag); return { th: 90, x: h.v * step, pose: { ...HOP(h.u), eyes: 'focus', mouth: 'open' } }; }
         const X = N * step;
         if (t < tTag + .3) { const e = (t - tTag) / .3; return { th: lerp(90, 66, EASE.io(e)), x: X, pose: { sq: lerp(.88, 1, e), lean: lerp(-6, 0, e), eyes: 'happy', mouth: 'open' } }; }
-        if (t < t1 - .32) return { th: 66, x: X, pose: { y: -8 * Math.abs(sin((t - tTag - .3) * 9)), eyes: 'happy', mouth: 'open', blush: 1.2, tailUp: .5 } };       // 「抓到了！換你追我」
-        if (t < t1) return { th: lerp(66, -90, EASE.io((t - (t1 - .32)) / .32)), x: X, pose: { eyes: 'happy', mouth: 'open', sq: .95 } };
+        if (t < t1 - .5) return { th: 66, x: X, pose: { y: -8 * Math.abs(sin((t - tTag - .3) * 9)), eyes: 'happy', mouth: 'open', blush: 1.2, tailUp: .5 } };       // 「抓到了！換你追我」
+        if (t < t1) { const e = (t - (t1 - .5)) / .5, eb = EASE.io(clamp((e - .15) / .85, 0, 1)), th = lerp(66, -90, eb), hy = clamp(lerp(66, -90, EASE.out(clamp(e / .7, 0, 1))) - th, -40, 40); return { th, x: X, pose: { eyes: 'happy', mouth: 'open', sq: .95 - .03 * sin(PI * e), head: { yaw: hy } } }; }
         if (t < t1 + run) { const h = hops(t, t1), look = bump(t, t1 + hopT * Math.max(.6, N - 2.6), hopT * 2.2); return { th: -90, x: X - h.v * step, pose: { ...HOP(h.u), eyes: 'happy', mouth: 'open', blush: 1.2, head: { yaw: 78 * look, roll: 6 * look } } }; }
         const e = t - t1 - run;
         if (e < .4) return { th: lerp(-90, 62, EASE.io(e / .4)), x: 0, pose: { eyes: 'happy', mouth: 'open', sq: lerp(.9, 1, e / .4) } };
@@ -673,7 +674,7 @@
           const lunge = { sq: .88, lean: 24, eyes: 'wide', mouth: 'o', arms: { L: { hand: [-10, 122, 44] } } };
           ks.push(K(tL - (smash ? .34 : .5), 60, BAD.ready.pose), K(tL - .04, 72, lunge), K(tL + .35, 72, { ...lunge, eyes: 'sad', mouth: 'flat' }), ...sorry(pl[L].per, tL + .7, 62).map((k) => ({ ...k, pose: { ...k.pose, arms: { ...(k.pose.arms || {}), L: { hand: [-16, 112, 30] } } } })),
             K(pick - .45, 78, { lean: 10, eyes: 'open', head: { pitch: 10 } }), K(pick, 80, { ...ANIM.FETCH.reach(1), arms: { L: { hand: [-16, 112, 30] }, R: { hand: [8, 142, 44] } } }), K(pick + .5, 62, { eyes: 'happy', mouth: 'open', arms: { R: { hand: [20, 84, 34] }, L: { hand: [-16, 110, 30] } } }), K(end - .4, 60, { eyes: 'happy' }), K(end, TH0));
-          ang.push([tL - (smash ? .34 : .5), BAD.ready.ang], [tL - .04, 100], [tL + .7, 150], [end - .4, 150]);
+          ang.push([tL - (smash ? .34 : .5), BAD.ready.ang], [tL - .04, 100], [tL + .7, 78], [end - .4, 70]);
           foot[p].push([tL - (smash ? .32 : .5), foot[p][foot[p].length - 1][1]], [tL - .06, foot[p][foot[p].length - 1][1] + 10 * pl[p].k]);
         }
         return { tr: track(ks), ang: pw(ang), dx: pw(foot[p]), flags };
@@ -709,20 +710,33 @@
     prep: { th: 66, pose: { sq: .8, lean: 14, head: { pitch: -12 }, eyes: 'focus', mouth: 'flat', arms: { L: { hand: [-4, 140, 46] }, R: { hand: [4, 140, 46] } } } },
     hit: { th: 66, pose: { sq: 1.04, lean: 3, head: { pitch: -18 }, eyes: 'focus', mouth: 'o', arms: { L: { hand: [-3, 116, 47] }, R: { hand: [3, 116, 47] } } } },
     follow: { th: 64, pose: { sq: 1.02, lean: 0, head: { pitch: -20 }, eyes: 'focus', mouth: 'open', arms: { L: { hand: [-3, 104, 45] }, R: { hand: [3, 104, 45] } } } },
-    spike: { th: 66, pose: { y: -34, sq: 1.06, lean: 6, tailUp: .9, head: { pitch: -8 }, eyes: 'focus', mouth: 'open', arms: { L: { hand: [-14, 62, 30], paw: 200 }, R: { hand: [14, 108, 30] } } } },
-    hold: { th: 62, pose: { sq: .97, lean: -3, eyes: 'happy', mouth: 'open', blush: 1.3, arms: { L: { hand: [-8, 112, 40] }, R: { hand: [8, 114, 40] } } } }
+    // 扣球：跳起來、身體往後仰，手掌在胸口前方「往前下方」拍（庫卡手短，舉不過頭；擊球點在臉的前下方，球不會掠過臉）
+    spike: { th: 70, pose: { y: -34, sq: 1.06, lean: -6, tailUp: .9, head: { pitch: -14 }, eyes: 'focus', mouth: 'open', arms: { L: { hand: [-6, 92, 48], paw: 230 }, R: { hand: [14, 108, 26] } } } },
+    // 接住：手往前伸、身體微微後仰（臉往後收），球落在伸出去的雙手上
+    serve: { th: 64, pose: { sq: .96, lean: -2, eyes: 'happy', mouth: 'smile', head: { pitch: -10 }, arms: { L: { hand: [-6, 124, 46] }, R: { hand: [6, 126, 46] } } } },
+    hold: { th: 64, pose: { sq: .97, lean: -5, eyes: 'happy', mouth: 'open', blush: 1.3, arms: { L: { hand: [-8, 114, 48] }, R: { hand: [8, 116, 48] } } } },
+    // 墊球（標準式、時間相對擊球那一刻）：先蹲低把平台伸到球的落點等球 → 球落在前臂上 → 蹬直往上送。
+    // 身體幾乎不前傾、頭往後仰看球：手永遠在臉的前下方，球最後一段不會經過臉
+    bump: [
+      { t: -.46, th: 64, pose: { sq: .9, lean: 3, eyes: 'focus', mouth: 'flat', head: { pitch: -20 }, arms: { L: { hand: [-4, 128, 46] }, R: { hand: [4, 128, 46] } } } },
+      { t: -.16, th: 66, pose: { sq: .87, lean: 1, eyes: 'focus', mouth: 'flat', head: { pitch: -26 }, arms: { L: { hand: [-3, 136, 50] }, R: { hand: [3, 136, 50] } } } },
+      { t: 0, th: 66, ease: 'in', pose: { sq: .9, lean: 0, eyes: 'focus', mouth: 'o', head: { pitch: -28 }, arms: { L: { hand: [-3, 133, 50] }, R: { hand: [3, 133, 50] } } } },
+      { t: .06, th: 66, pose: { sq: .93, lean: -1, eyes: 'focus', mouth: 'o', head: { pitch: -28 }, arms: { L: { hand: [-3, 128, 50] }, R: { hand: [3, 128, 50] } } } },
+      { t: .26, th: 64, ease: 'out', pose: { y: -8, sq: 1.07, lean: -4, tailUp: .6, eyes: 'focus', mouth: 'o', head: { pitch: -30 }, arms: { L: { hand: [-3, 108, 46] }, R: { hand: [3, 108, 46] } } } },
+      { t: .5, th: 62, ease: 'in', pose: { sq: .95, lean: 2, eyes: 'focus', mouth: 'smile', head: { pitch: -18 }, arms: { L: { hand: [-5, 122, 42] }, R: { hand: [5, 122, 42] } } } }
+    ]
   };
   TYPES.volleyball = {
     ball: true,
     gap: (ctx) => clamp(206 * ctx.kk, 170, 220),
     build(ctx) {
-      const pl = [ctx.a, ctx.b], sg = [1, -1], base = [0, ctx.d], F = 1.06, R = 12;
+      const pl = [ctx.a, ctx.b], sg = [1, -1], base = [0, ctx.d], F = 1.06, R = 12, G = 450;   // 拋物線低一點：球斜斜地落到手上，不是從臉的正上方掉下來
       const aWins = winA(ctx, 'volleyball'), spike = ctx.rnd() < .6;
       let n = 3 + Math.floor(ctx.rnd() * 3); if (((n - 1) % 2 === 0) !== aWins) n += n >= 5 ? -1 : 1;
       const W = aWins ? 0 : 1, L = 1 - W;
-      // 墊球重用單人排球動畫（蹲低併成平台 → 觸球 → 往上送）
-      const AV = ANIM.ANIMS && ANIM.ANIMS.volleyball, BUMP = AV && AV.hitT ? borrow('volleyball', .92, 1.6, AV.hitT, 0, true) : null, bHit = BUMP && BUMP.find((k) => Math.abs(k.t) < 1e-6);
-      const off = [0, 1].map((i) => { const m0 = handsOf(pl[i], bHit || VB.hit).mid, m = bHit ? { f: m0.f + 15 * pl[i].k, h: m0.h - 7 * pl[i].k } : { f: m0.f + 10 * pl[i].k, h: m0.h }, /* 擊球點在前臂前端、身體外側（球不會掠過臉） */ sp = handsOf(pl[i], VB.spike).L, hd = handsOf(pl[i], VB.hold).mid; return { bump: { f: m.f, h: m.h + (R + 3) * pl[i].k }, spike: { f: sp.f + 4 * pl[i].k, h: sp.h + (R + 2) * pl[i].k }, hold: { f: hd.f, h: hd.h + 4 * pl[i].k } }; });
+      // 墊球：自己的關鍵姿勢（VB.bump）。擊球點＝那一格雙手掌心中間、往上一個球的半徑（球落在前臂／手腕上）
+      const BUMP = VB.bump, bHit = BUMP.find((k) => Math.abs(k.t) < 1e-6);
+      const off = [0, 1].map((i) => { const k = pl[i].k, m = handsOf(pl[i], bHit).mid, sp = handsOf(pl[i], { th: VB.spike.th, pose: { ...VB.spike.pose, y: VB.spike.pose.y * pl[i].per.amp } }).L, /* 跳的高度依個性（styled）放大 */ hd = handsOf(pl[i], VB.hold).mid; return { bump: { f: m.f + 3 * k, h: m.h + (R + 1) * k }, spike: { f: sp.f + (R - 2) * k, h: sp.h + 4 * k }, hold: { f: hd.f, h: hd.h + 10 * k } }; });
       const hits = [], foot = [[[0, 0]], [[0, 0]]];
       for (let i = 0; i < n; i++) {
         const p = i % 2, T = 1.3 + i * F, kind = spike && i === n - 1 && i > 0 ? 'spike' : 'bump';
@@ -732,31 +746,35 @@
       }
       const last = hits[n - 1], isSpike = last.kind === 'spike';
       const segs = [];
-      for (let i = 0; i < n - 1; i++) segs.push({ t1: hits[i + 1].T, f: flight(hits[i].c, hits[i + 1].c, hits[i].T, F) });
+      for (let i = 0; i < n - 1; i++) segs.push({ t1: hits[i + 1].T, f: flight(hits[i].c, hits[i + 1].c, hits[i].T, F, G) });
       // 收尾：扣球 → 交給舞台的球（物理：落地彈、滾、停，輸的那隻去撿）；或另一隻接住
       const tC = last.T + F * .9, catchC = { u: base[L] + sg[L] * off[L].hold.f, h: off[L].hold.h };
-      if (!isSpike) segs.push({ t1: tC, f: flight(last.c, catchC, last.T, F * .9) });
+      if (!isSpike) segs.push({ t1: tC, f: flight(last.c, catchC, last.T, F * .9, G) });
       const end = isSpike ? last.T + 1.9 : tC + 2.3;
-      const serveC = hits[0].c;
+      // 發球：雙手在腰前捧著球 → 輕輕往上一送、手放低變成平台 → 球落到平台上（球不會經過臉）
+      const sv = handsOf(pl[0], VB.serve).mid, serveC = hits[0].c, tossC = { u: base[0] + sv.f, h: sv.h + 10 * pl[0].k }, toss = flight(tossC, serveC, .7, hits[0].T - .7, 220);
       const ballAt = (t) => {
-        if (t < hits[0].T) { const u = clamp((t - .7) / (hits[0].T - .7), 0, 1); return { u: serveC.u, h: serveC.h + 60 * pl[0].k * sin(PI * u), show: t > .45, spin: u * 120, toss: t <= .7 }; }
+        if (t < hits[0].T) { if (t <= .7) return { u: tossC.u, h: tossC.h, show: t > .45, spin: 0, toss: true }; const f = toss(t); return { ...f, show: true, spin: (t - .7) * 200 }; }
         for (const s of segs) if (t <= s.t1) return { ...s.f(t), show: true, spin: t * 260 };
         return { show: false };
       };
       const keysFor = (p) => {
-        const ks = [K(0, TH0), K(.5, 62, p === 0 ? VB.hold.pose : VB.ready.pose)];
-        if (p === 0) ks.push(K(.7, 62, { ...VB.hold.pose, eyes: 'focus' }), K(.9, 62, { sq: 1.02, head: { pitch: -16 }, eyes: 'focus', arms: { L: { hand: [-6, 92, 42] }, R: { hand: [6, 92, 42] } } }));
+        const ks = [K(0, TH0), K(.5, p === 0 ? VB.serve.th : 62, p === 0 ? VB.serve.pose : VB.ready.pose)];
+        if (p === 0) ks.push(K(.7, VB.serve.th, { ...VB.serve.pose, eyes: 'focus' }), K(.86, 64, { sq: .98, lean: -2, head: { pitch: -18 }, eyes: 'focus', arms: { L: { hand: [-4, 116, 50] }, R: { hand: [4, 116, 50] } } }, 'out'));
         for (const h of hits.filter((x) => x.p === p)) {
-          if (h.kind === 'spike') ks.push(K(h.T - .62, 62, VB.ready.pose), K(h.T - .3, 64, { sq: .8, lean: 6, eyes: 'focus', head: { pitch: -18 }, arms: { L: { hand: [-26, 110, 0] }, R: { hand: [20, 110, 10] } } }), K(h.T - .08, 64, { ...VB.spike.pose, y: -30, arms: { L: { hand: [-30, 66, 0] }, R: { hand: [14, 100, 30] } } }, 'out'), K(h.T, 66, VB.spike.pose), K(h.T + .14, 68, { ...VB.spike.pose, y: -22, lean: 12, arms: { L: { hand: [-8, 104, 42] }, R: { hand: [14, 112, 26] } } }), K(h.T + .34, 64, { sq: .86, lean: 8, eyes: 'happy', mouth: 'open' }, 'in'));
-          else if (BUMP) { ks.push(K(h.T - .72, 62, VB.ready.pose)); for (const k of BUMP) ks.push({ ...k, t: h.T + k.t }); ks.push(K(h.T + .78, 62, VB.ready.pose)); }
-          else ks.push(K(h.T - .7, 62, VB.ready.pose), K(h.T - .22, VB.prep.th, VB.prep.pose), K(h.T, VB.hit.th, VB.hit.pose, 'in'), K(h.T + .18, VB.follow.th, VB.follow.pose, 'out'), K(h.T + .6, 62, VB.ready.pose));
+          if (h.kind === 'spike') ks.push(K(h.T - .62, 62, VB.ready.pose), K(h.T - .3, 64, { sq: .8, lean: 6, eyes: 'focus', head: { pitch: -18 }, arms: { L: { hand: [-26, 110, 0] }, R: { hand: [20, 110, 10] } } }), K(h.T - .08, 64, { ...VB.spike.pose, y: -30, arms: { L: { hand: [-30, 66, 0] }, R: { hand: [14, 100, 30] } } }, 'out'), K(h.T, VB.spike.th, VB.spike.pose), K(h.T + .14, 70, { ...VB.spike.pose, y: -22, lean: -3, arms: { L: { hand: [-6, 110, 46] }, R: { hand: [14, 112, 26] } } }), K(h.T + .34, 64, { sq: .86, lean: 8, eyes: 'happy', mouth: 'open' }, 'in'));
+          else { const first = h === hits[0]; if (!first) ks.push(K(h.T - .72, 62, VB.ready.pose)); for (const k of BUMP) if (!first || k.t > -.2) ks.push({ ...k, t: h.T + k.t }); ks.push(K(h.T + .78, 62, VB.ready.pose)); }
         }
         if (isSpike) {
           if (p === W) ks.push(...cheerKeys(last.T + .55, 30, 2), K(end - .4, 45, { eyes: 'happy' }), K(end, TH0));
           else ks.push(K(last.T - .1, 62, VB.ready.pose), K(last.T + .3, 70, { sq: .84, lean: 22, eyes: 'wide', mouth: 'o', arms: { L: { hand: [-5, 140, 46] }, R: { hand: [5, 140, 46] } } }), K(last.T + .8, 66, { sq: .95, eyes: 'wide', mouth: 'o', head: { pitch: 6 } }), K(last.T + 1.3, 62, { eyes: 'sad', mouth: 'flat', head: { pitch: 10 } }), K(end, TH0));
-        } else if (p === L) ks.push(K(tC - .5, 62, VB.ready.pose), K(tC - .12, 62, { ...VB.hold.pose, lean: 2, eyes: 'focus', arms: { L: { hand: [-8, 106, 44] }, R: { hand: [8, 108, 44] } } }), K(tC, 62, VB.hold.pose), K(tC + .2, 60, { ...VB.hold.pose, sq: .92, lean: -8 }), K(tC + .6, 40, VB.hold.pose), K(tC + 1.0, 40, { ...VB.hold.pose, y: -14, tailUp: .7 }, 'out'), K(tC + 1.25, 40, { ...VB.hold.pose, sq: .93 }, 'in'), K(end - .5, 55, VB.hold.pose), K(end, TH0));
+        } else if (p === L) ks.push(K(tC - .5, 62, VB.ready.pose), K(tC - .24, 64, { ...VB.hold.pose, lean: -6, eyes: 'focus', head: { pitch: -16 }, arms: { L: { hand: [-8, 112, 50] }, R: { hand: [8, 114, 50] } } }), K(tC, 64, VB.hold.pose), K(tC + .2, 60, { ...VB.hold.pose, sq: .92, lean: -8 }), K(tC + .6, 40, VB.hold.pose), K(tC + 1.0, 40, { ...VB.hold.pose, y: -14, tailUp: .7 }, 'out'), K(tC + 1.25, 40, { ...VB.hold.pose, sq: .93 }, 'in'), K(end - .5, 55, VB.hold.pose), K(end, TH0));
         else ks.push(...cheerKeys(tC + .4, 40, 2), K(end - .5, 55, { eyes: 'happy' }), K(end, TH0));
-        return { tr: track(ks), dx: pw(foot[p]) };
+        // 接球的時段（球飛向自己手上的最後一段）
+        const recv = hits.filter((x) => x.p === p).map((x) => [x.T - .55, x.T + .08]);
+        if (p === 0) recv.push([.6, hits[0].T + .08]);
+        if (!isSpike && p === L) recv.push([tC - .55, tC + .1]);
+        return { tr: track(ks), dx: pw(foot[p]), recv };
       };
       const P = [keysFor(0), keysFor(1)];
       const res = finish(ctx, end, (t) => {
@@ -764,13 +782,18 @@
         [0, 1].forEach((p) => {
           const c = P[p].tr(t), dx = P[p].dx(t), key = p ? 'b' : 'a';
           if (P[p].dx(t + .02) !== dx || P[p].dx(t - .02) !== dx) { c.pose.y = (c.pose.y || 0) - 6; c.pose.tailUp = .4; }
-          if (ball.show && !ball.toss) watch(c, pl[p], base[p] + sg[p] * dx, sg[p], ball, .6);
+          if (ball.show && !ball.toss) {
+            // 球快到自己手上時：頭維持往後仰（只用眼睛往下看球），臉不往球的方向湊過去
+            const pk = (c.pose.head && c.pose.head.pitch) || 0, guard = P[p].recv.some(([a0, a1]) => t >= a0 && t <= a1);
+            watch(c, pl[p], base[p] + sg[p] * dx, sg[p], ball, .6);
+            if (guard) c.pose.head.pitch = Math.min(c.pose.head.pitch, pk);
+          }
           c.dx = sg[p] * dx; fr[key] = c;
         });
-        if (t <= .7 && t > .3) fr.a.pose.props = [{ t: 'vball', hand: 'both', off: [0, -4], s: Math.min(1, (t - .3) * 5) }];
+        if (t <= .7 && t > .3) fr.a.pose.props = [{ t: 'vball', hand: 'both', off: [0, -10], s: Math.min(1, (t - .3) * 5) }];
         if (ball.show && !ball.toss) fr.world.push({ k: 'vball', u: ball.u, h: ball.h, rot: ball.spin });
-        for (const h of hits) if (t >= h.T && t < h.T + .16) fr.world.push({ k: 'impact', u: h.c.u, h: h.c.h, s: h.kind === 'spike' ? .9 : .55 });
-        if (!isSpike && t >= tC && t < end - .3) { const c = fr[L ? 'b' : 'a']; c.pose.props = [{ t: 'vball', hand: 'both', off: [0, -4] }]; }
+        for (const h of hits) if (t >= h.T && t < h.T + (h.kind === 'spike' ? .1 : .16)) fr.world.push({ k: 'impact', u: h.c.u + sg[h.p] * 4 * ctx.kk, h: h.c.h - 4 * ctx.kk, s: h.kind === 'spike' ? .8 : .55 });
+        if (!isSpike && t >= tC && t < end - .3) { const c = fr[L ? 'b' : 'a']; c.pose.props = [{ t: 'vball', hand: 'both', off: [0, -10] }]; }
         if (!isSpike) fr.world.push(...floatUp('sparkle', t, end - .3, catchC.u, catchC.h, .9, .4, 8), ...floatUp('star', t, tC + .3, ctx.d / 2, 190 * ctx.kk, .7, 1.2, 20));
         else fr.world.push(...floatUp('star', t, last.T + .6, base[W] + sg[W] * 10, 196 * pl[W].k, .7, 1.2, 20), ...floatUp('sweat', t, last.T + .7, base[L] + sg[L] * 18, 150 * pl[L].k, 1, 1, -16));
         fr.world.push(...floatUp('sparkle', t, .3, serveC.u, serveC.h, .8, .4, 8));
@@ -881,7 +904,18 @@
       if (make) res.handoff = { t: tDown, kind: 'bball', u: rimC.u - away * 22, h: floor, vu: 0, vh: 0, owner: keyS };
       else {
         const u0 = rimNear - away * 3, h0 = rimH + R * .8, G = 1500 * ctx.kk;
-        if (roomP >= 120 * ctx.kk) { const vh = 640 * ctx.kk, tt = (vh + Math.sqrt(vh * vh + 2 * G * (h0 - R))) / G, land = baseP - away * 92 * ctx.kk; res.handoff = { t: tRim, kind: 'bball', u: u0, h: h0, vu: (land - u0) / tt, vh, owner: keyP }; }
+        if (roomP >= 120 * ctx.kk) {
+          // 拋物線要整段高過傳球那隻的頭（頭頂＋耳朵約 186 單位、再加球的半徑和一點餘裕）：不夠高就加大往上的速度
+          const land = baseP - away * 100 * ctx.kk, clearH = 186 * PS.k + R + 8 * ctx.kk, halfW = 50 * PS.k + R;
+          let vh = 640 * ctx.kk, tt = 0, vu = 0;
+          for (; vh < 1600 * ctx.kk; vh += 20 * ctx.kk) {
+            tt = (vh + Math.sqrt(vh * vh + 2 * G * (h0 - R))) / G; vu = (land - u0) / tt;
+            let okPath = true;
+            for (let q = 0; q <= 1; q += 1 / 80) { const t = q * tt, u = u0 + vu * t, h = h0 + vh * t - G * t * t / 2; if (Math.abs(u - baseP) < halfW && h < clearH) { okPath = false; break; } }
+            if (okPath) break;
+          }
+          res.handoff = { t: tRim, kind: 'bball', u: u0, h: h0, vu, vh, owner: keyP, clear: { u: baseP, halfW, h: clearH } };
+        }
         else res.handoff = { t: tRim, kind: 'bball', u: u0, h: h0, vu: -away * 55 * ctx.kk, vh: 210 * ctx.kk, owner: keyS };
       }
       res.info = { make, hoopU, rimH, rimC, ballAt, shooter: hoopB ? 'b' : 'a', tRim, tShot, tPass, tCatch };
