@@ -129,6 +129,16 @@
       const mid = (I.x + O.x) / 2;
       let ix = mid - side * gap / 2, ox = mid + side * gap / 2, laneFor = null;
       if ((ox - O.x) * side > 0) { ix = O.x - side * gap; ox = O.x; }      // 本來就比互動距離還近：對方不用往後退，發起的調整就好
+      // 會合點不能站到第三隻旁邊（非伴侶要保持禮貌距離）：中間有別隻時，改成對方不動、發起的走過去（或反過來）
+      {
+        const thirds = [...S.actors.values()].filter((o) => o !== I && o !== O && !o.inPouch && Math.abs(o.y - I.y) <= 40 && !(o.isFollow && (momOf(o) === I || momOf(o) === O)) && !(F.close(I, o) && F.close(O, o)));
+        const okPlan = (a, b) => thirds.every((o) => S.spotsOf(o).every((x) => Math.abs(x - a) >= S.politeGap(I, o) && Math.abs(x - b) >= S.politeGap(O, o)));
+        if (!okPlan(ix, ox)) {
+          const plans = [[O.x - side * gap, O.x], [I.x, I.x + side * gap]].filter(([a, b]) => a > 44 && a < W - 44 && b > 44 && b < W - 44);
+          const good = plans.find(([a, b]) => okPlan(a, b));
+          if (good) [ix, ox] = good;
+        }
+      }
       // 爸爸碰鼻小袋鼠：媽媽（錨點）擋在中間 → 爸爸留在自己這一側，小袋鼠從媽媽腳邊繞到爸爸這邊來
       const anc = this.soc.anchor ? S.actors.get(this.soc.anchor) : null;
       if (anc && anc !== I && anc !== O && !anc.inPouch && Math.abs(anc.y - I.y) <= 40 && (anc.x - I.x) * (anc.x - O.x) < 0) {
@@ -816,7 +826,7 @@
     }
     if (d > 700 || P.job || Math.random() > .65 || S.settings.walk === 'off') return false;
     // 站在伴侶旁邊有空位的那一側（那邊已經站著別隻就換另一側；兩側都沒位置就不過去）
-    const spotOk = (x) => x > 44 && x < innerWidth - 44 && [...S.actors.values()].every((o) => o === a || o === P || o.inPouch || Math.abs(o.y - a.y) > 40 || Math.abs(o.x - x) >= 96);
+    const spotOk = (x) => x > 44 && x < innerWidth - 44 && S.politeOk(a, x, { ignore: new Set([P]) });     // 和別隻（非伴侶）保持禮貌距離（和散步挑目的地用同一個標準）
     // 靠近自己這一側被別隻佔住：改站伴侶的另一側，從伴侶前面繞過去（情侶可以靠近、畫在前面經過）
     const s0 = Math.sign(a.x - P.x) || 1, side = spotOk(P.x + s0 * near) ? s0 : spotOk(P.x - s0 * near) ? -s0 : 0;
     if (side === 0) return false;
