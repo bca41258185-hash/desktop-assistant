@@ -158,9 +158,9 @@
     S.actors.delete(a.id);
     S.reportRects();
   }
-  // 回來（回信之後）：放生的倒帶——禿鷹橫抓著牠從遠的那一邊飛來（2.2 秒）→ 降到牠原本的家、邊放下邊扶正（0.8 秒）
-  //   → 鬆爪飛走（1.6 秒），庫卡落地說一句話。主行程先把牠加回名單（舞台已經建好這隻），再送 stage:arrive
-  const A_IN = 2200, A_DOWN = 800, A_OUT = 1600;
+  // 回來（回信之後）：庫卡坐在禿鷹背上，從遠的那一邊飛回來（2.4 秒）→ 禿鷹降落在牠家旁邊、牠從背上跳下來（0.8 秒）
+  //   → 禿鷹起飛離開（1.6 秒），庫卡說一句話。主行程先把牠加回名單（舞台已經建好這隻），再送 stage:arrive
+  const A_IN = 2400, A_HOP = 800, A_OUT = 1600, BACK = [136, 66];   // BACK＝禿鷹背上坐的位置（圖上的座標）
   S.arrive = function (qid, line) {
     const a = S.actors.get(qid);
     if (!a || a.arriving) return false;
@@ -174,53 +174,48 @@
     v.className = 'vulture';
     v.innerHTML = vultureSVG();
     v.style.transformOrigin = '0 0';
+    v.style.zIndex = '30000';                                     // 庫卡（坐在背上）畫在禿鷹前面
     S.fxEl.appendChild(v);
-    const C_OFF = (S.FOOT.y - S.VB.y) * a.k - a.h / 2, GRIP = 30 * a.k, ROT = 84 * dir;
-    const TH = ROT * Math.PI / 180, px = -GRIP * Math.sin(TH), py = -GRIP * Math.cos(TH);
-    const turned = (deg) => { const r = deg * Math.PI / 180; return { x: px * Math.cos(r) - py * Math.sin(r), y: px * Math.sin(r) + py * Math.cos(r) }; };
-    const put = (x, y, tilt, d = dir) => {
-      const left = d < 0 ? x - TALON[0] * sc : x + TALON[0] * sc;
-      v.style.transform = `translate3d(${left.toFixed(1)}px, ${(y - TALON[1] * sc).toFixed(1)}px, 0) scale(${d < 0 ? sc : -sc}, ${sc}) rotate(${tilt.toFixed(1)}deg)`;
+    const put = (x, y, tilt) => {                                 // 讓爪子落在 (x, y)
+      const left = dir < 0 ? x - TALON[0] * sc : x + TALON[0] * sc;
+      v.style.transform = `translate3d(${left.toFixed(1)}px, ${(y - TALON[1] * sc).toFixed(1)}px, 0) scale(${dir < 0 ? sc : -sc}, ${sc}) rotate(${tilt.toFixed(1)}deg)`;
     };
-    a.el.style.transformOrigin = '50% 50%';
-    let rot = ROT;
-    const hold = (gx, gy) => { const q = turned(rot); a.x = gx - q.x; a.y = gy - q.y + C_OFF; a.place(); a.el.style.transform += ` rotate(${rot.toFixed(1)}deg)`; };
-    // 落地時爪子的位置（直立、腳踩地時，抓的那一點）
-    const g1 = { x: homeX + px, y: ground - C_OFF + py };
-    const start = { x: fromRight ? innerWidth + W * sc + 40 : -W * sc - 40, y: -H * sc - a.h };
-    const above = { x: g1.x, y: g1.y - 70 };
+    const back = (x, y) => ({ x: x + (dir < 0 ? 1 : -1) * (BACK[0] - TALON[0]) * sc, y: y - (TALON[1] - BACK[1]) * sc + 6 });   // 爪子在 (x,y) 時背上的位置
+    const ride = (x, y, bob) => { const b = back(x, y); a.x = b.x; a.y = b.y + bob; a.place(); };
+    // 降落點：禿鷹的腳踩在地上、在牠家「來的那一側」旁邊，跳下來剛好落在家
+    const land = { x: homeX - dir * (BACK[0] - TALON[0]) * sc - dir * 46, y: ground };
+    const start = { x: fromRight ? innerWidth + W * sc + 40 : -W * sc - 40, y: Math.max(60, ground - 380) };
     const exit = { x: fromRight ? -W * sc - 80 : innerWidth + W * sc + 80, y: -H * sc - 120 };
-    a.setFrame('lift', 0, ANIM.STILL.lift); a.el.classList.add('dragging'); a.zBoost = 20000; if (a.tag) a.tag.style.display = 'none';
-    hold(start.x, start.y); put(start.x, start.y, 0);
-    let t0 = 0, landed = false;
+    a.setFrame('ride' + dir, dir * 30, { eyes: 'happy', mouth: 'open', blush: 1.2, arms: { L: { hand: [-22, 112, 26] }, R: { hand: [22, 112, 26] } } });
+    a.zBoost = 40000; if (a.tag) a.tag.style.display = 'none';
+    put(start.x, start.y, 0); ride(start.x, start.y, 0);
+    let t0 = 0, hop = null, landed = false;
     const job = { name: 'arrive', ticks: true, layer: 0,
       tick(now) {
         if (!t0) t0 = now;
         const t = now - t0;
-        if (t < A_IN) {                                          // 飛回來：從高處滑翔下來，庫卡橫著在爪子下晃
-          const u = ease(t / A_IN), mid = { x: (start.x + above.x) / 2, y: above.y - 160 };
-          const vx = bez(start.x, mid.x, above.x, u), vy = bez(start.y, mid.y, above.y, u);
-          rot = ROT + Math.sin(t / 190) * 5 * (1 - u);
-          hold(vx, vy); put(vx, vy, -6 * dir * (1 - u));
+        if (t < A_IN) {                                          // 飛回來：滑翔下來，背上的庫卡跟著上下晃
+          const u = ease(t / A_IN), mid = { x: (start.x + land.x) / 2, y: Math.min(start.y, land.y) - 120 };
+          const vx = bez(start.x, mid.x, land.x, u), vy = bez(start.y, mid.y, land.y, u);
+          put(vx, vy, -6 * dir * (1 - u)); ride(vx, vy, Math.sin(t / 160) * 3 * (1 - u));
           return true;
         }
-        if (t < A_IN + A_DOWN) {                                 // 放下：降到地面，同時把牠扶正
-          const u = ease((t - A_IN) / A_DOWN);
-          rot = ROT * (1 - u);
-          const gx = g1.x, gy = bez(above.y, above.y + 10, g1.y, u);
-          hold(gx, gy); put(gx, gy, 0);
+        if (t < A_IN + A_HOP) {                                  // 跳下來：從背上跳一個弧線落到家
+          const u = (t - A_IN) / A_HOP;
+          if (!hop) { hop = back(land.x, land.y); a.setFrame('lift', 0, ANIM.STILL.lift); }
+          put(land.x, land.y, 0);
+          a.x = hop.x + (homeX - hop.x) * u; a.y = hop.y + (ground - hop.y) * u - Math.sin(Math.PI * u) * 46; a.place();
           return true;
         }
-        if (!landed) {                                           // 鬆爪：站好、說話、冒星星
-          landed = true; rot = 0;
-          a.x = homeX; a.y = ground; a.el.style.transformOrigin = ''; a.el.classList.remove('dragging'); a.zBoost = 0;
-          if (a.tag) a.tag.style.display = '';
+        if (!landed) {                                           // 落地：站好、說話、冒星星
+          landed = true;
+          a.x = homeX; a.y = ground; a.zBoost = 0; if (a.tag) a.tag.style.display = '';
           a.place(); a.showRest();
           S.burst(a.x, a.y - a.h * .7, 'stars');
           if (line) a.say(line, { ms: 3000 });
         }
-        const u = Math.min(1, (t - A_IN - A_DOWN) / A_OUT), e = u * u;   // 禿鷹飛走（往原本的方向繼續飛）
-        put(bez(g1.x, g1.x + dir * 160, exit.x, e), bez(g1.y, g1.y - 120, exit.y, e), -10 * dir);
+        const u = Math.min(1, (t - A_IN - A_HOP) / A_OUT), e = u * u;   // 禿鷹起飛，往原本的方向繼續飛
+        put(bez(land.x, land.x + dir * 160, exit.x, e), bez(land.y, land.y - 140, exit.y, e), -10 * dir);
         if (u >= 1) { v.remove(); a.arriving = false; return false; }   // 交給 finish()：回到待機、存位置
         return true;
       },

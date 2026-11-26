@@ -55,11 +55,28 @@
   const ALONE = ['我在這裡交到好多新朋友，你們不用擔心我。', '主人，謝謝你以前照顧我。'];
   const SIGN = ['🌿', '🌊', '☀️', '🍃'];
 
+  // 漫畫的場景（每隻不一樣）：落腳的地方和信裡寫的一致；玩什麼看個性；想念的方式、寄信的方式隨機
+  //   place  0 海邊小島｜1 森林｜2 曬太陽的石頭島｜3 小溪星空（對應 PLACES）
+  //   play   eat 吃葉子｜ball 打排球｜nap 樹下打盹｜explore 追蝴蝶｜sun 曬太陽
+  //   mood   sunset 夕陽背影｜stars 星空裡有牠的臉｜moon 月光下抱著葉子
+  //   send   write 捧著明信片｜mail 交給禿鷹郵差｜bottle 瓶中信
+  const PLAY_BY = { athlete: 'ball', sleepy: 'nap', explorer: 'explore', clingy: 'eat', shy: 'sun', cool: 'sun' };
+  function scene(card, { rnd = Math.random } = {}) {
+    const arch = card.from && card.from.traits && card.from.traits.personality && card.from.traits.personality.archetype;
+    const plays = ['eat', 'ball', 'nap', 'explore', 'sun'];
+    return {
+      place: Math.floor(rnd() * PLACES.length) % PLACES.length,
+      play: PLAY_BY[arch] && rnd() < 0.75 ? PLAY_BY[arch] : pick(rnd, plays),
+      mood: pick(rnd, ['sunset', 'stars', 'moon']),
+      send: pick(rnd, ['write', 'mail', 'bottle']),
+      seed: Math.floor(rnd() * 1e6)
+    };
+  }
   function compose(card, { rnd = Math.random, present = () => true } = {}) {
     const lover = card.lover && card.lover.name;
     const friends = card.friends.map((f) => f.name);
     const to = lover || (friends.length ? join(friends) : '大家');
-    const lines = [`親愛的${to}：`, pick(rnd, PLACES)];
+    const lines = [`親愛的${to}：`, card.scene && PLACES[card.scene.place] ? PLACES[card.scene.place] : pick(rnd, PLACES)];
     if (lover) lines.push(pick(rnd, card.lover.partner ? LOVE_PARTNER : LOVE_CRUSH)(lover));
     if (friends.length && (lover || friends.length > 0)) lines.push(pick(rnd, FRIENDS)(join(friends)));
     if (!lover && !friends.length) lines.push(pick(rnd, ALONE));
@@ -72,5 +89,5 @@
     const f = card.friends.find((x) => isPresent(x.id));
     return f ? f.id : fallback;
   }
-  module.exports = { plan, compose, recipient, MIN };
+  module.exports = { plan, compose, scene, recipient, MIN, PLACES };
 })();

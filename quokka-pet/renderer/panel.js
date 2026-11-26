@@ -535,14 +535,34 @@
     markRead();
   }
   // ---- 明信片：放生的庫卡約 10 分鐘後寄回來（lib/postcard.js）----
+  // 極簡：預設只有一行「📮 〇〇寄來一張明信片」，點開才看四格漫畫、內文、回信
+  const comicCache = new Map();
+  function comicOf(c) {
+    if (comicCache.has(c.id)) return comicCache.get(c.id);
+    let h = '';
+    try {
+      const tr = (x) => { const q = x && qById(x.id); return q ? q.traits : null; };
+      h = window.PostcardComic && c.from.traits ? window.PostcardComic.html({
+        from: c.from, lover: c.lover ? { name: c.lover.name, traits: tr(c.lover) } : null,
+        friends: (c.friends || []).map((f) => ({ name: f.name, traits: tr(f) })), scene: c.scene || {}
+      }) : '';
+    } catch (e) { h = ''; }
+    comicCache.set(c.id, h);
+    return h;
+  }
   function postcardHTML(c) {
+    if (!(ui.pcOpen && ui.pcOpen.has(c.id))) {
+      return `<button type="button" class="pc-line${c.read ? '' : ' unread'}" data-act="pcOpen" data-pc="${esc(c.id)}" data-fk="pc:open:${esc(c.id)}" aria-expanded="false">
+        <span aria-hidden="true">📮</span> ${esc(c.from.name)}寄來一張明信片${c.read ? '' : '<span class="pc-new">新</span>'}<span class="pc-chev" aria-hidden="true">›</span></button>`;
+    }
     const from = { id: 'pc-' + c.from.id, name: c.from.name, traits: c.from.traits };
     const to = qById(c.to), when = c.sentAt ? new Date(c.sentAt) : null;
     const t = when ? `${when.getMonth() + 1}/${when.getDate()} ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}` : '';
     return `<article class="postcard${c.read ? '' : ' unread'}" data-pc="${esc(c.id)}" aria-label="${esc(c.from.name)}寄來的明信片">
       <div class="pc-stamp">${from.traits ? avatar(from, 'md') : ''}<span class="pc-mark" aria-hidden="true">📮</span></div>
       <div class="pc-body"><div class="pc-meta">${esc(c.from.name)} → ${esc(to ? to.name : '大家')}<span class="pc-time">${esc(t)}</span>${c.read ? '' : '<span class="pc-new">新</span>'}</div>
-      <p class="pc-text">${esc(c.text || '').split(String.fromCharCode(10)).join('<br>')}</p>${replyHTML(c)}</div></article>`;
+      ${comicOf(c)}<p class="pc-text">${esc(c.text || '').split(String.fromCharCode(10)).join('<br>')}</p>${replyHTML(c)}
+      <button type="button" class="link-btn pc-close" data-act="pcClose" data-pc="${esc(c.id)}" data-fk="pc:close:${esc(c.id)}">收起</button></div></article>`;
   }
   // 回信：寫幾句（可以不寫）→ 約 1 分鐘後禿鷹把牠帶回來
   function replyHTML(c) {
@@ -568,9 +588,8 @@
     const all = (S.postcards || []).slice().reverse();
     if (!all.length) return '';
     const shown = ui.pcMore ? all : all.slice(0, 2);
-    return `<div class="card postcards" role="group" aria-label="明信片"><div class="card-h"><h2>📮 明信片</h2>
-      ${all.length > 2 ? `<button type="button" class="link-btn" data-act="pcMore" data-fk="pc:more" aria-expanded="${!!ui.pcMore}">${ui.pcMore ? '收起' : `更多（${all.length - 2}）`}</button>` : ''}</div>
-      ${postcardsHTML(shown)}</div>`;
+    return `<div class="postcards" role="group" aria-label="明信片">${postcardsHTML(shown)}
+      ${all.length > 2 ? `<button type="button" class="link-btn" data-act="pcMore" data-fk="pc:more" aria-expanded="${!!ui.pcMore}">${ui.pcMore ? '收起' : `更多明信片（${all.length - 2}）`}</button>` : ''}</div>`;
   }
   // 畫出來的明信片＝讀過了（每張只送一次）
   const readSent = new Set();
@@ -1172,6 +1191,8 @@
       case 'gearCancel': ui.gearMode = null; render(); break;
       case 'infoToggle': ui.infoOpen = !ui.infoOpen; render(); break;
       case 'pcMore': ui.pcMore = !ui.pcMore; render(); break;
+      case 'pcOpen': (ui.pcOpen || (ui.pcOpen = new Set())).add(b.dataset.pc); render(); break;
+      case 'pcClose': if (ui.pcOpen) ui.pcOpen.delete(b.dataset.pc); ui.replying = null; render(); break;
       case 'pcReply': ui.replying = b.dataset.pc; ui.pcDraft = ''; render(); { const t = $('pcText'); if (t) t.focus(); } break;
       case 'pcSend': sendReply(b.dataset.pc); break;
       case 'pcCancel': ui.replying = null; ui.pcDraft = ''; render(); break;

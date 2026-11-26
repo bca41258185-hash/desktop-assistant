@@ -459,3 +459,16 @@ body.dragging .chip[data-drop] { background: var(--surface-2); border-style: das
 .pc-reply { margin-top: 8px; display: grid; gap: 6px; }
 .pc-reply textarea { width: 100%; resize: vertical; font: inherit; }
 .pc-state { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+
+/* 明信片：一行（極簡）→ 點開才有漫畫 */
+.pc-line { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; padding: 8px 10px; margin: 4px 0; border-radius: 10px;
+  border: 1px solid #ead9bd; background: #fffaf0; font: inherit; font-size: 13px; color: var(--ink); cursor: pointer; }
+.pc-line.unread { background: #fff6e2; border-color: #e6c48a; }
+.pc-chev { margin-left: auto; color: var(--muted); }
+.postcard .pc-close { display: block; margin: 6px 0 0 auto; }
+.pc-comic { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 6px 0; }
+.pc-cell { margin: 0; border: 1.5px solid #3e3127; border-radius: 5px; overflow: hidden; background: #fff; }
+.pc-cell svg { display: block; width: 100%; height: auto; }
+.pc-cell figcaption { font-size: 11px; text-align: center; padding: 2px 2px; border-top: 1.5px solid #3e3127; background: #fffaf0; color: #3e3127; line-height: 1.35; }
+.postcard { flex-direction: column; }
+.postcard .pc-stamp { display: none; }

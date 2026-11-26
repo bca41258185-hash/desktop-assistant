@@ -355,6 +355,7 @@ function start() {
     const due = (data.postcards || []).filter((c) => !c.sent && Date.now() >= c.dueAt);
     if (!due.length) return;
     for (const c of due) {
+      c.scene = postcard.scene(c);                     // 漫畫場景（每隻不一樣，落腳處和信裡寫的一致）
       c.text = postcard.compose(c);
       c.to = postcard.recipient(c, (id) => !!qById(id), data.settings.defaultOwner);
       c.sent = true; c.sentAt = new Date().toISOString(); c.read = false;

@@ -40,3 +40,17 @@ test('沒有愛人也沒有朋友：寫給大家；寄給誰的順序', () => {
   assert.equal(recipient(c2, (id) => id !== 'b', 'x'), 'c');
   assert.equal(recipient(c2, () => false, 'x'), 'x');
 });
+
+test('漫畫場景：每張不太一樣；落腳的地方和信裡寫的一致；個性影響玩什麼', () => {
+  const { scene, PLACES } = require('../lib/postcard');
+  const base = (arch) => ({ from: { id: 'a', name: '阿跳', traits: { personality: { archetype: arch } } }, lover: { id: 'b', name: '小麥', partner: true }, friends: [] });
+  const seen = new Set(), plays = { athlete: 0 };
+  for (let i = 0; i < 60; i++) {
+    const c = base(i % 2 ? 'athlete' : 'easy'); c.scene = scene(c, { rnd });
+    seen.add(JSON.stringify([c.scene.place, c.scene.play, c.scene.mood, c.scene.send]));
+    if (i % 2 && c.scene.play === 'ball') plays.athlete++;
+    assert.ok(compose(c, { rnd }).includes(PLACES[c.scene.place]));
+  }
+  assert.ok(seen.size > 20, `組合 ${seen.size}`);
+  assert.ok(plays.athlete > 18, `愛運動的打球 ${plays.athlete}/30`);
+});
