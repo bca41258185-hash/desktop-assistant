@@ -476,12 +476,13 @@
     }
     // 步態的一格（快取）：回傳這一步已前進的比例。位移只在腳離地（或前爪撐地、身體跟上）時發生，所以不滑步
     gaitFrame(gait, dir, u) {
-      const G = ANIM.GAIT, [f, v] = Actor.q(u, gait === 'walk' ? 12 : 8);
-      if (!G || !G[gait]) { this.setFrame(`hop${dir}_${f}`, dir * 90, ANIM.FETCH.hop(v)); return EASE.io(u); }
+      // 位移和畫格用同一個（量化後的）相位取值：腳在地上的那幾格，畫面上真的不動（不會有 1–2 px 的階梯抖動）
+      const G = ANIM.GAIT, [f, v] = Actor.q(u, gait === 'walk' ? 24 : gait === 'hop' ? 12 : 10);
+      if (!G || !G[gait]) { this.setFrame(`hop${dir}_${f}`, dir * 90, ANIM.FETCH.hop(v)); return EASE.io(v); }
       let fr = G[gait](v);
       if (dir > 0) fr = ANIM.mirrorFrame(fr);
       this.setFrame(`g${gait}${dir}_${f}`, fr.th, fr.pose, gait !== 'hop');
-      return G[gait](u).advance;
+      return u >= 1 ? 1 : G[gait](v).advance;
     }
     // 一步一步移動到目標（先轉身、再依步態走；每一步開始時重新看目標，所以可以跟著會動的對象）
     //   target：數字或函式；o.gait 指定步態；o.check(nx, dir) 回傳 false＝被擋住停下；o.ignore＝不用避讓的對象
@@ -688,8 +689,9 @@
       const mode = 'carry';                                              // 回程一律抱著球帶回去（不再用鼻子推）
       const home = a.throwX != null ? a.throwX : a.home;
       const NOSE = (F.ballDist || 88) * k;                               // 伸爪時球心在腳前方的距離
-      const advOf = (g, u) => (ANIM.GAIT && ANIM.GAIT[g] ? ANIM.GAIT[g](u).advance : EASE.io(u));
-      const carryAdv = (u) => S.clamp((u - .18) / .64, 0, 1);
+      // 位移跟畫格用同一個量化後的相位（每段 8 格）
+      const advOf = (g, u) => { if (u >= 1) return 1; const v = Actor.q(u, 8)[1]; return ANIM.GAIT && ANIM.GAIT[g] ? ANIM.GAIT[g](v).advance : EASE.io(v); };
+      const carryAdv = (u) => (u >= 1 ? 1 : S.clamp((Actor.q(u, 8)[1] - .18) / .64, 0, 1));
       const standX = ball.x - dir * NOSE;
       const P = {                                                        // 各段長度（毫秒）與格數
         discover: [Math.max(600, 250 + (1 - a.act) * 1200), 6], dash: [hopMs, 8], brake: [300, 4], sniff: [600, 8], scoop: [750, 10],

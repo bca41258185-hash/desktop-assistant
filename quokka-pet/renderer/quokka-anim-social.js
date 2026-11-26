@@ -294,7 +294,7 @@
     const mk = (y) => ({ th: 68, pose: { lean: 5, arms: { L: { hand: [-5, y, 40] }, R: { hand: [5, y + 2, 38] } } } });
     let y = clamp(yFor(ctx.a, mb.h) + 2, 78, 104), A = mk(y), ha = handsOf(ctx.a, A).mid;
     y = clamp(y + (ha.h - mb.h) / ctx.a.k * .9, 76, 106); A = mk(y); ha = handsOf(ctx.a, A).mid;
-    const tip = ha.f + (6 + 25 * LEAF_S) * ctx.a.k;            // 葉尖
+    const tip = ha.f + (6 + 28 * LEAF_S) * ctx.a.k;            // 葉尖
     return { A, Bp, y, gap: tip + mb.f - 3 * ctx.kk, ha };
   }
   TYPES.leaf = {

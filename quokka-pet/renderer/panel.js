@@ -163,6 +163,16 @@
     }
     return Infinity;
   }
+  // 規則壞掉（缺日期、缺星期、時間超出範圍）：主行程會跳過，面板標成「資料有誤」並當作停用
+  function ruleOk(rule) {
+    if (!rule || typeof rule !== 'object') return false;
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(rule.time || ''));
+    if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return false;
+    if (rule.type === 'daily') return true;
+    if (rule.type === 'weekly') return Array.isArray(rule.weekdays) && rule.weekdays.length > 0 && rule.weekdays.every((x) => Number.isInteger(x) && x >= 0 && x <= 6);
+    if (rule.type === 'once') { const d = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(rule.date || '')); if (!d) return false; const t = new Date(+d[1], d[2] - 1, +d[3]); return t.getMonth() === d[2] - 1 && t.getDate() === +d[3]; }
+    return false;
+  }
   // 錯過：主行程報「錯過」時寫入 missedAt；一直顯示到使用者按「知道了」（清掉 missedAt）或下次正常響起
   function isMissed(r) {
     if (!r || isRinging(r)) return false;
@@ -582,14 +592,14 @@
       ${ownerAv(t)}${body}${delBtn('task', t, t.text)}</li>`;
   }
   function reminderRow(r) {
-    const ringing = isRinging(r), missed = !ringing && isMissed(r), on = r.enabled !== false;
-    const tags = [`<span class="tag">${esc(ruleTag(r.rule))}</span>`];
+    const ringing = isRinging(r), missed = !ringing && isMissed(r), bad = !ruleOk(r.rule), on = r.enabled !== false && !bad;
+    const tags = bad ? ['<span class="tag tag-miss" title="時間或日期有誤，這個提醒不會響">資料有誤</span>'] : [`<span class="tag">${esc(ruleTag(r.rule))}</span>`];
     if (missed) tags.push(`<span class="tag tag-miss" title="${esc('報告錯過的時間：' + hm(r.missedAt))}">錯過</span>`);
     if (!ringing && r.snoozeUntil && new Date(r.snoozeUntil).getTime() > Date.now()) tags.push(`<span class="tag tag-soft">貪睡到 ${esc(hm(r.snoozeUntil))}</span>`);
     return `<li class="row rem${ringing ? ' is-ringing' : ''}${missed ? ' is-missed' : ''}${on ? '' : ' is-off'}" ${rowAttrs('reminder', r)}>
-      ${ownerAv(r)}<span class="when">${esc(ruleTime(r.rule))}</span>
+      ${ownerAv(r)}<span class="when">${bad ? '--:--' : esc(ruleTime(r.rule))}</span>
       <div class="rbody"><div class="rtext">${esc(r.text)}</div><div class="tags">${tags.join('')}</div></div>
-      <button type="button" class="switch" role="switch" aria-checked="${on}" data-act="remOn" data-fk="reminder:${esc(r.id)}:on" aria-label="提醒「${esc(r.text)}」${on ? '開著' : '關著'}"><span></span></button>
+      <button type="button" class="switch" role="switch" aria-checked="${on}"${bad ? ' disabled' : ''} data-act="remOn" data-fk="reminder:${esc(r.id)}:on" aria-label="提醒「${esc(r.text)}」${on ? '開著' : '關著'}"><span></span></button>
       ${delBtn('reminder', r, r.text)}
       ${ringing ? `<div class="ring"><span class="ring-l"><span class="bell" aria-hidden="true">🔔</span> 響鈴中</span>
         <button type="button" class="btn sm primary" data-act="ack" data-fk="reminder:${esc(r.id)}:ack" aria-label="知道了：${esc(r.text)}">知道了</button>
@@ -675,7 +685,8 @@
     // 提醒：響鈴中、錯過的排最上面
     const rems = itemsOf('reminder', owner).map((r) => ({ r, ring: isRinging(r), miss: isMissed(r), at: scheduledAt(r) }));
     if (rems.length) {
-      rems.sort((a, b) => (b.ring - a.ring) || (b.miss - a.miss) || ((a.r.enabled === false) - (b.r.enabled === false)) || (a.at - b.at));
+      const off = (r) => r.enabled === false || !ruleOk(r.rule);
+      rems.sort((a, b) => (b.ring - a.ring) || (b.miss - a.miss) || (off(a.r) - off(b.r)) || (a.at - b.at));
       out.push(section('reminder', '提醒', rems.length, `<ul class="list">${rems.map((x) => reminderRow(x.r)).join('')}</ul>`));
     }
     // 股票
