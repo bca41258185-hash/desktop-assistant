@@ -398,16 +398,26 @@ function start() {
   // 滑鼠快速繞圈（1.5 秒內繞 2 圈）→ 從繞圈的位置下一陣落葉雨；冷卻 20 秒。睡著、藏起來時不理
   const circles = createCircleDetector();
   let lastRainAt = 0;
-  setInterval(() => {
-    if (!stageVisible || sleeping || !stageReady) return;
-    const c = screen.getCursorScreenPoint(), t = Date.now();
-    const hit = circles.push(c.x, c.y, t);
-    if (hit && t - lastRainAt > 20000) {
-      lastRainAt = t;
-      const wa = screen.getPrimaryDisplay().workArea;                                    // 舞台座標＝螢幕座標 − 工作區左上角
-      toStage('stage:leafrain', { by: 'cursor', x: hit.x - wa.x, y: hit.y - wa.y, r: hit.r });
+  // 滑鼠在動時每 40 ms 取樣；停著不動超過 1 秒就放慢到每 250 ms 看一次（一動就回到 40 ms，繞圈一定是在動）
+  let lastCur = null, stillSince = 0;
+  const circlePoll = () => {
+    let wait = 250;
+    if (stageVisible && !sleeping && stageReady) {
+      const c = screen.getCursorScreenPoint(), t = Date.now();
+      const moved = !lastCur || c.x !== lastCur.x || c.y !== lastCur.y;
+      lastCur = c;
+      if (moved) stillSince = t;
+      wait = t - stillSince < 1000 ? 40 : 250;
+      const hit = circles.push(c.x, c.y, t);
+      if (hit && t - lastRainAt > 20000) {
+        lastRainAt = t;
+        const wa = screen.getPrimaryDisplay().workArea;                                    // 舞台座標＝螢幕座標 − 工作區左上角
+        toStage('stage:leafrain', { by: 'cursor', x: hit.x - wa.x, y: hit.y - wa.y, r: hit.r });
+      }
     }
-  }, 40);
+    setTimeout(circlePoll, wait);
+  };
+  circlePoll();
   powerMonitor.on('lock-screen', () => { locked = true; checkPresence(); });
   powerMonitor.on('unlock-screen', () => { locked = false; checkPresence(); });
 
