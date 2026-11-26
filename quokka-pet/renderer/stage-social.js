@@ -670,7 +670,7 @@
   // 跟隨期的小袋鼠：媽媽走牠就跟（保持在媽媽後方 40–60 px）；媽媽響鈴時坐著看、不擋氣泡；媽媽停下時偶爾學媽媽、打滾
   F.target = function (j, mom) {
     const back = mom.faceDir > 0 ? -1 : 1, ring = mom.job && mom.job.name === 'ring';
-    const d = ring ? Math.max(64, mom.w * .3 + j.w * .3 + 10) : S.clamp(mom.w * .2 + j.w * .25, 44, 60);   // 平常在後方 40–60 px；響鈴時退到不擋媽媽的點擊範圍和氣泡
+    const d = ring ? Math.max(76, mom.w * .3 + j.w * .3 + 24) : S.clamp(mom.w * .2 + j.w * .25, 44, 60);   // 響鈴時多留 12 px（跟隨停下的容差），一定不擋媽媽的點擊範圍   // 平常在後方 40–60 px；響鈴時退到不擋媽媽的點擊範圍和氣泡
     return S.clamp(mom.x + back * d, 24, innerWidth - 24);
   };
   F.tick = function (j, now) {
