@@ -7,7 +7,7 @@
 (function () {
   const S = window.Stage, ANIM = S.ANIM, SOC = S.SOC, EASE = ANIM.EASE, Actor = S.Actor;
   const COUPLE = new Set(['cuddle', 'groom', 'leanNap', 'walkTogether']);
-  const DUET_MS = 1000 / 24;                                    // 兩隻一起即時繪製：每秒 24 格（上限 30）
+  const DUET_MS = 28;                                           // 兩隻一起即時繪製：跟著共用迴圈，每秒最多 30 格
   let duetSeq = 0;
   S.duets = new Set();
 
@@ -41,14 +41,18 @@
     }
     begin(now) {
       const I = this.I, O = this.O, W = innerWidth;
-      const gap = this.T.gap(this.ctxFor()), side = O.x >= I.x ? 1 : -1;
+      const gap = this.T.gap(this.ctxFor());
+      let side = O.x >= I.x ? 1 : -1;
+      // 爸爸碰鼻小袋鼠：媽媽（錨點）就在小袋鼠旁邊 → 爸爸站到小袋鼠的另一側，不要疊在媽媽身上
+      const anc = this.soc.anchor ? S.actors.get(this.soc.anchor) : null;
+      if (anc && anc !== I && anc !== O && Math.abs(anc.x - O.x) < 150) { const s2 = anc.x >= O.x ? 1 : -1, x2 = O.x - s2 * gap; if (x2 > 44 && x2 < W - 44) side = s2; }
       let ix = O.x - side * gap, ox = O.x;
       // 發起的走過去；螢幕邊放不下時，對方也挪一下
       if (ix < 44) { ix = 44; ox = ix + side * gap; } else if (ix > W - 44) { ix = W - 44; ox = ix + side * gap; }
       if (ox < 40 || ox > W - 40) return false;
       this.gap = gap; this.t0 = now;
       const ig = new Set([I, O]);
-      this.mI = Math.abs(ix - I.x) > 3 ? I.mover(ix, { ignore: ig, tol: 1.5 }) : null;
+      this.mI = Math.abs(ix - I.x) > 3 ? I.mover(ix, { ignore: ig, tol: 1.5, gait: (rem) => (rem < 64 * I.k ? 'walk' : 'hop') }) : null;
       this.mO = Math.abs(ox - O.x) > 3 ? O.mover(ox, { ignore: ig, tol: 1.5, gait: 'hop' }) : null;
       this.waitTurn = this.mO ? null : O.turner(-side * 60, 280);
       return true;
@@ -355,7 +359,7 @@
   // 跟隨期的小袋鼠：媽媽走牠就跟（保持在媽媽後方 40–60 px）；媽媽響鈴時坐著看、不擋氣泡；媽媽停下時偶爾學媽媽、打滾
   F.target = function (j, mom) {
     const back = mom.faceDir > 0 ? -1 : 1, ring = mom.job && mom.job.name === 'ring';
-    const d = Math.max(ring ? 64 : 50, (mom.w * .3 + j.w * .3 + (ring ? 10 : 0)));               // 不擋媽媽的點擊範圍和氣泡
+    const d = ring ? Math.max(64, mom.w * .3 + j.w * .3 + 10) : S.clamp(mom.w * .2 + j.w * .25, 44, 60);   // 平常在後方 40–60 px；響鈴時退到不擋媽媽的點擊範圍和氣泡
     return S.clamp(mom.x + back * d, 24, innerWidth - 24);
   };
   F.tick = function (j, now) {
@@ -365,7 +369,7 @@
     if (mom.dragging || mom.mode !== 'awake') { F.intoPouch(j, mom); return false; }
     const tx = F.target(j, mom), far = Math.abs(tx - j.x), dy = Math.abs(mom.y - j.y);
     const momMoving = mom.job && mom.job.ticks && mom.job.name !== 'ring' && mom.job.name !== 'social';
-    if (far > (momMoving ? 26 : 34) || dy > 3) { j.requestActivity(7, F.followJob(j, mom)); return !!j.job; }
+    if (far > (momMoving ? 26 : mom.job && mom.job.name === 'ring' ? 10 : 34) || dy > 3) { j.requestActivity(7, F.followJob(j, mom)); return !!j.job; }
     // 待機：面向媽媽坐著；偶爾打滾或學媽媽
     if (now >= j.nextAt && !S.reduceMotion && S.movingCount() < S.MAX_MOVING) {
       j.nextAt = now + 14000 + Math.random() * 22000;
@@ -376,7 +380,7 @@
   F.wakeAt = function (j) {
     if (j.inPouch) return Infinity;
     const mom = momOf(j);
-    if (mom && Math.abs(F.target(j, mom) - j.x) > 34) return performance.now();
+    if (mom && Math.abs(F.target(j, mom) - j.x) > (mom.job && mom.job.name === 'ring' ? 10 : 34)) return performance.now();
     return j.nextAt;
   };
   F.followJob = function (j, mom) {
@@ -433,7 +437,7 @@
       const anim = { dur: 2.3, keys };
       const job = a.animJob('grow', anim, {
         each: (jb, now, t) => { const u = S.clamp((t - .45) / .6, 0, 1); setK(oldK + (newK - oldK) * EASE.io(u)); a.place(); if (t > .6 && !jb.burst) { jb.burst = true; const p = a.toStage(80, 50); S.burst(p.x, p.y, 'stars'); } },
-        interrupt: () => { setK(newK); a.place(); }, end: () => { setK(newK); a.home = a.x; a.place(); S.api.savePos(a.id, { x: Math.round(a.x), y: Math.round(a.y) }); }
+        interrupt: () => { setK(newK); a.place(); }, end: () => { setK(newK); a.home = a.x; a.place(); S.api.savePos(a.id, { x: Math.round(a.x), y: Math.round(a.y) }); setTimeout(() => a.stepAway(), 400); }
       });
       a.th = -10;
       a.requestActivity(2, job);

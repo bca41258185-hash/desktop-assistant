@@ -250,7 +250,7 @@
         K(1.5 + d0, 75, touch(c, per)), K(2.1 + d0, 75, { ...touch(c, per), head: { ...c.pose.head, roll: (c.pose.head.roll || 0) + wig } }),
         K(2.7 + d0, 75, touch(c, per)), K(3.2, 75, { ...touch(c, per), head: { ...c.pose.head, roll: (c.pose.head.roll || 0) + wig * .6 } }),
         K(3.9, 66, { lean: 3, eyes: 'happy', mouth: 'open', blush: 1.4 }), K(4.5, 62, { eyes: 'happy', mouth: 'smile', blush: 1.2, y: per.lively ? -8 : 0 }), K(5.2, TH0)]));
-      const A = seq(F.A, pa, 0, -3), B = seq(F.B, pb, d, 3);
+      const A = seq(F.A, pa, 0, -2), B = seq(F.B, pb, d, 1.5);
       const T = 1.5 + d, cu = F.na.f + 1.3 * ctx.kk, ch = (F.na.h + F.nb.h) / 2;
       const dur = 5.2 + linger(ctx);
       return finish(ctx, dur, (t) => ({ a: A(Math.min(t, 5.2)), b: B(Math.min(t, 5.2)), world: [
@@ -380,7 +380,7 @@
 
   // ---- 並排曬太陽：各自坐好、仰頭瞇眼，一隻伸懶腰，慵懶的那隻打起盹；最後相視而笑 ---------------
   TYPES.sunbathe = {
-    gap: (ctx) => polite(ctx, 110),
+    gap: (ctx) => polite(ctx, 126),
     build(ctx) {
       const pa = ctx.a.per, pb = ctx.b.per, sitA = { sq: .93, lean: -5, head: { pitch: -9, roll: 5 }, eyes: 'closed', mouth: 'smile', arms: { L: { hand: [-9, 134, 28] }, R: { hand: [9, 134, 28] } } };
       const br = (t, ph) => 1 + .012 * sin(t * 2 + ph);
@@ -459,8 +459,8 @@
       const A = track(aKeys);
       const bow = (dr, ef) => ({ ...bp, head: { ...bp.head, roll: bp.head.roll + dr }, eyes: 'closed', mouth: 'smile', blush: 1.6, earFlop: ef });
       const bKeys = [K(0, TH0), K(.7, 30, { eyes: 'happy', blush: 1.3, head: { yaw: 20 } }), K(1.5, 18, bow(0, { L: 0, R: 0 }))];
-      for (let i = 0; i < 4; i++) { const t0 = 1.9 + i * .95; bKeys.push(K(t0, 18, bow(1.5, { L: 0, R: 4 })), K(t0 + .5, 18, { ...bow(-1.5, { L: 0, R: 20 }), tailUp: .2 })); }
-      bKeys.push(K(6.1, 22, { eyes: 'happy', mouth: 'open', blush: 1.6, head: { yaw: 20 } }), K(6.4, 22, { head: { roll: 8 }, earFlop: { L: 22, R: -14 }, eyes: 'closed', blush: 1.5 }), K(6.6, 22, { head: { roll: -8 }, earFlop: { L: -14, R: 22 }, eyes: 'closed', blush: 1.5 }),
+      for (let i = 0; i < 4; i++) { const t0 = 1.9 + i * .95; bKeys.push(K(t0, 18, bow(1.5, { L: 0, R: 2 })), K(t0 + .5, 18, { ...bow(-1.5, { L: 0, R: 9 }), tailUp: .2 })); }
+      bKeys.push(K(6.1, 22, { eyes: 'happy', mouth: 'open', blush: 1.6, head: { yaw: 20 } }), K(6.4, 22, { head: { roll: 8 }, earFlop: { L: 11, R: -7 }, eyes: 'closed', blush: 1.5 }), K(6.6, 22, { head: { roll: -8 }, earFlop: { L: -7, R: 11 }, eyes: 'closed', blush: 1.5 }),
         K(6.85, 30, { head: { roll: 3, yaw: 24 }, eyes: 'happy', mouth: 'open', blush: 1.5, y: pb.lively ? -8 : 0 }), K(7.5, 45));
       const B = track(bKeys), hu = F.ha.f, hh = F.ha.h;
       const dur = 7.5 + linger(ctx);
@@ -473,11 +473,11 @@
     couple: true,
     gap: (ctx) => polite(ctx, 104),
     build(ctx) {
-      const S = scoot(ctx, 76, .9), T1 = S.t2;
-      const napA = (hr, p) => ({ roll: 11, sq: .93, head: { roll: hr, pitch: p }, eyes: 'closed', mouth: 'smile', blush: 1.3, arms: { L: { hand: [-8, 132, 28] }, R: { hand: [8, 132, 28] } } });
+      const S = scoot(ctx, 84, .9), T1 = S.t2;
+      const napA = (hr, p) => ({ roll: 9, sq: .93, head: { roll: hr, pitch: p }, eyes: 'closed', mouth: 'smile', blush: 1.3, arms: { L: { hand: [-8, 132, 28] }, R: { hand: [8, 132, 28] } } });
       const napB = (p, hr) => ({ sq: .97, head: { pitch: p, roll: hr }, eyes: 'closed', mouth: 'smile', blush: 1.2 });
       const A = track([K(0, TH0), K(.7, 20, { eyes: 'sleepy', head: { pitch: 2 } }), K(T1 + .1, 20, { sq: 1.03, head: { pitch: -10 }, eyes: 'closed', mouth: 'open' }), K(T1 + .6, 20, { eyes: 'sleepy', mouth: 'smile', head: { yaw: 20 } }),
-        K(T1 + 1.5, 20, napA(24, 8)), K(T1 + 3.3, 20, napA(26, 10)), K(T1 + 5.1, 20, napA(24, 8)), K(T1 + 5.8, 20, { roll: 4, head: { roll: 10, pitch: 4 }, eyes: 'sleepy', mouth: 'smile' }),
+        K(T1 + 1.5, 20, napA(21, 8)), K(T1 + 3.3, 20, napA(23, 10)), K(T1 + 5.1, 20, napA(21, 8)), K(T1 + 5.8, 20, { roll: 4, head: { roll: 10, pitch: 4 }, eyes: 'sleepy', mouth: 'smile' }),
         K(T1 + 6.4, 18, { head: { yaw: 24 }, eyes: 'happy', mouth: 'open', blush: 1.4 }), K(T1 + 7.0, 18, { head: { yaw: 20 }, eyes: 'happy', blush: 1.3 }), K(T1 + 7.6, 15)]);
       const B = track([K(0, TH0), K(.8, 20, { eyes: 'open', head: { yaw: 22 } }), K(T1 + 1.2, 20, { eyes: 'happy', head: { yaw: 26, pitch: 6 }, blush: 1.4 }), K(T1 + 2.0, 20, { eyes: 'sleepy', head: { pitch: 4, roll: 3 } }),
         K(T1 + 2.7, 20, napB(8, 5)), K(T1 + 4.1, 20, napB(11, 6)), K(T1 + 5.5, 20, napB(8, 5)), K(T1 + 6.1, 20, { eyes: 'sleepy', head: { pitch: 2 } }), K(T1 + 6.35, 20, { eyes: 'wide', head: { pitch: -3 } }),

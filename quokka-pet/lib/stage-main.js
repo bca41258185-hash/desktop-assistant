@@ -1,7 +1,7 @@
 // 舞台圖層（主行程端，規格第 1、8.4、15 節）
 // 每個螢幕一層全螢幕透明視窗，所有庫卡都畫在裡面；平常滑鼠穿透，游標碰到某隻庫卡才接收點擊。
 // 判斷方式（三個平台通用）：舞台回報每隻庫卡的範圍 → 主行程依游標位置切換穿透。
-//   游標在任一隻 150 px 內：每 50 ms 查一次；否則每 400 ms；使用者離開電腦時暫停。
+//   游標在任一隻 150 px 內：每 50 ms 查一次；400 px 內（看向游標）每 120 ms；否則每 400 ms；使用者離開電腦時暫停。
 (function () {
   function createStageManager({ BrowserWindow, screen, ipcMain, path, dir }) {
     const stages = new Map();          // displayId → { win, rects: [{id,x,y,w,h}], ignoring }
@@ -38,18 +38,19 @@
     function poll() {
       if (paused) { cursorTimer = setTimeout(poll, 1000); return; }
       const c = screen.getCursorScreenPoint();
-      let near = false;
+      let near = false, look = false;
       for (const st of stages.values()) {
         let over = st.dragging;
         for (const r of st.rects) {
           const dx = Math.max(r.x - c.x, 0, c.x - (r.x + r.w)), dy = Math.max(r.y - c.y, 0, c.y - (r.y + r.h));
           if (dx === 0 && dy === 0) over = true;
           if (dx < 150 && dy < 150) near = true;
+          if (dx < 400 && dy < 400) look = true;   // 400 px 內庫卡會看向游標
         }
         setIgnore(st, !over);
-        if (near && !st.win.isDestroyed()) st.win.webContents.send('stage:cursor', { x: c.x - st.display.workArea.x, y: c.y - st.display.workArea.y });
+        if (look && !st.win.isDestroyed()) st.win.webContents.send('stage:cursor', { x: c.x - st.display.workArea.x, y: c.y - st.display.workArea.y });
       }
-      cursorTimer = setTimeout(poll, near ? 50 : 400);
+      cursorTimer = setTimeout(poll, near ? 50 : look ? 120 : 400);
     }
     ipcMain.on('stage:rects', (e, { rects, dragging }) => {
       for (const st of stages.values()) {

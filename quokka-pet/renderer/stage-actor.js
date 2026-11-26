@@ -386,7 +386,7 @@
       job.item = item;
       return job;
     }
-    // L1 響鈴：播循環動畫（跳一下、揮手、指向氣泡、踩小碎步；每秒 20 格）；響超過 60 秒改播安靜版（每秒 10 格）省資源
+    // L1 響鈴：播循環動畫（跳一下、揮手、指向氣泡、踩小碎步；每秒 20 格）；響超過 45 秒改播安靜版（每秒 10 格）省資源
     startRing() {
       if (!this.alerts.length) return;
       const al = this.alerts[this.alerts.length - 1];
@@ -404,10 +404,10 @@
         },
         tick(now) {
           if (job.pre) { if (job.pre.tick(now)) return true; job.pre = null; job.t0 = now; }
-          const t = (now - job.t0) / 1000, late = t > 60, an = late ? quiet : ring;
+          const t = (now - job.t0) / 1000, late = t > 45, an = late ? quiet : ring;
           if (now - job.last < (late ? 100 : 50)) return true;
           job.last = now;
-          const s = ANIM.sample(an, (late ? t - 60 : t) % an.dur);
+          const s = ANIM.sample(an, (late ? t - 45 : t) % an.dur);
           s.pose.props = an.props ? an.props(t % an.dur, {}) : [];
           a.th = 0; a.drawLive(s.th, s.pose);
           return true;
