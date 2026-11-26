@@ -147,6 +147,9 @@
     if (window.QuokkaSoftBlur) svg = window.QuokkaSoftBlur.merge(window.QuokkaSoftBlur.apply(svg, { sink: addShared }));   // ＋相鄰兩個毛邊濾鏡合成一次
     // 共用的毛
     svg = svg.replace(/<g data-fur="1">([\s\S]*?)<\/g>/g, (m, inner) => {
+      // 毛畫成圖了就直接貼圖（fur-image.js：幾百條線 → 一張圖，顯示卡少約四分之一的工作）；還沒畫好先用共用定義
+      const FI = window.QuokkaFurImage, im = FI && FI.get(inner);
+      if (im) return FI.tag(im);
       let id = furIds.get(inner);
       if (!id) { if (furIds.size > 40) return m; id = 'qfur' + furIds.size; furIds.set(inner, id); addShared(`<g id="${id}">${inner}</g>`); }
       return `<use href="#${id}"/>`;
