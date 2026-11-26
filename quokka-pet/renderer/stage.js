@@ -5,7 +5,7 @@
   const S = window.Stage, api = S.api;
   const isId = (v) => typeof v === 'string' && v.length > 0 && v.length <= 80;
   const actorOf = (qid) => (isId(qid) ? S.actors.get(qid) : null);
-  let awayNow = false, cursorStale = 0;
+  let awayNow = false, sleepNow = false, cursorStale = 0;
 
   // ---- 名單 ----------------------------------------------------------------------
   function placeNew(q, i, n) {
@@ -126,18 +126,24 @@
     }
     return out;
   }
+  // 離開（一段時間沒動電腦）：前 20 分鐘不睡、照常玩（主行程讓互動加倍）；sleep＝離開超過 20 分鐘或鎖定螢幕 → 才睡
   api.onPresence((p) => {
     if (!p) return;
-    const away = !!(p.away || p.locked);
-    if (away === awayNow && !p.digest) return;
-    awayNow = away;
-    if (away) for (const a of S.actors.values()) a.cancelDrag && a.cancelDrag();   // 鎖定／離開時還拎著：強制放下（mouseup 可能收不到）
+    const away = !!(p.away || p.locked), sleep = !!(p.locked || p.sleep);
+    if (away === awayNow && sleep === sleepNow && !p.digest) return;
+    const wasAway = awayNow;
+    awayNow = away; sleepNow = sleep;
+    if (away && !wasAway) for (const a of S.actors.values()) a.cancelDrag && a.cancelDrag();   // 鎖定／離開時還拎著：強制放下（mouseup 可能收不到）
     if (S.mode === 'hidden') {
       // 藏起來的時候回來：報告先記到各隻的佇列，等舞台顯示出來再講（不丟掉）
       if (!away) { const items = digestItems(p.digest); for (const [qid, list] of items) for (const it of list) actorOf(qid).enqueue(it); }
       return;
     }
-    if (away) { S.mode = 'asleep'; for (const a of S.actors.values()) a.setMode('asleep'); S.reportRects(); return; }
+    if (sleep) { S.mode = 'asleep'; for (const a of S.actors.values()) a.setMode('asleep'); S.reportRects(); return; }
+    if (away) {                                                         // 剛離開：醒著玩（從睡著回到醒著也一樣）
+      if (S.mode !== 'awake') { S.mode = 'awake'; for (const a of S.actors.values()) a.setMode('awake'); }
+      S.reportRects(); S.kick(); return;
+    }
     S.mode = 'awake';
     const items = digestItems(p.digest);
     for (const [qid, list] of items) for (const it of list) actorOf(qid).enqueue(it);
@@ -163,7 +169,7 @@
   let hideTimer = 0;
   function setHidden(h) {
     document.body.classList.toggle('hidden', h);
-    S.mode = h ? 'hidden' : (awayNow ? 'asleep' : 'awake');
+    S.mode = h ? 'hidden' : (sleepNow ? 'asleep' : 'awake');
     if (h) for (const a of S.actors.values()) a.cancelDrag && a.cancelDrag();
     for (const a of S.actors.values()) a.setMode(S.mode);
     if (!h) for (const a of S.actors.values()) if (a.alerts.length) a.startRing();   // 回來時補上提醒氣泡

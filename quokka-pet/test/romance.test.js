@@ -419,3 +419,20 @@ test('舊資料沒有 birthAt：用建立時間 − 年齡（月）天補上', (
   assert.ok(Math.abs(w.R.ageMonths(w.q('a')) - 25) < 1e-9);
   assert.ok(w.q('a').traits.birthAt);
 });
+
+test('喜歡的對象：好感最高且至少 20；有伴侶就是伴侶；不喜歡親人和小袋鼠', () => {
+  const w = world([(n) => mk(n, 'a', 'male'), (n) => mk(n, 'b', 'female'), (n) => mk(n, 'c', 'female'), (n) => mk(n, 'kid', 'female', 400, { mom: 'b' })]);
+  assert.equal(w.R.crushOf('a'), null);                    // 還沒有好感
+  setAff(w, 'a', 'b', 19);
+  assert.equal(w.R.crushOf('a'), null);                    // 不到 20
+  setAff(w, 'a', 'b', 30); setAff(w, 'a', 'c', 45);
+  assert.equal(w.R.crushOf('a'), 'c');                     // 好感最高的那一隻
+  assert.equal(w.R.crushOf('c'), 'a');
+  setAff(w, 'b', 'kid', 90);
+  assert.equal(w.R.crushOf('kid'), null);                  // 親人不算（媽媽和女兒）
+  w.q('c').stage = 'follow';
+  assert.equal(w.R.crushOf('a'), 'b');                     // 跟隨期的小袋鼠不算
+  w.q('c').stage = 'adult';
+  w.data.relations[pairKey('a', 'b')].couple = true;
+  assert.equal(w.R.crushOf('a'), 'b');                     // 有伴侶就是伴侶，即使對別隻好感更高
+});

@@ -33,6 +33,7 @@
     sel: 'all',              // 'all' 或某隻的 id
     adding: null,            // 新增卡：{ traits, name, err }
     gear: false,             // 這隻的 ⚙ 是否展開
+    infoOpen: false,         // 資訊卡的「更多資訊」（個性、好感度）是否展開
     gearMode: null,          // null | 'delete' | 'regen'
     gearMsg: null,           // ⚙ 裡的錯誤訊息
     globalOpen: false,       // 全域設定
@@ -519,7 +520,40 @@
     const q = qById(ui.sel);
     if (q && isJoey(q)) { slot.innerHTML = joeyCardHTML(q); return; }
     if (q && ui.gear) { slot.innerHTML = gearCardHTML(q); return; }
+    if (q) { slot.innerHTML = infoCardHTML(q); return; }
     slot.innerHTML = '';
+  }
+  // ---- 資訊卡：選了某隻（沒開 ⚙）時顯示牠的基本資料、個性、喜歡誰、和每一隻的好感度 ----
+  function infoCardHTML(q) {
+    const t = q.traits || {}, crushes = S.crushes || {};
+    const rels = new Map(relationsOf(q.id).map((r) => [r.other, r]));
+    const kin = (o) => o.mom === q.id || o.dad === q.id || q.mom === o.id || q.dad === o.id;
+    const partner = relationsOf(q.id).find((r) => r.couple);
+    const likes = crushes[q.id] ? qById(crushes[q.id]) : null;
+    const likedBy = S.quokkas.filter((o) => o.id !== q.id && crushes[o.id] === q.id);
+    const others = S.quokkas.filter((o) => o.id !== q.id && !isJoey(o))
+      .map((o) => ({ o, r: rels.get(o.id) || { affinity: 0 } }))
+      .sort((x, y) => (y.r.affinity || 0) - (x.r.affinity || 0));
+    const tag = (o, r) => [r.couple && '<span class="itag heart">♥ 伴侶</span>', !r.couple && r.friend && '<span class="itag star">★ 好朋友</span>',
+      !r.couple && likes && likes.id === o.id && '<span class="itag crush">偷偷喜歡</span>', crushes[o.id] === q.id && !r.couple && '<span class="itag crush">喜歡牠</span>',
+      kin(o) && '<span class="itag">家人</span>'].filter(Boolean).join('');
+    const likeLine = partner ? `和${esc(qName(partner.other))}是一對 ♥`
+      : likes ? `偷偷喜歡${esc(likes.name)}${likedBy.some((o) => o.id === likes.id) ? '（對方也喜歡牠！）' : ''}`
+      : '還沒有特別喜歡誰';
+    const open = !!ui.infoOpen;
+    return `<div class="card info" role="group" aria-label="${esc(q.name)}的資訊">
+      <div class="card-h">${avatar(q, 'md')}<h2>${esc(q.name)}</h2>
+        <button type="button" class="link-btn" data-act="infoToggle" data-fk="i:toggle" aria-expanded="${open}" aria-controls="infoMore">${open ? '收起' : '更多資訊'}</button></div>
+      <p class="info-line">${esc(traitLine(t, ageMonths(q)))}</p>
+      <p class="info-line">💕 ${likeLine}${!partner && likedBy.length ? `・${likedBy.map((o) => esc(o.name)).join('、')}喜歡牠` : ''}</p>
+      ${open ? `<div id="infoMore">
+        <dl class="info-dl">${TR.describePersonality(t).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+        ${others.length ? `<h3 class="info-h">和大家的好感度</h3><ul class="aff-list">${others.map(({ o, r }) => {
+          const v = Math.max(0, Math.min(100, Math.round(r.affinity || 0)));
+          return `<li>${avatar(o, 'sm')}<span class="aff-name">${esc(o.name)}</span><span class="aff-bar" role="img" aria-label="好感度 ${v}／100"><i style="width:${v}%"></i></span><span class="aff-n">${v}</span>${tag(o, r)}</li>`;
+        }).join('')}</ul>` : '<p class="note">只有牠一隻，還沒有可以互動的同伴。</p>'}
+      </div>` : ''}
+    </div>`;
   }
   function newCardHTML() {
     const a = ui.adding;
@@ -1052,6 +1086,7 @@
         if (ui.gear) { const n = $('gName'); if (n) { n.focus({ preventScroll: true }); n.closest('.card').scrollIntoView({ block: 'nearest' }); } } else { const g = document.querySelector('[data-fk="gear"]'); if (g) g.focus(); }
         break;
       case 'gearCancel': ui.gearMode = null; render(); break;
+      case 'infoToggle': ui.infoOpen = !ui.infoOpen; render(); break;
       case 'rename': doRename(); break;
       case 'color': doAccessory($('gAcc').value, b.dataset.c); break;
       case 'regenAsk': ui.gearMode = 'regen'; render(); break;

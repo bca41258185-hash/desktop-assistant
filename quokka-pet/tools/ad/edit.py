@@ -35,9 +35,12 @@ def map_marks(start, shot, a, b, kinds, fn):
 
 # 1 鉤子：臉部特寫＋跳（慢動作），大字
 chapter('hit')
-s = clip('hook', 0.0, 3.5)
+# 程式自己在 3.4 秒左右冒出「跳跳跳！」氣泡（畫面正中上方，約 x 760–1160、y 165–365）。
+# 大字卡改成三行窄版放在左側（避開臉和氣泡），鏡頭多留一拍到 4.0 秒，讓氣泡看得清楚，
+# 字卡與氣泡並排一拍後一起在 4.0 秒的重拍上切走；之後所有剪接點整體晚 0.5 秒（一拍），仍在拍子上。
+s = clip('hook', 0.0, 4.0)
 sfx(s + 0.42, 'bigpop', 1.0); sfx(s + 1.35, 'boing', .5)
-cap('hook', s + 1.0, s + 3.5, 960, 250, 'big')
+cap('hook', s + 1.0, s + 4.0, 380, 480, 'big')
 # 問題：雜亂桌面，庫卡走進來（快速閃過）
 s = clip('desk', 1.0, 3.0)
 sfx(s, 'whoosh', .5)
@@ -169,7 +172,7 @@ print('TOTAL', round(TOTAL, 2), 'clips', len(EDL))
 
 # ---- 1. 剪接（逐格精準，60fps）-------------------------------------------------------------
 def run(cmd):
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')   # Windows 預設 cp950 解不開 ffmpeg 的中文路徑訊息
     if r.returncode: print(' '.join(cmd)[:2000]); print(r.stderr[-3000:]); sys.exit(1)
 inp, fc = [], []
 srcs = {}

@@ -5,7 +5,7 @@ const { app, BrowserWindow } = require('electron');
 const fs = require('fs'), path = require('path');
 const OUT = path.resolve(process.argv[process.argv.length - 1]);
 const CAPS = {
-  hook: ['你的桌面，<br>需要一隻庫卡。', 'big'],
+  hook: ['你的桌面，<br>需要<br>一隻庫卡。', 'big'],     // 三行窄版：放在開場鏡頭左側，不蓋臉，也不碰右邊冒出的「跳跳跳！」氣泡
   problem: ['事情太多，記不住？', 'cream'],
   morning: ['早安！今天也一起加油', ''],
   work: ['一句話，交給我吧！', ''],
@@ -32,7 +32,7 @@ const LABELS = { cool: '獨立酷酷派・酷酷', clingy: '黏人開心果・�
 const CSS = `*{margin:0;padding:0;box-sizing:border-box}body{background:transparent;font-family:'WenQuanYi Zen Hei','Noto Sans TC','Microsoft JhengHei','PingFang TC','Noto Color Emoji','Segoe UI Emoji',sans-serif}
 .cap{position:absolute;left:60px;top:60px;display:inline-flex;align-items:center;gap:14px;padding:18px 46px 24px;border-radius:999px;background:#6fb26a;color:#fffbea;font-weight:bold;font-size:72px;letter-spacing:4px;
  box-shadow:0 9px 0 #4f8f4a,0 20px 40px rgba(60,90,50,.28);white-space:nowrap;text-shadow:0 3px 0 #4f8f4a;-webkit-text-stroke:2.5px currentColor}
-.cap.big{font-size:104px;line-height:1.18;border-radius:64px;padding:30px 64px 40px;text-align:center;white-space:normal;display:block}
+.cap.big{font-size:96px;line-height:1.18;border-radius:64px;padding:30px 64px 40px;text-align:center;white-space:normal;display:block}
 .cap.cream{background:#fff5dc;color:#4f8f4a;box-shadow:0 9px 0 #e8cf9a,0 20px 40px rgba(120,90,40,.22);text-shadow:none}
 .cap.orange{background:#f39a3d;box-shadow:0 9px 0 #c9732a,0 20px 40px rgba(150,80,20,.28);text-shadow:0 3px 0 #c9732a}
 .cap.red{background:#e0524a;box-shadow:0 9px 0 #ad3a33,0 20px 40px rgba(150,40,30,.28);text-shadow:0 3px 0 #ad3a33}

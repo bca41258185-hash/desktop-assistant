@@ -401,3 +401,20 @@ body.dragging .chip[data-drop] { background: var(--surface-2); border-style: das
 .report-lines { margin: 0; padding-left: 18px; }
 .report-tags { margin: 6px 0 2px; display: flex; flex-wrap: wrap; gap: 4px; }
 .report-nums, .report-note { margin: 4px 0 0; font-size: 13px; color: var(--muted, #9a8670); font-variant-numeric: tabular-nums; }
+
+/* ---- 資訊卡（選了某隻時）：基本資料、喜歡誰、個性、好感度 ---- */
+.info .card-h { margin-bottom: 4px; }
+.info-line { font-size: 13px; color: var(--ink); margin: 2px 0; line-height: 1.5; }
+.info-dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 13px; margin: 10px 0 4px; }
+.info-dl dt { color: var(--muted); }
+.info-h { font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+.aff-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.aff-list li { display: flex; align-items: center; gap: 6px; font-size: 13px; flex-wrap: wrap; }
+.aff-name { min-width: 4.5em; }
+.aff-bar { flex: 1 1 60px; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.aff-bar i { display: block; height: 100%; background: #e07a8f; border-radius: 4px; }
+.aff-n { width: 2.2em; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.itag { font-size: 12px; padding: 0 6px; border-radius: 9px; background: var(--paper); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.itag.heart { color: #c2185b; border-color: #f3c1d3; background: #fff0f5; }
+.itag.star { color: #8a6d00; border-color: #ecd98a; background: #fffbe6; }
+.itag.crush { color: #ad3f63; border-color: #f0c9d6; background: #fff6f9; }

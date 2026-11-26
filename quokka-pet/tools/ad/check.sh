@@ -1,8 +1,9 @@
 #!/bin/bash
+export PYTHONUTF8=1 PYTHONIOENCODING=utf-8
 # 成片檢查：bash check.sh 影片.mp4 格圖.png
 #   · 每秒不同畫格數（mpdecimate）  · 響度（-16 LUFS、真峰值 < -1 dBTP）  · 每秒一格的格圖（附時間）
 V="$1"; G="$2"
-PY=$(command -v python3 || command -v python)
+PY=$(for p in python3 python; do "$p" -c "import numpy" >/dev/null 2>&1 && { command -v "$p"; break; }; done)
 ffprobe -v error -select_streams v -show_entries stream=width,height,r_frame_rate,codec_name,profile -of compact=p=0 "$V"
 ffprobe -v error -select_streams a -show_entries stream=codec_name,sample_rate,channels -of compact=p=0 "$V"
 N=$(ffprobe -v error -count_frames -select_streams v -show_entries stream=nb_read_frames -of csv=p=0 "$V")

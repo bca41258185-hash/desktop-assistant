@@ -29,6 +29,16 @@ module.exports = async function drive(shot) {
   const stage = stageWin.webContents;
   for (let i = 0; i < 200; i++) { if (!stage.isLoading() && await stage.executeJavaScript('!!(window.__stage && window.__vc)').catch(() => false)) break; await sleep(50); }
   stageWin.setAlwaysOnTop(false);
+  // Windows：建立視窗時會被縮成螢幕工作區（例如 1080 高的螢幕扣掉工作列），建好後再設一次就能比螢幕大
+  if (process.env.AD_FAKE_SCREEN) {
+    const [fw, fh] = process.env.AD_FAKE_SCREEN.split('x').map(Number);
+    for (let i = 0; i < 20; i++) {
+      stageWin.setBounds({ x: 0, y: 0, width: fw, height: fh });
+      await sleep(100);
+      const [iw, ih] = await stage.executeJavaScript('[innerWidth, innerHeight]');
+      if (iw >= fw && ih >= fh) break;
+    }
+  }
   // 離開偵測、游標：改成腳本控制（程式自己的輪詢照常讀這兩個值）
   global.__idle = 0; powerMonitor.getSystemIdleTime = () => global.__idle;
   global.__cur = { x: -5000, y: -5000 }; screen.getCursorScreenPoint = () => ({ x: Math.round(global.__cur.x), y: Math.round(global.__cur.y) });

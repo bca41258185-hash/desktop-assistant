@@ -19,6 +19,7 @@
     decayAfterDays: 7,           // 連續 7 天沒互動
     decayPerDay: 2,              // 之後每天 −2
     friendAt: 80,
+    crushAt: 20,                 // 好感達 20 才會「偷偷喜歡」（有伴侶就是伴侶）
     coupleAt: 100,
     matureMonths: { female: 18, male: 12 },
     juvenileUntilMonths: 18,     // 未滿 18 個月是亞成體
@@ -224,6 +225,21 @@
         if (v && v.couple) { const [a, b] = k.split('|'); if (a === qid) return b; if (b === qid) return a; }
       }
       return null;
+    }
+    // 喜歡的對象：有伴侶就是伴侶；否則是好感最高（至少 crushAt）、不是親人的那一隻。小袋鼠（育兒袋、跟隨期）不算
+    function crushOf(qid) {
+      const isKid = (q) => !q || q.stage === 'pouch' || q.stage === 'follow';
+      if (isKid(byId(qid))) return null;
+      const p = partnerOf(qid);
+      if (p) return p;
+      let best = null, top = C.crushAt - 1e-9;
+      for (const [k, v] of Object.entries(data.relations)) {
+        if (!v || !(v.affinity > top)) continue;
+        const [a, b] = k.split('|'), o = a === qid ? b : b === qid ? a : null;
+        if (!o || isKid(byId(o)) || isKin(qid, o)) continue;
+        best = o; top = v.affinity;
+      }
+      return best;
     }
     const isCouple = (a, b) => { const r = rel(a, b, false); return !!(r && r.couple); };
     const isFriend = (a, b) => { const r = rel(a, b, false); return !!(r && r.friend); };
@@ -526,7 +542,7 @@
 
     return {
       onTogether, onInterrupted, onPass, dailyDecay, canPair, tickClock, ageMonths, onDelete, deleteWarning,
-      canRegenerate, onRegenerate, refreshAges, isKin, partnerOf, isCouple, isFriend, guardianOf, canOwnTasks,
+      canRegenerate, onRegenerate, refreshAges, isKin, partnerOf, crushOf, isCouple, isFriend, guardianOf, canOwnTasks,
       tempName, resolveNameClash, relation: (a, b) => rel(a, b, false), pairKey, constants: C
     };
   }

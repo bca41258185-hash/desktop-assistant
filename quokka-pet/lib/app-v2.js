@@ -73,8 +73,18 @@ function start() {
   let stageReady = false; const stageBacklog = [];
   const toStage = (ch, payload) => { if (!stageReady && (ch === 'q:event' || ch === 'presence')) { if (stageBacklog.length < 50) stageBacklog.push([ch, payload]); return; } stage.send(ch, payload); };
   const stageQ = (q) => ({ id: q.id, name: q.name, traits: q.traits, pos: q.home || null, stage: q.stage || 'adult', mom: q.mom || null, dad: q.dad || null,
-    growScale: (q.traits && q.traits.growScale) || null, pregnant: !!q.pregnancy, hasJoey: q.joey ? q.joey.id : null, partner: partnerId(q.id) });
+    growScale: (q.traits && q.traits.growScale) || null, pregnant: !!q.pregnancy, hasJoey: q.joey ? q.joey.id : null, partner: partnerId(q.id), crush: crushId(q.id) });
   function partnerId(qid) { try { return romance.partnerOf(qid) || null; } catch (e) { return null; } }
+  function crushId(qid) { try { return romance.crushOf(qid) || null; } catch (e) { return null; } }
+  // 喜歡的對象變了（好感度變動後）：舞台要知道才會偷看對方；面板顯示也跟著更新
+  let crushSig = '';
+  function syncCrush() {
+    const sig = data.quokkas.map((q) => q.id + ':' + (crushId(q.id) || '')).join('|');
+    if (sig === crushSig) return;
+    crushSig = sig;
+    toStage('stage:quokkas', data.quokkas.map(stageQ));
+    toPanel('store:changed', snapshot());
+  }
   let away = false;
   const digest = {};                    // 離開期間各隻的待報告事項：{ qid: R.digestPush 的累積 }，回來時由各隻報告（R.digestTexts 轉成文字）
   const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -87,7 +97,8 @@ function start() {
     getLayer: (qid) => (layers[qid] == null ? 8 : layers[qid]),
     getPos: (qid) => positions[qid] || null,
     now: () => Date.now(), random: Math.random, romance,
-    isBlocked: () => away || !stageVisible,
+    isBlocked: () => sleeping || !stageVisible,      // 睡著（離開超過 20 分鐘、鎖定）或藏起來時不排
+    isAway: () => away && !sleeping,                 // 剛離開（前 20 分鐘）：互動加倍
     onStart: (job) => toStage('social:start', job),
     onAbort: (job) => toStage('social:abort', { pairId: job.pairId, by: job.by, reason: job.reason })
   });
@@ -132,7 +143,7 @@ function start() {
     data.reminders = data.reminders.filter((r) => !(spent(r) && !r.missedAt && new Date(r.lastFiredAt).getTime() < cut));
     if (data.reminders.length !== n) changed();
   }
-  setInterval(() => { try { romance.dailyDecay(); sweepReminders(); } catch (e) {} }, 3600000);
+  setInterval(() => { try { romance.dailyDecay(); sweepReminders(); syncCrush(); } catch (e) {} }, 3600000);
 
   let panel = null;
   function createPanel() {
@@ -157,7 +168,7 @@ function start() {
   const quotes = {};                 // symbol → 最新報價
   function snapshot() {
     return { quokkas: data.quokkas, tasks: data.tasks, reminders: data.reminders, stocks: data.stocks, folders: data.folders,
-      relations: data.relations, settings: data.settings, quotes, ringing: data.reminders.filter((r) => r.ringing).map((r) => r.id),
+      relations: data.relations, crushes: Object.fromEntries(data.quokkas.map((q) => [q.id, crushId(q.id)])), settings: data.settings, quotes, ringing: data.reminders.filter((r) => r.ringing).map((r) => r.id),
       folderChanges: folderWatch.recentAll() };
   }
   function changed({ quokkas = false } = {}) {
@@ -316,18 +327,23 @@ function start() {
   const unwatchFolder = (id) => folderWatch.unwatch(id);
 
   // ---- 離開偵測（PresenceWatch） --------------------------------------------------
-  let locked = false;
+  // 離開（一段時間沒動電腦）的前 20 分鐘：庫卡不睡，反而玩得更兇（互動加倍）；離開超過 20 分鐘才睡；鎖定螢幕一律睡
+  const AWAY_PLAY_MS = 20 * 60000;
+  let locked = false, awaySince = 0, sleeping = false;
   function checkPresence() {
     const mins = Number(data.settings.awayMinutes) || 0;
     const idle = powerMonitor.getSystemIdleTime();
     const nowAway = locked || (mins > 0 && idle >= mins * 60);
-    if (nowAway === away) return;
-    away = nowAway;
+    if (nowAway && !away) awaySince = Date.now();
+    const nowSleep = locked || (nowAway && Date.now() - awaySince >= AWAY_PLAY_MS);
+    if (nowAway === away && nowSleep === sleeping) return;
+    const back = away && !nowAway;
+    away = nowAway; sleeping = nowSleep;
     stage.pause(away || !stageVisible);
     const texts = {};
-    if (!away) for (const [qid, d] of Object.entries(digest)) { const t = R.digestTexts(d); if (t.length) texts[qid] = t; }
-    toStage('presence', { away, locked, digest: away ? null : texts });
-    if (!away) for (const k of Object.keys(digest)) delete digest[k];
+    if (back) for (const [qid, d] of Object.entries(digest)) { const t = R.digestTexts(d); if (t.length) texts[qid] = t; }
+    toStage('presence', { away, locked, sleep: sleeping, digest: away ? null : texts });
+    if (back) for (const k of Object.keys(digest)) delete digest[k];
   }
   setInterval(checkPresence, 5000);
   powerMonitor.on('lock-screen', () => { locked = true; checkPresence(); });
@@ -623,7 +639,7 @@ function start() {
     const backlog = stageBacklog.splice(0);
     for (const [ch, payload] of backlog) e.sender.send(ch, payload);
     // 重新載入（當掉、沒回應）後：補送目前的離開／鎖定狀態（開機時的已在上面的待送事項裡）
-    if (away && !backlog.some(([ch]) => ch === 'presence')) e.sender.send('presence', { away, locked, digest: null });
+    if (away && !backlog.some(([ch]) => ch === 'presence')) e.sender.send('presence', { away, locked, sleep: sleeping, digest: null });
     if (hiddenUntil > Date.now()) e.sender.send('stage:hide', { until: hiddenUntil });
   });
   // 位置沒變就不寫；有變的最快每 10 秒寫一次（結束程式前一定寫入）
@@ -641,9 +657,9 @@ function start() {
     if (affTimer) return;
     affTimer = setTimeout(() => { affTimer = null; store.save(); posSaver.markSaved(); }, 10000);
   }
-  ipcMain.on('social:done', (e, { pairId, ok, type } = {}) => { try { const r = social.done(pairId, { ok: !!ok, type }); saveAffinitySoon(); onRomanceEvents(r && r.events); } catch (err) {} });
+  ipcMain.on('social:done', (e, { pairId, ok, type } = {}) => { try { const r = social.done(pairId, { ok: !!ok, type }); saveAffinitySoon(); onRomanceEvents(r && r.events); syncCrush(); } catch (err) {} });
   ipcMain.on('social:abort', (e, { pairId, by, reason } = {}) => { try { social.abort(pairId, by, reason); } catch (err) {} });
-  ipcMain.on('q:pass', (e, { a, b } = {}) => { if (qById(a) && qById(b)) { try { social.passBy(a, b); saveAffinitySoon(); } catch (err) {} } });
+  ipcMain.on('q:pass', (e, { a, b } = {}) => { if (qById(a) && qById(b)) { try { social.passBy(a, b); saveAffinitySoon(); syncCrush(); } catch (err) {} } });
   ipcMain.on('q:dblclick', (e, { qid } = {}) => showPanel(qById(qid) ? qid : null));
   ipcMain.on('q:context', (e, { qid } = {}) => {
     const q = qById(qid); if (!q) return;
@@ -695,7 +711,7 @@ function start() {
   boot('資料夾', () => { data.folders.forEach((f) => boot('資料夾 ' + f.path, () => watchFolder(f))); folderWatch.startLoop(); });
   boot('股價', () => { syncWatchlist(); stocks.start(); });
   try { romance.refreshAges(); romance.dailyDecay(); sweepReminders(); } catch (e) {}
-  scheduleSocial(90000);               // 開機 1.5 分鐘後才開始安排互動
+  scheduleSocial(15000);               // 開機 15 秒後開始安排互動
   app.on('before-quit', () => { app.isQuitting = true; clearTimeout(socialTimer); clearTimeout(affTimer); stocks.stop(); clock.stop(); folderWatch.stop(); reminderNotes.flush(); posSaver.flush(); store.saveNow(); });
   return { store, stage, data, showPanel, unhide, stocks, quotes, layers, positions, folderWatch, posSaver, perf };
 }

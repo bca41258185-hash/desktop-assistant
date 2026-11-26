@@ -125,14 +125,18 @@
       const I = this.I, O = this.O, W = innerWidth;
       const gap = this.T.gap(this.ctxFor());
       const side = O.x >= I.x ? 1 : -1;
-      let ix = O.x - side * gap, ox = O.x, laneFor = null;
+      // 兩隻都跳向對方，在中間會合（各走一半）
+      const mid = (I.x + O.x) / 2;
+      let ix = mid - side * gap / 2, ox = mid + side * gap / 2, laneFor = null;
+      if ((ox - O.x) * side > 0) { ix = O.x - side * gap; ox = O.x; }      // 本來就比互動距離還近：對方不用往後退，發起的調整就好
       // 爸爸碰鼻小袋鼠：媽媽（錨點）擋在中間 → 爸爸留在自己這一側，小袋鼠從媽媽腳邊繞到爸爸這邊來
       const anc = this.soc.anchor ? S.actors.get(this.soc.anchor) : null;
       if (anc && anc !== I && anc !== O && !anc.inPouch && Math.abs(anc.y - I.y) <= 40 && (anc.x - I.x) * (anc.x - O.x) < 0) {
         ox = anc.x - side * (anc.w * .3 + O.w * .3 + 14); ix = ox - side * gap; laneFor = anc;
       }
-      // 發起的走過去；螢幕邊放不下時，對方也挪一下
+      // 螢幕邊放不下時，整組往內挪
       if (ix < 44) { ix = 44; ox = ix + side * gap; } else if (ix > W - 44) { ix = W - 44; ox = ix + side * gap; }
+      else if (ox < 44) { ox = 44; ix = ox - side * gap; } else if (ox > W - 44) { ox = W - 44; ix = ox - side * gap; }
       if (ox < 40 || ox > W - 40) return false;
       // 任何走位都不穿過第三隻：兩隻要走的路上（含站位）有別隻 → 先請待機的那隻讓路（跳到這一段的外側；
       // 要越過這兩隻其中一隻時走靠鏡頭那一道、畫在前面繞過去）；正在忙的就等牠；等太久（7 秒）才取消
@@ -156,9 +160,10 @@
       if (ox < 40 || ox > W - 40) return false;
       this.gap = gap; this.t0 = now;
       const ig = new Set([I, O]);
-      const chk = (who) => (nx, d) => !who.blocked(nx, d, new Set([I, O, ...(laneFor ? [laneFor] : [])]));   // 走到一半有別隻走進來擋路：停下、取消
-      this.mI = Math.abs(ix - I.x) > 3 ? I.mover(ix, { ignore: ig, tol: 1.5, check: chk(I), gait: (rem) => (rem < 64 * I.k ? 'walk' : 'hop') }) : null;
-      this.mO = Math.abs(ox - O.x) > 3 ? O.mover(ox, { ignore: ig, tol: 1.5, gait: 'hop', lane: laneFor ? [laneFor] : null }) : null;
+      // 走到一半有別隻走進來擋路：停下、取消。游標不算擋路（不然滑鼠停在旁邊，互動一開始就被取消）
+      const chk = (who) => (nx, d) => !who.blocked(nx, d, new Set([I, O, ...(laneFor ? [laneFor] : [])]), null, { cursor: false });
+      this.mI = Math.abs(ix - I.x) > 3 ? I.mover(ix, { ignore: ig, tol: 1.5, check: chk(I), gait: (rem) => (S.CRAWL && rem < 64 * I.k ? 'walk' : 'hop') }) : null;
+      this.mO = Math.abs(ox - O.x) > 3 ? O.mover(ox, { ignore: ig, tol: 1.5, gait: 'hop', lane: laneFor ? [laneFor] : null, check: laneFor ? null : chk(O) }) : null;
       this.waitTurn = this.mO ? null : O.smoothTo(-side * 60, {}, 280);
       return true;
     }
