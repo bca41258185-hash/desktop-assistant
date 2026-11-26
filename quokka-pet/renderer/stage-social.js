@@ -292,7 +292,7 @@
   };
   // 往後退一小步讓路：看一眼 → 小跳往後（depth）、必要時往旁邊挪一點 → 回頭看撿球的 → 等撿完 → 跳回地面線
   function yieldJob(o, mover, ballX, fromX, opt = {}) {
-    const k = o.k, D = 26 * k, HOP = 420;
+    const k = o.k, D = 38 * k, HOP = 460;
     const politeOk = (x) => [...S.actors.values()].every((q) => q === o || q === mover || q.inPouch || Math.abs(q.y - o.y) > 40 || F.close(o, q) || Math.abs((q.sideTo != null ? q.sideTo : q.x) - x) >= 92 * (q.k + k) / 2 / S.SCALE);
     // 撿球的會停在球前面 88 單位（站位）；退的那一步要離球和站位都有一個身體的距離、離別隻保持禮貌距離
     const standX = ballX == null ? null : ballX - (Math.sign(ballX - fromX) || 1) * 88 * mover.k;

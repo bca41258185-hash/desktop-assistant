@@ -69,7 +69,7 @@
   // ---- 一隻庫卡 ------------------------------------------------------------------
   class Actor {
     constructor(q) {
-      this.uid = ++uidSeq; this.frameGen = 0; this.pendingSrc = null; this.liveShown = false;
+      this.uid = ++uidSeq; this.frameGen = 0; this.shownGen = 0; this.pendingSrc = null; this.liveShown = false;
       this.id = q.id; this.name = S.str(q.name, 12);
       this.mode = S.mode === 'hidden' ? 'hidden' : 'awake';
       this.job = null; this.queue = []; this.alerts = []; this.ball = null;
@@ -80,11 +80,12 @@
       this.el = document.createElement('div');
       this.el.className = 'actor';
       this.img = document.createElement('img'); this.img.draggable = false;
+      this.imgB = document.createElement('img'); this.imgB.draggable = false; this.imgB.className = 'back'; this.imgB.alt = '';   // 背景緩衝：下一格先在這裡載入、解碼好才換到前面
       this.live = document.createElement('div'); this.live.className = 'live';
       this.zz = document.createElement('span'); this.zz.className = 'zz'; this.zz.setAttribute('aria-hidden', 'true'); this.zz.innerHTML = 'z<b>Z</b>';
       this.bang = document.createElement('span'); this.bang.className = 'bang'; this.bang.setAttribute('aria-hidden', 'true'); this.bang.textContent = '！';
       this.tag = document.createElement('span'); this.tag.className = 'name';
-      this.el.append(this.img, this.live, this.zz, this.bang, this.tag);
+      this.el.append(this.img, this.imgB, this.live, this.zz, this.bang, this.tag);
       S.stageEl.appendChild(this.el);
       this.bubble = new S.Bubble(this);
       this.applyData(q, true);
@@ -93,7 +94,8 @@
       this.home = this.x; this.dy = 0;
       this.th = -15;
       this.nextAt = performance.now() + 2500 + Math.random() * 6000;
-      this.img.style.animationDelay = (-Math.random() * 3.2).toFixed(2) + 's';   // 每隻的呼吸錯開
+      this.breathDelay = (-Math.random() * 3.2).toFixed(2) + 's';                 // 每隻的呼吸錯開
+      this.img.style.animationDelay = this.imgB.style.animationDelay = this.breathDelay;
       this.bindInput();
       this.showRest();
       this.place();
@@ -125,7 +127,7 @@
       this.el.classList.toggle('joey', this.isFollow);
       this.beh = S.TR.behavior(this.traits) || null;
       this.act = this.traits.personality ? this.traits.personality.activity : .5;
-      this.img.alt = this.name; this.tag.textContent = this.name;
+      this.tag.textContent = this.name;
       this.el.setAttribute('aria-label', this.name);
       if (S.family) S.family.refresh(this);
       const sizeChanged = !first && Math.abs(this.k - oldK) > 1e-4;
@@ -148,19 +150,37 @@
     }
     // SVG 座標 → 舞台座標（腳底 (80,183) 對到 (x, y)）
     toStage(sx, sy) { return { x: this.x + (sx - S.FOOT.x) * this.k, y: this.y + (sy - S.FOOT.y) * this.k }; }
-    // 換畫格：新畫的格子（還沒解碼）先在背景解碼好才換上去；這段時間繼續顯示上一格（或即時 SVG），不會有空白的一格
+    // 換畫格：新的一格先放在背景的 <img> 載入、解碼，確定畫得出來才換到前面；這段時間繼續顯示上一格（或即時 SVG）。
+    // 直接改前面那張的 src 會有一格空白、或新舊畫框（寬／窄）對不上而縮成一團的一格
     setFrame(key, th, pose, wide = false) {
       if (this.liveOn) this.hideLive();
-      const u = S.frameURL(this, key, th, pose, wide), gen = ++this.frameGen;
-      const apply = () => {
-        if (gen !== this.frameGen) return;
-        if (wide !== !!this.wideImg) { this.wideImg = wide; this.img.classList.toggle('wide', wide); }
-        if (this.img.src !== u) this.img.src = u;
-        this.pendingSrc = null; this.flushLive();
-      };
-      if (this.img.src === u || S.frameReady(u)) { apply(); return; }
+      this.showURL(S.frameURL(this, key, th, pose, wide), wide);
+    }
+    showURL(u, wide) {
+      const gen = ++this.frameGen;
+      if (this.img.src === u && !!this.wideImg === wide) { this.shownGen = gen; this.pendingSrc = null; this.flushLive(); return; }
+      const B = this.imgB;
+      B.classList.toggle('wide', wide);
+      if (B.src !== u) B.src = u;
+      if (B.complete && B.naturalWidth > 0) {                                     // 已經在記憶體裡：馬上換（前後兩張互換角色）
+        const F = this.img; this.img = B; this.imgB = F;
+        B.classList.remove('back'); F.classList.add('back');
+        this.wideImg = wide; this.shownGen = gen; this.pendingSrc = null; this.flushLive();
+        return;
+      }
+      // 還沒好：這張自己慢慢解碼（換一張新的當背景緩衝），解碼好時如果還是最新的就換上去
+      const N = B;
+      this.imgB = document.createElement('img'); this.imgB.draggable = false; this.imgB.alt = ''; this.imgB.className = 'back'; this.imgB.style.animationDelay = this.breathDelay;
+      this.el.insertBefore(this.imgB, this.live);
       this.pendingSrc = u;
-      S.decodeFrame(u).then(apply);
+      const done = () => {
+        if (gen > this.shownGen && N.src === u && N.isConnected) {
+          const F = this.img; this.img = N; N.classList.remove('back'); F.remove();
+          this.wideImg = wide; this.shownGen = gen;
+          if (gen === this.frameGen) { this.pendingSrc = null; this.flushLive(); }
+        } else N.remove();
+      };
+      (N.decode ? N.decode() : Promise.resolve()).then(done, done);
     }
     // 依時間取第幾格（快取用），回傳 [格號, 取樣點]
     static q(u, n) { const f = Math.min(n - 1, Math.floor(u * n)); return [f, (f + .5) / n]; }
@@ -366,7 +386,10 @@
           a.el.classList.remove('asleep', 'ringing');
           // 先平順轉到動畫的起始角度（不瞬間切換）
           const th0 = (opts.flip ? -1 : 1) * anim.keys[0].th;
-          if (a.preAnim && performance.now() < a.preAnim.until && !S.reduceMotion) job.pre = a.preAnim;                       // 依偎／打盹被打斷：先起身 0.4 秒
+          if (a.preAnim && performance.now() < a.preAnim.until && !S.reduceMotion) {                                       // 依偎／打盹被打斷：先起身 0.4 秒；散步跳到一半：先落地。之後再平順轉到起始角度
+            const pre = a.preAnim; let t2 = null;
+            job.pre = { tick: (now) => { if (!t2) { if (pre.tick(now)) return true; t2 = Math.abs(th0 - a.th) > 12 ? a.turner(th0, S.clamp(Math.abs(th0 - a.th) * 3.2, 120, 300)) : { tick: () => false }; } return t2.tick(now); } };
+          }
           else if (!a.liveOn && Math.abs(th0 - a.th) > 12 && !S.reduceMotion) job.pre = a.turner(th0, S.clamp(Math.abs(th0 - a.th) * 3.2, 120, 300));
           a.preAnim = null;
           if (opts.start) opts.start(job);
@@ -533,6 +556,17 @@
         if (u >= 1) { m.steps++; phase = 'plan'; if (o.onStep) o.onStep(m); }
         return true;
       };
+      // 被打斷時正跳到一半：把這一步快快跳完、落地（給下一個動作當開頭），不會從半空中直接變成站姿
+      m.landTicker = () => {
+        if (phase !== 'step') return null;
+        const t0 = performance.now(), u0 = Math.min(1, (t0 - p0) / dur), ms = Math.max(60, (1 - u0) * dur * .6);
+        if (u0 >= .98) return null;
+        return { until: t0 + 600, tick(now) {
+          const u = u0 + (1 - u0) * Math.min(1, (now - t0) / ms), adv = a.gaitFrame(gait, m.dir, u);
+          a.x = x0 + m.dir * len * adv; a.place();
+          return u < 1;
+        } };
+      };
       return m;
     }
     // L7 散步：家附近 ±400、避開別隻與游標、不出螢幕。
@@ -580,7 +614,7 @@
         }
         return false;
       };
-      job.interrupt = () => { a.hideLive(); if (o.lane) { a.depth = 0; a.zBoost = 0; } a.afterWalk(); };
+      job.interrupt = () => { const lt = job.phase === 'go' && m && m.landTicker(); if (lt) a.preAnim = lt; a.hideLive(); if (o.lane) { a.depth = 0; a.zBoost = 0; } a.afterWalk(); };
       job.end = () => { if (o.lane) { a.depth = 0; a.zBoost = 0; } a.afterWalk(); };
       return job;
     }
@@ -876,7 +910,9 @@
           try {
             // 按鍵其實已經放開（mouseup 在視窗外遺失）：當作放手。
             // 視窗切換穿透時 Chromium 會補一個 buttons=0 的合成 mousemove，所以要連續 3 次、跨 80 ms 以上才算
-            if (ev.buttons === 0) { if (!cur.free) cur.free = { n: 0, t: performance.now() }; if (++cur.free.n >= 3 && performance.now() - cur.free.t > 80) { finish(true); return; } } else cur.free = null;
+            // 這種 buttons=0 的事件座標也不可信（常是視窗中央之類的舊位置）：不拿來移動，免得被拎著的那隻瞬移一下
+            if (ev.buttons === 0) { if (!cur.free) cur.free = { n: 0, t: performance.now() }; if (++cur.free.n >= 3 && performance.now() - cur.free.t > 80) finish(true); return; }
+            cur.free = null;
             const now = performance.now();
             cur.moved = Math.max(cur.moved, Math.hypot(ev.clientX - cur.x, ev.clientY - cur.y));
             cur.samples.push({ x: ev.clientX, y: ev.clientY, t: now });

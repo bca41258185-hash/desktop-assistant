@@ -7,6 +7,7 @@ body.hidden #stage, body.hidden #fx { display: none; }
 .actor img, .actor .live { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; transform-origin: 50% 92.6%; }   /* 以腳底為基準 */
 .actor .live svg { width: 100%; height: 100%; overflow: visible; }
 .actor.live-on img { visibility: hidden; }
+.actor img.back { visibility: hidden; }   /* 背景緩衝：下一格在這裡解碼好才換到前面 */
 .actor img.wide { left: -27.78%; width: 155.56%; }   /* 寬畫框（x −60…220，平常是 −10…170） */
 /* 呼吸：只做 transform（交給合成器，不重畫）；每隻用 animation-delay 錯開；睡覺時更慢更深 */
 /* 只在 .breathe（游標 400 px 內、或剛動完 10 秒內）時播放；其餘時間停在靜止格，待機幾乎不耗資源 */

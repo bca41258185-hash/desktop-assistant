@@ -57,9 +57,8 @@
     }
     return entry.url;
   };
-  // 已經解碼過的畫格網址（換上去不會有空白格）；新的先在背景解碼
+  // PNG 先在背景解碼好才換（換上去不會有空白格）
   const ready = new Set();
-  S.frameReady = (u) => ready.has(u);
   S.decodeFrame = function (u) {
     const im = new Image();
     im.src = u;
@@ -114,7 +113,7 @@
           // PNG 先解碼好再換（直接換 src 會有一格空白）；舊網址晚一點才釋放（可能還有一張正在等著換上去）
           S.decodeFrame(png).then(() => {
             if (cache.get(entry.key) !== entry) { URL.revokeObjectURL(png); return; }
-            for (const a of S.actors.values()) if (a.img.src === old) a.img.src = png;
+            for (const a of S.actors.values()) if (a.img.src === old && !a.pendingSrc && !a.liveShown) a.showURL(png, !!a.wideImg);
             cacheBytes += b.size - entry.bytes; entry.url = png; entry.bytes = b.size;
             ready.delete(old); setTimeout(() => URL.revokeObjectURL(old), 3000);
             setTimeout(nextPNG, 0);
