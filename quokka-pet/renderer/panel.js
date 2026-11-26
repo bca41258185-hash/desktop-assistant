@@ -617,20 +617,22 @@
     const others = workers().filter((w) => w.id !== q.id);
     const lastOne = others.length === 0;
     let danger = '';
-    if (ui.gearMode === 'delete') {
+    const releasing = ui.gearMode === 'release';
+    if (ui.gearMode === 'delete' || releasing) {
       // 放不下的（轉過去會超過每隻的上限）先標出來、不能選；主行程會再檢查一次
       const full = new Set(others.filter((o) => wouldOverflow(q.id, o.id)).map((o) => o.id));
       const firstOk = others.find((o) => !full.has(o.id));
-      danger = `<div class="confirm" role="group" aria-label="刪除${esc(q.name)}">
+      danger = `<div class="confirm" role="group" aria-label="${releasing ? '放生' : '刪除'}${esc(q.name)}">
+        ${releasing ? `<p>要放生<b>${esc(q.name)}</b>嗎？會有一隻禿鷹飛過來，把牠帶回大自然。</p>` : ''}
         ${q.pregnancy ? `<p class="warn">${esc(q.name)}懷孕中，刪除後寶寶不會出生。</p>` : ''}
         ${n ? `<p><b>${esc(q.name)}</b>負責的 ${n} 件事要交給誰？</p>
           <div class="radio-list" role="radiogroup" aria-label="交給誰">
           ${others.map((o) => `<label class="radio${full.has(o.id) ? ' is-full' : ''}"><input type="radio" name="xfer" value="${esc(o.id)}"${o === firstOk ? ' checked' : ''}${full.has(o.id) ? ' disabled' : ''}> ${avatar(o, 'sm')} ${esc(o.name)}${full.has(o.id) ? '（放不下了）' : ''}</label>`).join('')}
           <label class="radio"><input type="radio" name="xfer" value="delete"${firstOk ? '' : ' checked'}> 一起刪除</label></div>`
-        : `<p>確定要刪除<b>${esc(q.name)}</b>嗎？</p>`}
+        : releasing ? '' : `<p>確定要刪除<b>${esc(q.name)}</b>嗎？</p>`}
         ${ui.gearMsg ? `<p class="err" role="alert">${esc(ui.gearMsg)}</p>` : ''}
-        <p class="note">刪除庫卡不能復原。</p>
-        <div class="btns"><button type="button" class="btn danger" data-act="delGo" data-fk="g:delGo">確定刪除</button>
+        <p class="note">${releasing ? '放生以後牠就不會回來了。' : '刪除庫卡不能復原。'}</p>
+        <div class="btns"><button type="button" class="btn danger" data-act="delGo" data-fk="g:delGo">${releasing ? '放生牠' : '確定刪除'}</button>
         <button type="button" class="btn" data-act="gearCancel" data-fk="g:cancel">取消</button></div></div>`;
     } else if (ui.gearMode === 'regen') {
       danger = `<div class="confirm"><p>換成另一隻新的？名字和負責的事會留著，外型、個性會換掉，好感度歸零。</p>
@@ -639,9 +641,10 @@
     } else {
       danger = `<div class="btns">
         <button type="button" class="btn" data-act="regenAsk" data-fk="g:regen"${why ? ' disabled aria-describedby="regenWhy"' : ''}><span class="sym" aria-hidden="true">↻</span> 重新生成</button>
-        <button type="button" class="btn danger-ghost" data-act="delAsk" data-fk="g:del"${lastOne ? ' disabled aria-describedby="delWhy"' : ''}>刪除牠</button></div>
+        <button type="button" class="btn" data-act="releaseAsk" data-fk="g:release"${lastOne ? ' disabled aria-describedby="delWhy"' : ''}>放生</button>
+</div>
         ${why ? `<p class="note" id="regenWhy">${esc(why)}</p>` : ''}
-        ${lastOne ? '<p class="note" id="delWhy">至少要留 1 隻庫卡，最後一隻不能刪除</p>' : ''}`;
+        ${lastOne ? '<p class="note" id="delWhy">至少要留 1 隻庫卡，最後一隻不能放生</p>' : ''}`;
     }
     const profile = TR.describe(t).concat(TR.describePersonality(t));
     return `<div class="card gear" role="group" aria-label="${esc(q.name)}的設定">
@@ -649,7 +652,7 @@
       <label class="field-l" for="gName">名字</label>
       <div class="inline"><input type="text" id="gName" class="text-in" maxlength="${NAME_MAX}" value="${esc(q.name)}" data-fk="g:name" aria-describedby="gErr" autocomplete="off">
         <button type="button" class="btn" data-act="rename" data-fk="g:rename">改名</button></div>
-      <p class="err" id="gErr" role="alert">${esc(ui.gearMode === 'delete' ? '' : ui.gearMsg || '')}</p>
+      <p class="err" id="gErr" role="alert">${esc((ui.gearMode === 'delete' || ui.gearMode === 'release') ? '' : ui.gearMsg || '')}</p>
       <label class="field-l" for="gAcc">飾品</label>
       <div class="inline"><select id="gAcc" data-fk="g:acc">${TR.ACCESSORIES.map((a) => `<option value="${a.id}"${a.id === def.id ? ' selected' : ''}>${esc(TR.accessoryName({ type: a.id }))}</option>`).join('')}</select></div>
       <div class="swatches" role="radiogroup" aria-label="飾品顏色">${def.colors.map((c, i) =>
@@ -1019,14 +1022,15 @@
     const q = qById(ui.sel); if (!q) return;
     const pick = document.querySelector('input[name="xfer"]:checked');
     const transferTo = pick ? pick.value : 'delete';
-    const res = await api.deleteQuokka({ qid: q.id, transferTo }).catch(() => ({ ok: false }));
+    const release = ui.gearMode === 'release';
+    const res = await api.deleteQuokka({ qid: q.id, transferTo, release }).catch(() => ({ ok: false }));
     // 新主人放不下（超過上限）：留在確認畫面，讓使用者選別隻或「一起刪除」
     if (res && res.full) { ui.gearMsg = res.message; render(); const r = document.querySelector('input[name="xfer"]:checked'); if (r) r.focus(); return; }
-    if (!res || !res.ok) { ui.gearMsg = (res && res.message) || '沒有刪除成功'; ui.gearMode = null; render(); return; }
+    if (!res || !res.ok) { ui.gearMsg = (res && res.message) || (release ? '沒有放生成功' : '沒有刪除成功'); ui.gearMode = null; render(); return; }
     const name = q.name;
     ui.gear = false; ui.gearMode = null;
     select(transferTo !== 'delete' && qById(transferTo) ? transferTo : 'all');
-    showToast(`已刪除${name}`);
+    showToast(release ? `${name}被禿鷹帶回大自然了，祝牠過得好 🦅` : `已刪除${name}`);
   }
   async function doNameBaby() {
     const j = qById(ui.sel); if (!j) return;
@@ -1125,6 +1129,7 @@
       case 'regenAsk': ui.gearMode = 'regen'; render(); break;
       case 'regenGo': doRegen(); break;
       case 'delAsk': ui.gearMode = 'delete'; ui.gearMsg = null; render(); break;
+      case 'releaseAsk': ui.gearMode = 'release'; ui.gearMsg = null; render(); break;
       case 'delGo': doDelete(); break;
       case 'nameBaby': doNameBaby(); break;
       case 'play': {
