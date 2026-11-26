@@ -764,7 +764,7 @@
       this.th = Math.round(this.th / 15) * 15;
       this.nextAt = performance.now() + this.restGap();
     }
-    blocked(nx, dir, ignore, gait) {   // 前方 120 px 內（四肢著地走時再加口鼻伸出去的距離）有別隻（伴侶、自己的小袋鼠、媽媽除外）、或游標就在前面 → 停
+    blocked(nx, dir, ignore, gait, opt = {}) {   // 前方 120 px 內（四肢著地走時再加口鼻伸出去的距離）有別隻（伴侶、自己的小袋鼠、媽媽除外）、或游標就在前面 → 停
       for (const o of S.actors.values()) {
         if (o === this || o.inPouch || Math.abs(o.y - this.y) > 80 || (ignore && ignore.has(o))) continue;
         if (S.family && S.family.close(this, o)) {
@@ -781,6 +781,7 @@
         if (Math.sign(ox - this.x) === dir && Math.abs(ox - nx) < front) return true;
         if (Math.abs(ox - nx) < S.politeGap(this, o) && Math.abs(ox - nx) < Math.abs(ox - this.x)) return true;   // 越走越靠近別隻、進到禮貌距離內：停
       }
+      if (opt.cursor === false) return false;                                           // 走去互動：游標不算擋路
       return Math.abs(S.cursor.x - nx) < 120 && Math.abs(S.cursor.y - (this.y - 80)) < 160;
     }
 

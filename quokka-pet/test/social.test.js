@@ -32,7 +32,7 @@ function setup(qs, opts = {}) {
     getQuokkas: () => data.quokkas, getRelations: () => data.relations,
     getLayer: (id) => layer[id], getPos: (id) => pos[id], now, random, romance,
     onStart: (j) => started.push(j), onAbort: (j) => aborted.push(j),
-    isBlocked: opts.isBlocked, freeSlots: opts.freeSlots, constants: opts.constants
+    isBlocked: opts.isBlocked, isAway: opts.isAway, freeSlots: opts.freeSlots, constants: opts.constants
   });
   return { data, pos, layer, S, romance, started, aborted, advance: (ms) => { t += ms; } };
 }
@@ -275,8 +275,8 @@ test('刪除：先中止互動；散步經過 +1 每天一次', () => {
 });
 
 // 模擬：照主行程的排程方式跑 30 分鐘（每次 tick 回傳下一次延遲；互動 6–20 秒後完成），量每個 60 秒區間開始幾次
-function simulate(qs, minutes, seed) {
-  const w = setup(qs, { seed });
+function simulate(qs, minutes, seed, opts = {}) {
+  const w = setup(qs, { seed, ...opts });
   const rnd = seeded(seed + 99);
   const ends = [];                                         // [時間, pairId]
   let t = 0, nextTick = 15000;
@@ -313,4 +313,20 @@ test('頻率：10 隻都很愛社交也不超過每 60 秒 10 次', () => {
   const win = perWindow(simulate(qs, 30, 5), 30);
   assert.ok(Math.max(...win) <= 10, `max ${Math.max(...win)}`);
   assert.ok(Math.min(...win) >= 1);
+});
+
+test('使用者剛離開：保底提早到 20 秒、互動比較多，但仍然每 60 秒最多 10 次', () => {
+  const shy = () => [mk('a', 'male', { initiative: 0, sociability: 0, boldness: 0.1 }), mk('b', 'female', { initiative: 0, sociability: 0, boldness: 0.1 })];
+  const w = setup(shy(), { isAway: () => true });
+  w.pos.b.x = w.pos.a.x + 600;
+  w.advance(20000); w.S.tick();
+  assert.equal(w.started.length, 1);                       // 離開時 20 秒就保底
+  const user = () => [mk('a', 'male', { sociability: 0.14, initiative: 0.14, boldness: 0.48, activity: 0.5 }), mk('b', 'male', { sociability: 0.06, initiative: 0.05, boldness: 0.3, activity: 0.23 }),
+    mk('c', 'female', { sociability: 0.56, initiative: 0.5, boldness: 0.27, activity: 0.14 }), mk('d', 'female', { sociability: 0.36, initiative: 0.44, boldness: 0.95, activity: 0.56 })];
+  const here = perWindow(simulate(user(), 30, 1), 30), away = perWindow(simulate(user(), 30, 1, { isAway: () => true }), 30);
+  const avg = (w) => w.reduce((a, b) => a + b, 0) / w.length;
+  assert.ok(avg(away) > avg(here) * 1.4, `away ${avg(away)} here ${avg(here)}`);
+  assert.ok(Math.min(...away) >= 2 && Math.max(...away) <= 10, `away min ${Math.min(...away)} max ${Math.max(...away)}`);
+  const ten = perWindow(simulate(Array.from({ length: 10 }, (_, i) => mk('q' + i, i % 2 ? 'female' : 'male')), 30, 5, { isAway: () => true }), 30);
+  assert.ok(Math.max(...ten) <= 10);
 });

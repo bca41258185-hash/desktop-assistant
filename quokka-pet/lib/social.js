@@ -9,7 +9,8 @@
     minDelayMs: 15 * 1000,       // 每 15–30 秒檢查一次
     maxDelayMs: 30 * 1000,
     maxPerMinute: 10,            // 上限：任何 60 秒內最多開始 10 次互動
-    guaranteeMs: 40 * 1000,      // 保底：超過 40 秒沒有任何互動開始，就挑最合適的一對直接開始（不看主動性、不用對方答應）
+    guaranteeMs: 40 * 1000,
+    awayK: 0.5,                  // 使用者剛離開（前 20 分鐘）：檢查間隔和保底時間都減半（互動加倍；上限一樣每分鐘 10 次）      // 保底：超過 40 秒沒有任何互動開始，就挑最合適的一對直接開始（不看主動性、不用對方答應）
     maxActive: 3,                // 同時進行的互動上限（一對算 1 個名額，另可用 freeSlots() 限制）
     maxStartsPerTick: 2,         // 每次 tick 最多發起幾對
     nearDistance: 250,           // 同伴在身邊（約兩個身長內）
@@ -63,6 +64,7 @@
     getQuokkas, getRelations, getLayer, getPos, now = Date.now, random = Math.random,
     onStart, onAbort, romance, constants,
     isBlocked,     // (qid) → true：游標在附近等，不發起互動
+    isAway,        // () → true：使用者剛離開，互動加倍
     freeSlots      // () → 「同時動 3 隻」剩幾個名額；沒給就只看 maxActive
   } = {}) {
     const C = { ...DEFAULTS, ...(constants || {}) };
@@ -209,7 +211,9 @@
         room--;
       }
       // 保底：太久沒有互動（個性都很害羞時也一樣），挑最合適的一對直接開始
-      if (!started.length && room > 0 && now() - lastStartAt >= C.guaranteeMs) {
+      const boost = !!(isAway && isAway());
+      const G = boost ? C.guaranteeMs * C.awayK : C.guaranteeMs;
+      if (!started.length && room > 0 && now() - lastStartAt >= G) {
         const g = guaranteedPair(list);
         if (g) started.push(start(g.a, g.b, chooseType(g.a, g.b)));
       }
@@ -221,8 +225,9 @@
       // 有兩隻閒著的同伴就在身邊：提早再檢查
       const idle = others.filter(available);
       if (idle.some((a, i) => idle.some((b, j) => j > i && besides(a.id, b.id)))) delay *= C.nearDelayK;
+      if (boost) delay *= C.awayK;
       // 保底時間快到了：準時回來檢查
-      if (idle.length >= 2) delay = Math.min(delay, Math.max(2000, C.guaranteeMs - (now() - lastStartAt)));
+      if (idle.length >= 2) delay = Math.min(delay, Math.max(2000, G - (now() - lastStartAt)));
       return Math.round(delay);
     }
     // 保底的那一對：都閒著、距離夠近；好感越高、越近越優先（同分隨機）。主動性高的那隻當發起者

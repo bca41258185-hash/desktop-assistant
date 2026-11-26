@@ -97,7 +97,8 @@ function start() {
     getLayer: (qid) => (layers[qid] == null ? 8 : layers[qid]),
     getPos: (qid) => positions[qid] || null,
     now: () => Date.now(), random: Math.random, romance,
-    isBlocked: () => away || !stageVisible,
+    isBlocked: () => sleeping || !stageVisible,      // 睡著（離開超過 20 分鐘、鎖定）或藏起來時不排
+    isAway: () => away && !sleeping,                 // 剛離開（前 20 分鐘）：互動加倍
     onStart: (job) => toStage('social:start', job),
     onAbort: (job) => toStage('social:abort', { pairId: job.pairId, by: job.by, reason: job.reason })
   });
@@ -326,18 +327,23 @@ function start() {
   const unwatchFolder = (id) => folderWatch.unwatch(id);
 
   // ---- 離開偵測（PresenceWatch） --------------------------------------------------
-  let locked = false;
+  // 離開（一段時間沒動電腦）的前 20 分鐘：庫卡不睡，反而玩得更兇（互動加倍）；離開超過 20 分鐘才睡；鎖定螢幕一律睡
+  const AWAY_PLAY_MS = 20 * 60000;
+  let locked = false, awaySince = 0, sleeping = false;
   function checkPresence() {
     const mins = Number(data.settings.awayMinutes) || 0;
     const idle = powerMonitor.getSystemIdleTime();
     const nowAway = locked || (mins > 0 && idle >= mins * 60);
-    if (nowAway === away) return;
-    away = nowAway;
+    if (nowAway && !away) awaySince = Date.now();
+    const nowSleep = locked || (nowAway && Date.now() - awaySince >= AWAY_PLAY_MS);
+    if (nowAway === away && nowSleep === sleeping) return;
+    const back = away && !nowAway;
+    away = nowAway; sleeping = nowSleep;
     stage.pause(away || !stageVisible);
     const texts = {};
-    if (!away) for (const [qid, d] of Object.entries(digest)) { const t = R.digestTexts(d); if (t.length) texts[qid] = t; }
-    toStage('presence', { away, locked, digest: away ? null : texts });
-    if (!away) for (const k of Object.keys(digest)) delete digest[k];
+    if (back) for (const [qid, d] of Object.entries(digest)) { const t = R.digestTexts(d); if (t.length) texts[qid] = t; }
+    toStage('presence', { away, locked, sleep: sleeping, digest: away ? null : texts });
+    if (back) for (const k of Object.keys(digest)) delete digest[k];
   }
   setInterval(checkPresence, 5000);
   powerMonitor.on('lock-screen', () => { locked = true; checkPresence(); });
@@ -633,7 +639,7 @@ function start() {
     const backlog = stageBacklog.splice(0);
     for (const [ch, payload] of backlog) e.sender.send(ch, payload);
     // 重新載入（當掉、沒回應）後：補送目前的離開／鎖定狀態（開機時的已在上面的待送事項裡）
-    if (away && !backlog.some(([ch]) => ch === 'presence')) e.sender.send('presence', { away, locked, digest: null });
+    if (away && !backlog.some(([ch]) => ch === 'presence')) e.sender.send('presence', { away, locked, sleep: sleeping, digest: null });
     if (hiddenUntil > Date.now()) e.sender.send('stage:hide', { until: hiddenUntil });
   });
   // 位置沒變就不寫；有變的最快每 10 秒寫一次（結束程式前一定寫入）
