@@ -21,6 +21,8 @@
     periodMs: 30 * MIN_MS,
     decayAfterDays: 7,           // 連續 7 個半小時沒互動（欄位名稱沿用舊的）
     decayPerDay: 2,              // 之後每半小時 −2
+    takenDecayAfter: 2,          // 放下得比較快：喜歡的對象已經有別的伴侶（例如舊情人有了新的另一半）→ 1 小時沒一起互動就開始淡
+    takenDecayPer: 10,           //   之後每半小時愛情 −10（愛情 100 大約 6 小時淡完）；一起互動也不會再加愛情（友情照常）
     friendAt: 80,
     crushAt: 20,                 // 愛情達 20 才會「偷偷喜歡」（有伴侶就是伴侶；好朋友不算）
     flirtAt: 60,                 // 愛情達 60（互相有感覺、兩隻都單身）＝曖昧：公開（面板粉紅心）、常走在一起、不會分開太遠
@@ -281,6 +283,8 @@
       }
       return best;
     }
+    // b 已經有別的伴侶（不是 a）：a 對 b 的愛情要放下
+    const takenBy = (a, b) => { const p = partnerOf(b); return !!p && p !== a; };
     const isCouple = (a, b) => { const r = rel(a, b, false); return !!(r && r.couple); };
     const isFriend = (a, b) => { const r = rel(a, b, false); return !!(r && r.friend); };
     // 好朋友：不分性別，好感達門檻就是（情侶另計）。性別不可影響社交主動性與互動頻率。
@@ -351,10 +355,11 @@
       const sim = 1 - Math.abs((pa.activity != null ? pa.activity : 0.5) - (pb.activity != null ? pb.activity : 0.5));
       const amount = Math.round(lerp(C.togetherMin, C.togetherMax, clamp(0.5 * soc + 0.5 * sim, 0, 1)));
       const gained = gain(r, amount);
-      const loveGained = attraction(a, b, r) ? gainLove(r, amount) : 0;
+      // 對方已經有別的伴侶：愛情不再增加（要放下），友情照常
+      const loveGained = attraction(a, b, r) && !takenBy(aId, bId) && !takenBy(bId, aId) ? gainLove(r, amount) : 0;
       const d = today();
       const firstToday = r.lastTogetherDay !== d;
-      r.lastTogetherDay = d; r.decayDays = 0;
+      r.lastTogetherDay = d; r.decayDays = 0; r.takenDecayDone = 0;
       const wasFriend = r.friend;
       refreshFriend(r, a, b);
       if (r.friend && !wasFriend) events.push({ type: 'friend', a: aId, b: bId });
@@ -411,6 +416,12 @@
           const [a, b] = k.split('|');
           refreshFriend(r, byId(a), byId(b));
           if (r.affinity !== before) changed.push({ pair: k, from: before, to: r.affinity });
+        }
+        // 放下得比較快：喜歡的對象已經有別的伴侶 → 1 小時沒一起互動後，愛情每半小時 −10
+        const [a, b] = k.split('|');
+        if (!r.couple && (r.love || 0) > 0 && (takenBy(a, b) || takenBy(b, a))) {
+          const tt = Math.max(0, gap - C.takenDecayAfter), td = r.takenDecayDone || 0;
+          if (tt > td) { const lb = r.love; r.love = Math.max(0, r.love - C.takenDecayPer * (tt - td)); r.takenDecayDone = tt; changed.push({ pair: k, love: true, from: lb, to: r.love }); }
         }
       }
       return changed;

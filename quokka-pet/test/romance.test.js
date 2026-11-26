@@ -566,3 +566,26 @@ test('伴侶被放生（刪除）後，留下的那隻可以有新的感情、�
   w.R.onReturn(snap, rels);
   assert.equal(w.R.partnerOf('f'), 'm2');                    // 舊伴侶回來也不拆散
 });
+
+test('放下得比較快：喜歡的對象有了別的伴侶 → 1 小時後愛情每半小時 −10、一起互動也不再加愛情；友情照常', () => {
+  const P = 30 * MIN;
+  const w = couple();                                         // m 和 f 是一對
+  w.data.quokkas.push(mk(w.now, 'x', 'male'));
+  setLove(w, 'x', 'f', 100); setAff(w, 'x', 'f', 50);          // x 還愛著 f（f 已經和 m 在一起）
+  const r = w.data.relations[pairKey('x', 'f')];
+  w.R.onTogether('x', 'f');
+  assert.equal(r.love, 100);                                   // 一起互動：愛情不加
+  assert.ok(r.affinity > 50);                                  // 友情照常加
+  w.now.add(2 * P); w.R.dailyDecay();
+  assert.equal(r.love, 100);                                   // 1 小時內還沒開始淡
+  w.now.add(3 * P); w.R.dailyDecay(); w.R.dailyDecay();
+  assert.equal(r.love, 70);                                    // 之後每半小時 −10（不重複扣）
+  w.now.add(20 * P); w.R.dailyDecay();
+  assert.equal(r.love, 0);
+  // 對單身的對象：照一般速度（3.5 小時後每半小時 −2）
+  const w2 = world([(n) => mk(n, 'a', 'male'), (n) => mk(n, 'b', 'female')]);
+  setLove(w2, 'a', 'b', 80); w2.R.onTogether('a', 'b');
+  const r2 = w2.data.relations[pairKey('a', 'b')], l0 = r2.love;
+  w2.now.add(5 * P); w2.R.dailyDecay();
+  assert.equal(r2.love, l0);
+});
