@@ -624,11 +624,11 @@
     return null;
   }
 
-  // 提醒內容去掉句中的「提醒我／記得／要記得…」（「明天早上提醒我帶便當」→「帶便當」）；去光了就保留原文
+  // 提醒內容去掉句中的「提醒我／記得／要記得…」（「明天早上提醒我帶便當」→「帶便當」）；去光了就用「時間到了」
   const MID_CUE = /(?:請|麻煩)?(?:幫我)?(?:提醒我|要記得|記得要|記得|別忘記?了|不要忘記?了)\s*[:,，]?\s*/g;
   function remText(t) {
     const out = tidy(String(t || '').replace(PREFIX, '').replace(MID_CUE, ''));
-    return out || t;
+    return out || '時間到了';
   }
 
   function parseInput(raw, now = new Date()) {

@@ -425,6 +425,10 @@
         alt.hidden = false; alt.textContent = '加入股票';
         alt.setAttribute('aria-label', '確定要盯這檔股票，加入');
       }
+      if (ui.msg.action2 === 'asParent' && ui.msg.parent) {    // 貼的是檔案：改看它所在的資料夾
+        alt.hidden = false; alt.textContent = '監看所在的資料夾';
+        alt.setAttribute('aria-label', `改成監看檔案所在的資料夾 ${ui.msg.parent}`);
+      }
       return;
     }
     hintEl.className = 'add-hint';
@@ -465,7 +469,8 @@
       const m = (res && res.message) || '沒有加進去，請再試一次';
       // 主行程問「要當成待辦嗎？」（找不到資料夾、查不到股票、名稱對不上、連不上…）就一定給「當成待辦」按鈕
       const canTask = !!(res && res.askTask) && ui.forceType !== 'task';
-      showMsg(m, 'err', canTask ? 'asTask' : null, res && res.askStock ? 'asStock' : null);
+      showMsg(m, 'err', canTask ? 'asTask' : null, res && res.askStock ? 'asStock' : res && res.askParent ? 'asParent' : null);
+      if (res && res.askParent) { ui.msg.parent = res.askParent; updateHint(); }
     }
   }
 
@@ -1083,6 +1088,9 @@
   });
   $('globalGear').addEventListener('click', () => { ui.globalOpen = !ui.globalOpen; ui.adding = null; render(); });
   $('altAction').addEventListener('click', () => {
+    if (ui.msg && ui.msg.action2 === 'asParent' && ui.msg.parent) {   // 貼的是檔案 → 監看它所在的資料夾
+      $('addInput').value = ui.msg.parent; ui.forceType = null; ui.msg = null; submit(); return;
+    }
     ui.confirmStock = $('addInput').value.trim(); ui.forceType = null; ui.msg = null; submit();
   });
   $('switchType').addEventListener('click', () => {

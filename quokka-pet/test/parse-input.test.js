@@ -545,3 +545,46 @@ test('單一常見英文字（IT、GO、ON、NOW、ME）帶 word，送出後先�
   assert.deepEqual(p('AAPL'), { type: 'stock', symbol: 'AAPL', market: 'us' });
   for (const s of ['zoom', 'gym', 'it', 'go', 'on', 'now', 'me']) assert.equal(p(s).type, 'task', s);   // 小寫的常見字直接是待辦
 });
+
+test('「X小時半後」「X個半小時後」「X小時Y分（鐘）後」：時間要對，不會少算', () => {
+  const at = (s) => { const r = p(s); assert.equal(r.type, 'reminder', s); return [r.text, r.rule.date, r.rule.time]; };
+  // 現在 14:05
+  assert.deepEqual(at('1小時半後出門'), ['出門', '2026-11-25', '15:35']);
+  assert.deepEqual(at('1個半小時後出門'), ['出門', '2026-11-25', '15:35']);
+  assert.deepEqual(at('一個半小時後出門'), ['出門', '2026-11-25', '15:35']);
+  assert.deepEqual(at('2小時30分後出門'), ['出門', '2026-11-25', '16:35']);
+  assert.deepEqual(at('2小時30分鐘後出門'), ['出門', '2026-11-25', '16:35']);
+  assert.deepEqual(at('兩小時十五分後開會'), ['開會', '2026-11-25', '16:20']);
+  assert.deepEqual(at('3個鐘頭20分鐘後收衣服'), ['收衣服', '2026-11-25', '17:25']);
+  assert.deepEqual(at('出門 1小時半後'), ['出門', '2026-11-25', '15:35']);
+  assert.deepEqual(at('出門 2小時30分後'), ['出門', '2026-11-25', '16:35']);
+  assert.deepEqual(at('3小時20分後'), ['時間到了', '2026-11-25', '17:25']);     // 內容不會留下「3小時」
+  assert.deepEqual(at('11小時半後提醒我關火'), ['關火', '2026-11-26', '01:35']);
+  // 分鐘超過 59、分後面再接分：不亂算
+  assert.equal(p('2小時90分後出門').type, 'task');
+  assert.equal(p('30分20分後').type, 'task');
+});
+
+test('相對時間的提示不能建議錯的時間：沒寫「後」時提示整段（含半、Y分）', () => {
+  const r = p('2小時30分 簡報');
+  assert.equal(r.type, 'task');
+  assert.match(r.note, /「2小時30分後」/);
+  const r2 = p('1小時半 簡報');
+  assert.equal(r2.type, 'task'); assert.match(r2.note, /「1小時半後」/);
+  for (const s of ['1小時半後出門', '2小時30分後出門', '2小時30分鐘後出門']) assert.equal(p(s).note, undefined, s);
+});
+
+test('提醒內容去掉句中的「提醒我／記得／要記得」', () => {
+  const t = (s) => { const r = p(s); assert.equal(r.type, 'reminder', s); return r.text; };
+  assert.equal(t('明天早上提醒我帶便當'), '帶便當');
+  assert.equal(t('明天要記得繳費'), '繳費');
+  assert.equal(t('明天下午3點記得要開會'), '開會');
+  assert.equal(t('明天下午3點記得開會'), '開會');
+  assert.equal(t('30分鐘後提醒我喝水'), '喝水');
+  assert.equal(t('週五別忘了交圖'), '交圖');
+  assert.equal(t('記得明天下午3點開會'), '開會');
+  assert.equal(t('明天提醒我'), '時間到了');                              // 去光了：用「時間到了」
+  assert.equal(t('每天9點吃藥'), '吃藥');
+  // 待辦不改內容
+  assert.equal(p('記得帶傘').text, '記得帶傘');
+});

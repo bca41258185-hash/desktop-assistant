@@ -15,7 +15,8 @@ const { createStageManager } = require('./stage-main');
 const { createFolderWatch } = require('./folder-watch');
 const { createPosSaver } = require('./pos-saver');
 const { createPerfSender } = require('./perf');
-const { transferProblem } = require('./owner-ops');
+const { transferProblem, transferDupes } = require('./owner-ops');
+const TRANSFER_KEY = { stock: (x) => x.symbol };      // 轉移時要去重的種類
 const { createRomance } = require('./romance');
 const { createSocialDirector } = require('./social');
 const { createHistory, withToday, INDEX } = require('./stock-history');
@@ -141,6 +142,9 @@ function start() {
     });
     panel.loadFile(path.join(ROOT, 'renderer', 'panel.html'));
     panel.on('closed', () => { panel = null; });            // 關掉就整個釋放；下次打開重新載入（約 1 秒）
+    // 最小化或藏起來的時候可能沒收到更新：叫回來（restore／show／focus）時補送一份完整快照
+    const resync = () => { if (panel && !panel.isDestroyed() && !panel.webContents.isLoading()) panel.webContents.send('store:changed', snapshot()); };
+    for (const ev of ['restore', 'show', 'focus']) panel.on(ev, resync);
   }
   // 只有面板開著、看得到時才傳資料給它
   const panelLive = () => panel && !panel.isDestroyed() && panel.isVisible();
@@ -345,7 +349,14 @@ function start() {
     if (!text) return { ok: false, message: '請先輸入內容' };
     // 貼上一個存在的資料夾路徑 → 監看資料夾
     if (!p.forceType && /[\\/]/.test(text)) {
-      try { if (fs.statSync(text).isDirectory()) return addFolder(text, owner); } catch (err) { /* 不是路徑就當一般文字 */ }
+      const full = expandHome(text);                          // 「~/專案」→ 家目錄底下
+      let st = null; try { st = fs.statSync(full); } catch (err) { /* 不是路徑就當一般文字 */ }
+      if (st && st.isDirectory()) return addFolder(full, owner);
+      // 貼的是檔案：說清楚，並提供「監看它所在的資料夾」
+      if (st && st.isFile()) {
+        const parent = path.dirname(path.resolve(full));
+        return { ok: false, type: 'folder', message: `這是檔案，不是資料夾。要監看它所在的資料夾「${path.basename(parent) || parent}」嗎？`, askParent: parent, askTask: true };
+      }
       if (/^(?:[A-Za-z]:[\\/]|\\\\|\/|~[\\/])/.test(text)) return { ok: false, type: 'folder', message: '找不到這個資料夾，請確認路徑。要當成待辦嗎？', askTask: true };
     }
     let r = parseInput(text);
@@ -377,6 +388,7 @@ function start() {
       } else if (problem) return { ok: false, type: 'stock', message: problem, askTask: true };
       else {
         if (!qById(owner)) return { ok: false, message: '這隻庫卡已經不在了' };                       // 查詢期間被刪掉
+        if (countOf('stock', owner) >= LIM.stock) return { ok: false, message: '這隻盯的東西太多了，先完成或交給別隻吧' };   // 查詢期間同時送出好幾檔
         if (data.stocks.some((s) => s.owner === owner && s.symbol === found.symbol)) return { ok: false, message: '這檔已經在盯了' };   // 查詢期間連按兩次
         stockFound = found;
       }
@@ -399,6 +411,8 @@ function start() {
     event(owner, 'task-added', { text: item.text });
     return { ok: true, type: 'task', item, message: r.note || undefined };    // 看得出日期時間但排不了的，說明為什麼當待辦
   });
+  // 「~」開頭的路徑展開成家目錄（fs 不會自己展開）
+  function expandHome(t) { return /^~(?=[\\/]|$)/.test(t) ? path.join(app.getPath('home'), t.slice(1)) : t; }
   function addFolder(p, owner) {
     p = path.resolve(p);
     if (countOf('folder', owner) >= LIM.folder) return { ok: false, message: '這隻看的資料夾太多了，先移掉幾個吧' };
@@ -466,6 +480,7 @@ function start() {
     if (!romance.canOwnTasks(qById(owner))) return { ok: false, message: '小袋鼠還不能接任務' };
     if (it.owner === owner) return { ok: true };
     if (LIM[kind] && countOf(kind, owner) >= LIM[kind]) return { ok: false, message: '牠手上的事已經滿了' };
+    if (kind === 'stock' && data.stocks.some((x) => x.owner === owner && x.symbol === it.symbol)) return { ok: false, message: '牠已經在盯這檔了' };
     const wasRinging = !!it.ringing;
     if (wasRinging) clearAlert(it);
     it.owner = owner;
@@ -526,8 +541,10 @@ function start() {
     const to = transferTo === 'delete' ? null : qById(transferTo) && transferTo !== qid && romance.canOwnTasks(qById(transferTo)) ? transferTo : (owners.find((x) => x.id !== qid) || {}).id;
     // 轉給新主人前先檢查上限（每隻 50 件待辦…）：超過就不刪，請使用者選別隻或「一起刪除」
     if (to) {
-      const why = transferProblem(data, qid, to, { LIM, kinds: KINDS, counts: (kind, x) => !(kind === 'task' && x.done) && !(kind === 'reminder' && spent(x)) });
+      const why = transferProblem(data, qid, to, { LIM, kinds: KINDS, keyOf: TRANSFER_KEY, counts: (kind, x) => !(kind === 'task' && x.done) && !(kind === 'reminder' && spent(x)) });
       if (why) return { ok: false, full: true, message: `${qById(to).name}${why}，請選別隻，或選「一起刪除」` };
+      // 兩隻都盯同一檔股票：轉過去會重複，先把這隻的那一筆拿掉
+      for (const d of transferDupes(data, qid, to, { kinds: KINDS, keyOf: TRANSFER_KEY })) data[d.key] = data[d.key].filter((x) => x !== d.item);
     }
     for (const k of Object.values(KINDS)) {
       if (to) data[k].forEach((x) => { if (x.owner === qid) x.owner = to; });
@@ -590,9 +607,11 @@ function start() {
   ipcMain.handle('alert:ack', ack); ipcMain.handle('alert:snooze', snooze);
   ipcMain.on('alert:ack', ack); ipcMain.on('alert:snooze', snooze);
 
-  // ---- 動畫幀率：預設每秒 60 格；只有手動開「省電」才 30 格（lib/perf.js） ----
-  const perf = createPerfSender({ getSaver: () => data.settings.saver, send: (p) => stage.send('stage:perf', p) });
+  // ---- 動畫幀率：預設每秒 60 格；手動開「省電」或用電池時 30 格（lib/perf.js） ----
+  const perf = createPerfSender({ getSaver: () => data.settings.saver, isOnBattery: () => powerMonitor.isOnBatteryPower(), send: (p) => stage.send('stage:perf', p) });
   const sendPerf = (force = false) => perf.update(force);
+  powerMonitor.on('on-battery', () => sendPerf());           // 拔掉電源 → 30 格
+  powerMonitor.on('on-ac', () => sendPerf());                // 插回電源 → 60 格（省電沒開時）
 
   // ---- 舞台 → 主行程 ---------------------------------------------------------------
   ipcMain.on('stage:ready', (e) => {
@@ -616,9 +635,15 @@ function start() {
   ipcMain.on('q:rest', savePos);
   ipcMain.on('q:state', (e, { qid, layer } = {}) => { if (qById(qid)) { layers[qid] = layer; social.onLayer(qid, layer); } });
   ipcMain.on('q:pos', (e, list) => { if (Array.isArray(list)) for (const p of list.slice(0, 500)) if (p && qById(p.qid)) positions[p.qid] = { x: p.x, y: p.y, display: p.display || 'primary' }; });
-  ipcMain.on('social:done', (e, { pairId, ok, type } = {}) => { try { const r = social.done(pairId, { ok: !!ok, type }); onRomanceEvents(r && r.events); } catch (err) {} });
+  // 好感度變動（互動完成、擦身而過）：很頻繁，不每次都寫；節流成最多每 10 秒寫一次（結束前一定寫）
+  let affTimer = null;
+  function saveAffinitySoon() {
+    if (affTimer) return;
+    affTimer = setTimeout(() => { affTimer = null; store.save(); posSaver.markSaved(); }, 10000);
+  }
+  ipcMain.on('social:done', (e, { pairId, ok, type } = {}) => { try { const r = social.done(pairId, { ok: !!ok, type }); saveAffinitySoon(); onRomanceEvents(r && r.events); } catch (err) {} });
   ipcMain.on('social:abort', (e, { pairId, by, reason } = {}) => { try { social.abort(pairId, by, reason); } catch (err) {} });
-  ipcMain.on('q:pass', (e, { a, b } = {}) => { if (qById(a) && qById(b)) { try { social.passBy(a, b); } catch (err) {} } });
+  ipcMain.on('q:pass', (e, { a, b } = {}) => { if (qById(a) && qById(b)) { try { social.passBy(a, b); saveAffinitySoon(); } catch (err) {} } });
   ipcMain.on('q:dblclick', (e, { qid } = {}) => showPanel(qById(qid) ? qid : null));
   ipcMain.on('q:context', (e, { qid } = {}) => {
     const q = qById(qid); if (!q) return;
@@ -671,7 +696,7 @@ function start() {
   boot('股價', () => { syncWatchlist(); stocks.start(); });
   try { romance.refreshAges(); romance.dailyDecay(); sweepReminders(); } catch (e) {}
   scheduleSocial(90000);               // 開機 1.5 分鐘後才開始安排互動
-  app.on('before-quit', () => { app.isQuitting = true; clearTimeout(socialTimer); stocks.stop(); clock.stop(); folderWatch.stop(); reminderNotes.flush(); posSaver.flush(); store.saveNow(); });
+  app.on('before-quit', () => { app.isQuitting = true; clearTimeout(socialTimer); clearTimeout(affTimer); stocks.stop(); clock.stop(); folderWatch.stop(); reminderNotes.flush(); posSaver.flush(); store.saveNow(); });
   return { store, stage, data, showPanel, unhide, stocks, quotes, layers, positions, folderWatch, posSaver, perf };
 }
 
