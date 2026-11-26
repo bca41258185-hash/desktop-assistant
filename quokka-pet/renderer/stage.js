@@ -28,54 +28,61 @@
     a.destroy(); S.actors.delete(qid);
     S.reportRects();
   }
-  // 育兒袋期的小袋鼠不是獨立的 Actor（是媽媽的附件，之後另外畫）
+  // 育兒袋期的小袋鼠不是獨立的 Actor：畫在媽媽的育兒袋口（S.family.setPouch）
   const isPouch = (q) => q && (q.stage === 'pouch' || (q.traits && q.traits.stage === 'pouch'));
+  let pouchList = [];
+  const setPouch = (list) => { pouchList = list; S.family.setPouch(list); };
+  // 剛出袋（變成跟隨期）的小袋鼠：從媽媽腳邊冒出來
+  function addNear(q) {
+    const mom = actorOf(q.mom) || actorOf(q.dad);
+    if (mom && (q.stage === 'follow' || !q.pos)) q.pos = { x: Math.round(mom.x + (mom.faceDir > 0 ? -1 : 1) * 16), y: Math.round(mom.y) };
+    add(q);
+    const a = actorOf(q.id);
+    if (a && mom && q.stage === 'follow') { const p = a.toStage(80, 60); S.burst(p.x, p.y, 'stars'); }
+  }
   function setList(list) {
     if (!Array.isArray(list)) return;
     const seen = new Set();
+    setPouch(list.filter(isPouch));
     list = list.filter((q) => !isPouch(q));
-    list.slice(0, 500).forEach((q, i) => { if (!q || !isId(q.id)) return; seen.add(q.id); if (S.actors.has(q.id)) S.actors.get(q.id).applyData(q); else add(q, i, list.length); });
+    list.slice(0, 500).forEach((q, i) => {
+      if (!q || !isId(q.id)) return;
+      seen.add(q.id);
+      if (S.actors.has(q.id)) S.actors.get(q.id).applyData(q);
+      else if (q.stage === 'follow' && S.actors.size) addNear(q);
+      else add(q, i, list.length);
+    });
     for (const id of [...S.actors.keys()]) if (!seen.has(id)) remove(id);
+    S.family.setPouch(pouchList);
     S.reportRects(); S.kick();
   }
   api.onQuokkas(setList);
   api.onInit((p) => setList(p && p.actors));
-  api.onAdd((p) => { const q = p && p.q ? p.q : p; if (!isPouch(q)) add(q); S.reportRects(); S.kick(); });
+  api.onAdd((p) => { const q = p && p.q ? p.q : p; if (!q) return; if (isPouch(q)) setPouch(pouchList.filter((x) => x.id !== q.id).concat([q])); else if (q.stage === 'follow') addNear(q); else add(q); S.reportRects(); S.kick(); });
   api.onUpdate((p) => {
     const q = p && p.q ? p.q : p; if (!q) return;
     const a = actorOf(q.id);
-    if (isPouch(q)) { if (a) remove(q.id); return; }
-    if (!a) { add(q); S.kick(); return; }
-    // 階段變了（例如跟隨期 → 亞成體）大小也會變
-    if (q.stage && q.stage !== a.attach.stage) { const old = a.k; a.applyData(q); if (a.k !== old) { S.purgeFrames(a.id); a.showRest(); a.place(); } }
-    else a.applyData(q);
+    if (isPouch(q)) { if (a) remove(q.id); setPouch(pouchList.filter((x) => x.id !== q.id).concat([q])); return; }
+    if (pouchList.some((x) => x.id === q.id)) setPouch(pouchList.filter((x) => x.id !== q.id));     // 出袋了
+    if (!a) { if (q.stage === 'follow') addNear(q); else add(q); S.kick(); return; }
+    a.applyData(q);                                                     // 階段變了（跟隨期 → 亞成體）會自己播長大動畫
+    S.kick();
   });
-  api.onRemove((p) => remove(p && typeof p === 'object' ? p.qid : p));
+  api.onRemove((p) => { const id = p && typeof p === 'object' ? p.qid : p; if (pouchList.some((x) => x.id === id)) setPouch(pouchList.filter((x) => x.id !== id)); remove(id); });
   api.onSettings((p) => {
     if (!p) return;
-    if (['carry', 'nudge', 'alternate'].includes(p.fetchReturn)) S.settings.fetchReturn = p.fetchReturn;
+    if (['carry', 'nudge', 'alternate'].includes(p.fetchReturn)) S.settings.fetchReturn = 'carry';   // 回程一律抱回來（舊設定值都當成 carry）
     if (['home', 'screen', 'off'].includes(p.walk)) S.settings.walk = p.walk;
     if (['system', 'on', 'off'].includes(p.reducedMotion)) S.settings.reducedMotion = p.reducedMotion;
     S.reduceMotion = S.settings.reducedMotion === 'on' ? true : S.settings.reducedMotion === 'off' ? false : S.systemReduce;
     document.body.classList.toggle('reduce', S.reduceMotion);
     // 改成不散步：正在走的原地停下
-    if (S.settings.walk === 'off' || S.reduceMotion) for (const a of S.actors.values()) if (a.job && a.job.name === 'walk') { const j = a.job; a.job = null; j.interrupt(); a.setLayer(8); a.showRest(); }
+    if (S.settings.walk === 'off' || S.reduceMotion) for (const a of S.actors.values()) if (a.job && a.job.name === 'walk') { const j = a.job; a.job = null; j.interrupt(); a.th = Math.round(a.th / 15) * 15; a.setLayer(8); a.showRest(); }
   });
 
-  // ---- 社交（簡化版） -------------------------------------------------------------
-  api.onSocialStart((p) => {
-    if (!p || !isId(p.pairId)) return;
-    const A = actorOf(p.a), B = actorOf(p.b);
-    if (!A || !B || A === B) { api.socialAbort(p.pairId, p.a, 'user'); return; }
-    if (Math.abs(A.y - B.y) > 40) { api.socialAbort(p.pairId, p.a, 'user'); return; }       // 不在同一地面
-    const soc = { pairId: p.pairId, a: p.a, b: p.b, type: S.str(p.type, 30), initiator: p.initiator === p.b ? p.b : p.a };
-    const I = soc.initiator === p.a ? A : B, O = I === A ? B : A;
-    const ji = I.socialJob(soc, true, O), jo = O.socialJob(soc, false, I);
-    if (!I.requestActivity(5, ji)) { api.socialAbort(soc.pairId, I.id, I.layer <= 1 ? 'alert' : 'work'); return; }
-    if (!O.requestActivity(5, jo)) { ji.quiet = true; I.finish(ji, { rest: false }); api.socialAbort(soc.pairId, O.id, O.layer <= 1 ? 'alert' : 'work'); return; }
-    S.kick();
-  });
-  api.onSocialAbort((p) => { if (!p || !isId(p.pairId)) return; for (const a of S.actors.values()) a.endSocial(p.pairId); });
+  // ---- 社交：兩隻共用一個「雙人動畫」（stage-social.js） -------------------------------
+  api.onSocialStart((p) => { if (p && isId(p.pairId)) S.startSocial(p); });
+  api.onSocialAbort((p) => { if (!p || !isId(p.pairId)) return; for (const a of [...S.actors.values()]) a.endSocial(p.pairId); });
 
   // ---- 工作事件 ------------------------------------------------------------------
   const KINDS = new Set(['task-added', 'task-done', 'stock', 'folder', 'missed', 'note', 'birth']);

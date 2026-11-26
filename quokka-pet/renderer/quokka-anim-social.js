@@ -180,7 +180,7 @@
       const r = POSE.render(c.th, (opts.id || 'D') + key + (o.uid || ''), pose);
       ART.configure(null);
       const L = r.layers, deco = o.deco ? o.deco(c.th, pose) : '';
-      const wrap = (s) => (s ? `<g transform="translate(${f1(x)} ${f1(gy)}) scale(${o.k.toFixed(4)}) translate(-80 -183)" style="--band:${(o.tr && o.tr.band) || '#e5533d'}">${s}</g>` : '');
+      const wrap = (s) => (s ? `<g transform="translate(${f1(x)} ${f1(gy + (o.oy || 0))}) scale(${o.k.toFixed(4)}) translate(-80 -183)" style="--band:${(o.tr && o.tr.band) || '#e5533d'}">${s}</g>` : '');
       out[key] = { defs: wrap(L.defs), shadow: wrap(L.shadow), back: wrap(L.back), body: wrap(L.body + deco), front: wrap(L.front) };
       pos[key] = { x, th: c.th, hands: r.hands };
     }
@@ -592,6 +592,19 @@
       follow: { th: 66, pose: { sq: 1.03, lean: 0, head: { pitch: -10 }, eyes: 'focus', mouth: 'open', arms: { L: { hand: [-16, 78, 30] } } }, ang: 22 }
     }
   };
+  // 重用單人擊球動畫（quokka-anim.js 的 ANIMS，面向左）裡的一段關鍵姿勢：時間對齊到擊球那一刻 T。
+  // toRight＝鏡射成面向右（標準式面向對方）；回傳 [{ t, th, pose, ease, rk, bo }]
+  function borrow(name, t0, t1, hitT, T, toRight) {
+    const A = ANIM.ANIMS && ANIM.ANIMS[name];
+    if (!A) return null;
+    return A.keys.filter((k) => k.t >= t0 - 1e-6 && k.t <= t1 + 1e-6).map((k) => {
+      const c = toRight ? mirrorPose({ th: k.th, pose: k.pose }) : { th: k.th, pose: { ...k.pose } };
+      const rk = k.pose.rk, bo = k.pose.bo;
+      delete c.pose.rk; delete c.pose.bo;
+      return { t: T + (k.t - hitT), th: c.th, pose: c.pose, ...(k.ease ? { ease: k.ease } : {}), rk: rk == null ? null : (toRight ? -rk : rk), bo };
+    });
+  }
+  const SMASH = () => { const A = ANIM.ANIMS && ANIM.ANIMS.badminton; return A && A.hitT ? borrow('badminton', .72, 1.86, A.hitT, 0, true) : null; };
   const CHEER = (y) => ({ y, sq: y ? 1.05 : .93, eyes: 'happy', mouth: 'open', blush: 1.3, tailUp: y ? .8 : 0, arms: { L: { hand: [-36, 70, 6] }, R: { hand: [36, 70, 6] } } });
   const cheerKeys = (t, th = 30, n = 2) => { const ks = []; for (let i = 0; i < n; i++) ks.push(K(t + i * .5, th, CHEER(0)), K(t + .22 + i * .5, th, CHEER(-20), 'out'), K(t + .44 + i * .5, th, CHEER(0), 'in')); return ks; };
   const sorry = (per, t, th = 60) => (per.clingy || per.lazy
@@ -611,19 +624,22 @@
       // 每一拍：誰打、什麼時候、腳往前後移多少（接球前移一小步到落點）、接觸點
       const off = [{}, {}];
       for (const i of [0, 1]) for (const kind of ['over', 'serve']) off[i][kind] = faceOf(pl[i], BAD[kind].hit, BAD[kind].hit.ang);
+      // 最後一拍：跳起來殺球（重用單人羽球動畫的引拍、擊球、收拍）
+      const SM = SMASH(), smHit = SM && SM.find((k) => Math.abs(k.t) < 1e-6);
+      if (smHit) for (const i of [0, 1]) off[i].smash = faceOf(pl[i], smHit, smHit.rk);
       const hits = [], foot = [[[0, 0]], [[0, 0]]];
       for (let i = 0; i < n; i++) {
-        const p = i % 2, T = 1.25 + i * F, kind = i === 0 ? 'serve' : 'over';
+        const p = i % 2, T = 1.25 + i * F, kind = i === 0 ? 'serve' : (i === n - 1 && smHit) ? 'smash' : 'over';
         const st = i === 0 ? 0 : Math.round((ctx.rnd() * 30 - 12) * pl[p].k);
         foot[p].push([T - .66, foot[p][foot[p].length - 1][1]], [T - .36, st]);
         const o = off[p][kind];
         hits.push({ p, T, kind, st, c: { u: base[p] + sg[p] * (st + o.f), h: o.h } });
       }
       // 最後一球：落在輸的那隻前面，牠往前撲但來不及
-      const last = hits[n - 1], landU = base[L] + sg[L] * 50 * pl[L].k, Fl = F * 1.05, tL = last.T + Fl;
+      const last = hits[n - 1], smash = last.kind === 'smash', landU = base[L] + sg[L] * 50 * pl[L].k, Fl = smash ? .36 : F * 1.05, tL = last.T + Fl;
       const segs = [];
       for (let i = 0; i < n - 1; i++) segs.push({ t0: hits[i].T, t1: hits[i + 1].T, f: flight(hits[i].c, hits[i + 1].c, hits[i].T, F, GRAV, 1.45) });
-      segs.push({ t0: last.T, t1: tL, f: flight(last.c, { u: landU, h: 4 }, last.T, Fl, GRAV, 1.45) });
+      segs.push({ t0: last.T, t1: tL, f: flight(last.c, { u: landU, h: 4 }, last.T, Fl, smash ? 260 : GRAV, smash ? 1 : 1.45) });
       const bounce = flight({ u: landU, h: 4 }, { u: landU + sg[W] * 12, h: 3 }, tL, .3, 700);
       const restU = landU + sg[W] * 12, pick = tL + 2.0, end = tL + 3.3;
       const ballAt = (t) => {
@@ -635,18 +651,23 @@
       const keysFor = (p) => {
         const ks = [K(0, TH0), K(.55, 60, BAD.ready.pose)], ang = [[0, 35], [.55, BAD.ready.ang]], flags = [];
         for (const h of hits.filter((x) => x.p === p)) {
+          if (h.kind === 'smash') {
+            ks.push(K(h.T - .7, 60, BAD.ready.pose)); ang.push([h.T - .7, BAD.ready.ang]);
+            for (const k of SM) { ks.push({ ...k, t: h.T + k.t }); ang.push([h.T + k.t, k.rk, k.ease]); }
+            flags.push(h.T); continue;
+          }
           const S = BAD[h.kind];
           ks.push(K(h.T - .62, 60, BAD.ready.pose), K(h.T - .2, S.prep.th, S.prep.pose), K(h.T, S.hit.th, S.hit.pose, 'in'), K(h.T + .2, S.follow.th, S.follow.pose, 'out'), K(h.T + .6, 60, BAD.ready.pose));
           ang.push([h.T - .62, BAD.ready.ang], [h.T - .2, S.prep.ang], [h.T, S.hit.ang, 'in'], [h.T + .2, S.follow.ang, 'out'], [h.T + .6, BAD.ready.ang]);
           flags.push(h.T);
         }
-        if (p === W) { ks.push(K(tL + .1, 60, BAD.ready.pose), ...cheerKeys(tL + .35, 30, 3), K(end - .5, 45, { eyes: 'happy', mouth: 'smile' }), K(end, TH0)); ang.push([tL + .1, BAD.ready.ang], [tL + .6, -20], [end - .5, 20]); }
+        if (p === W) { ks.push(K(Math.max(tL + .1, last.T + .8), 60, BAD.ready.pose), ...cheerKeys(Math.max(tL + .35, last.T + 1.0), 30, 3), K(end - .5, 45, { eyes: 'happy', mouth: 'smile' }), K(end, TH0)); ang.push([Math.max(tL + .1, last.T + .8), BAD.ready.ang], [Math.max(tL + .6, last.T + 1.25), -20], [end - .5, 20]); }
         else {
           const lunge = { sq: .88, lean: 24, eyes: 'wide', mouth: 'o', arms: { L: { hand: [-10, 122, 44] } } };
-          ks.push(K(tL - .5, 60, BAD.ready.pose), K(tL - .08, 72, lunge), K(tL + .35, 72, { ...lunge, eyes: 'sad', mouth: 'flat' }), ...sorry(pl[L].per, tL + .7, 62).map((k) => ({ ...k, pose: { ...k.pose, arms: { ...(k.pose.arms || {}), L: { hand: [-16, 112, 30] } } } })),
+          ks.push(K(tL - (smash ? .34 : .5), 60, BAD.ready.pose), K(tL - .04, 72, lunge), K(tL + .35, 72, { ...lunge, eyes: 'sad', mouth: 'flat' }), ...sorry(pl[L].per, tL + .7, 62).map((k) => ({ ...k, pose: { ...k.pose, arms: { ...(k.pose.arms || {}), L: { hand: [-16, 112, 30] } } } })),
             K(pick - .45, 78, { lean: 10, eyes: 'open', head: { pitch: 10 } }), K(pick, 80, { ...ANIM.FETCH.reach(1), arms: { L: { hand: [-16, 112, 30] }, R: { hand: [8, 142, 44] } } }), K(pick + .5, 62, { eyes: 'happy', mouth: 'open', arms: { R: { hand: [20, 84, 34] }, L: { hand: [-16, 110, 30] } } }), K(end - .4, 60, { eyes: 'happy' }), K(end, TH0));
-          ang.push([tL - .5, BAD.ready.ang], [tL - .08, 100], [tL + .7, 150], [end - .4, 150]);
-          foot[p].push([tL - .5, foot[p][foot[p].length - 1][1]], [tL - .1, foot[p][foot[p].length - 1][1] + 10 * pl[p].k]);
+          ang.push([tL - (smash ? .34 : .5), BAD.ready.ang], [tL - .04, 100], [tL + .7, 150], [end - .4, 150]);
+          foot[p].push([tL - (smash ? .32 : .5), foot[p][foot[p].length - 1][1]], [tL - .06, foot[p][foot[p].length - 1][1] + 10 * pl[p].k]);
         }
         return { tr: track(ks), ang: pw(ang), dx: pw(foot[p]), flags };
       };
@@ -663,6 +684,8 @@
           c.dx = sg[p] * dx; fr[key] = c;
         });
         if (ball.show) fr.world.push({ k: 'shuttle', u: ball.u, h: ball.h, rot: ball.ang, s: 1.45 });
+        if (smash && t > last.T + .03 && t < tL) fr.world.push({ k: 'speed', u: ball.u - sg[W] * 22, h: ball.h + 16, rot: ball.ang, s: .9 });
+        if (t >= tL && t < tL + .25) fr.world.push({ k: 'dust', u: landU, h: 2, s: .45 });
         if (t >= pick && t < end - .4) { /* 撿起來拿在手上：畫在輸的那隻的手邊 */ const c = fr[L ? 'b' : 'a']; c.pose.props = (c.pose.props || []).concat([{ t: 'shuttle', hand: 'R', off: [0, -8], rot: -90, s: 1.3 }]); }
         for (const tt of [.42, end - .36]) fr.world.push(...floatUp('sparkle', t, tt, 20, 110 * ctx.kk, .7, .5, 10), ...floatUp('sparkle', t, tt, ctx.d - 20, 110 * ctx.kk, .7, .5, 10));
         fr.world.push(...floatUp('star', t, tL + .5, base[W] + sg[W] * 10, 190 * pl[W].k, .7, 1.2, 20), ...floatUp('sparkle', t, tL + .9, base[W] - sg[W] * 14, 196 * pl[W].k, .8, 1.2, 20), ...floatUp('sweat', t, tL + .5, base[L] + sg[L] * 20, 150 * pl[L].k, 1, 1, -16));
@@ -690,7 +713,9 @@
       const aWins = winA(ctx, 'volleyball'), spike = ctx.rnd() < .6;
       let n = 3 + Math.floor(ctx.rnd() * 3); if (((n - 1) % 2 === 0) !== aWins) n += n >= 5 ? -1 : 1;
       const W = aWins ? 0 : 1, L = 1 - W;
-      const off = [0, 1].map((i) => { const m = handsOf(pl[i], VB.hit).mid, sp = handsOf(pl[i], VB.spike).L, hd = handsOf(pl[i], VB.hold).mid; return { bump: { f: m.f, h: m.h + (R + 3) * pl[i].k }, spike: { f: sp.f + 4 * pl[i].k, h: sp.h + (R + 2) * pl[i].k }, hold: { f: hd.f, h: hd.h + 4 * pl[i].k } }; });
+      // 墊球重用單人排球動畫（蹲低併成平台 → 觸球 → 往上送）
+      const AV = ANIM.ANIMS && ANIM.ANIMS.volleyball, BUMP = AV && AV.hitT ? borrow('volleyball', .92, 1.6, AV.hitT, 0, true) : null, bHit = BUMP && BUMP.find((k) => Math.abs(k.t) < 1e-6);
+      const off = [0, 1].map((i) => { const m0 = handsOf(pl[i], bHit || VB.hit).mid, m = bHit ? { f: m0.f + 6 * pl[i].k, h: m0.h - 5 * pl[i].k } : m0, sp = handsOf(pl[i], VB.spike).L, hd = handsOf(pl[i], VB.hold).mid; return { bump: { f: m.f, h: m.h + (R + 3) * pl[i].k }, spike: { f: sp.f + 4 * pl[i].k, h: sp.h + (R + 2) * pl[i].k }, hold: { f: hd.f, h: hd.h + 4 * pl[i].k } }; });
       const hits = [], foot = [[[0, 0]], [[0, 0]]];
       for (let i = 0; i < n; i++) {
         const p = i % 2, T = 1.3 + i * F, kind = spike && i === n - 1 && i > 0 ? 'spike' : 'bump';
@@ -716,6 +741,7 @@
         if (p === 0) ks.push(K(.7, 62, { ...VB.hold.pose, eyes: 'focus' }), K(.9, 62, { sq: 1.02, head: { pitch: -16 }, eyes: 'focus', arms: { L: { hand: [-6, 92, 42] }, R: { hand: [6, 92, 42] } } }));
         for (const h of hits.filter((x) => x.p === p)) {
           if (h.kind === 'spike') ks.push(K(h.T - .62, 62, VB.ready.pose), K(h.T - .3, 64, { sq: .8, lean: 6, eyes: 'focus', head: { pitch: -18 }, arms: { L: { hand: [-26, 110, 0] }, R: { hand: [20, 110, 10] } } }), K(h.T - .08, 64, { ...VB.spike.pose, y: -30, arms: { L: { hand: [-30, 66, 0] }, R: { hand: [14, 100, 30] } } }, 'out'), K(h.T, 66, VB.spike.pose), K(h.T + .14, 68, { ...VB.spike.pose, y: -22, lean: 12, arms: { L: { hand: [-8, 104, 42] }, R: { hand: [14, 112, 26] } } }), K(h.T + .34, 64, { sq: .86, lean: 8, eyes: 'happy', mouth: 'open' }, 'in'));
+          else if (BUMP) { ks.push(K(h.T - .72, 62, VB.ready.pose)); for (const k of BUMP) ks.push({ ...k, t: h.T + k.t }); ks.push(K(h.T + .78, 62, VB.ready.pose)); }
           else ks.push(K(h.T - .7, 62, VB.ready.pose), K(h.T - .22, VB.prep.th, VB.prep.pose), K(h.T, VB.hit.th, VB.hit.pose, 'in'), K(h.T + .18, VB.follow.th, VB.follow.pose, 'out'), K(h.T + .6, 62, VB.ready.pose));
         }
         if (isSpike) {
@@ -775,7 +801,11 @@
       const rimC = { u: hoopU - away * 3 * hs * ctx.kk, h: rimH }, rimNear = hoopU - away * 20 * hs * ctx.kk;
       const make = ctx.rnd() < clamp(.55 + (SH.per.likes.includes('basketball') ? .15 : 0) + (SH.per.act - .5) * .2, .3, .85);
       // 接觸點
-      const dH = handsOf(PS, { th: 60, pose: BB.drib(126) }).L, pOut = handsOf(PS, BB.pass).mid, cIn = handsOf(SH, BB.catch).mid, sOut = handsOf(SH, BB.shot).mid;
+      // 跳投重用單人籃球動畫（蹲低蓄力 → 起跳 → 最高點出手 → 落地）；bo＝球相對雙手的位移
+      const AB = ANIM.ANIMS && ANIM.ANIMS.basketball, relT = AB && AB.events && AB.events[0] ? AB.events[0].t : .98;
+      const SHOT = AB ? borrow('basketball', .74, 1.54, relT, 0, false) : null, sRel = SHOT && SHOT.find((k) => Math.abs(k.t) < 1e-6);
+      const dH = handsOf(PS, { th: 60, pose: BB.drib(126) }).L, pOut = handsOf(PS, BB.pass).mid, cIn = handsOf(SH, BB.catch).mid;
+      const sM = handsOf(SH, sRel || BB.shot).mid, sOut = sRel ? { f: sM.f + (sRel.bo ? sRel.bo[0] : -6) * SH.k, h: sM.h - (sRel.bo ? sRel.bo[1] + 14 : 0) * SH.k } : sM;
       const dU = baseP + sgP * dH.f, dTop = dH.h - R * .9;
       const pass0 = { u: baseP + sgP * pOut.f + sgP * 8 * PS.k, h: pOut.h + 2 * PS.k }, pass1 = { u: baseS + sgS * cIn.f + sgS * 8 * SH.k, h: cIn.h + 2 * SH.k };
       const rel = { u: baseS + sgS * sOut.f, h: sOut.h + 14 * SH.k };
@@ -803,8 +833,8 @@
         K(tPass - .5, 60, BB.hold.pose), K(tPass - .2, 62, BB.wind.pose), K(tPass, 66, BB.pass.pose, 'in'), K(tPass + .2, 66, { ...BB.pass.pose, lean: 12, arms: { L: { hand: [-12, 108, 44] }, R: { hand: [12, 110, 44] } } }, 'out'), K(tPass + .7, 60, { eyes: 'focus', mouth: 'smile' }), K(tShot, 58, { eyes: 'wide', mouth: 'o', sq: .97 }), K(tRim, 58, { eyes: 'wide', mouth: 'o', sq: 1.02 }),
         ...(make ? [...cheerKeys(tCheer, 40, 2), ...hopKeys(80), ...five(PS, PS.per)] : [K(tRim + .25, 60, { eyes: 'wide', mouth: 'o', y: -8 }, 'out'), K(tRim + .5, 60, { eyes: 'wide', mouth: 'o', sq: .94 }, 'in'), K(end - .3, 45, { eyes: 'focus', mouth: 'smile', head: { yaw: -30 } }), K(end, TH0)])];
       const SK = [K(0, TH0), K(.6, 60, { eyes: 'happy', mouth: 'open' }), K(tPass - .4, 62, { sq: .94, lean: 6, eyes: 'focus', arms: { L: { hand: [-10, 108, 40] }, R: { hand: [10, 110, 40] } } }), K(tCatch - .1, 64, BB.catch.pose), K(tCatch, 64, BB.catch.pose), K(tCatch + .2, 60, BB.cushion.pose, 'out'),
-        K(tCatch + .5, 50, { ...BB.hold.pose, eyes: 'happy' }), K(tCatch + .95, -55, { ...BB.hold.pose, eyes: 'focus', head: { pitch: -8 } }), K(tShot - .35, BB.aim.th, BB.aim.pose), K(tShot - .08, -64, { ...BB.shot.pose, y: -22, arms: { L: { hand: [-6, 80, 42] }, R: { hand: [6, 78, 44] } } }, 'out'), K(tShot, BB.shot.th, BB.shot.pose),
-        K(tShot + .3, BB.landed.th, BB.landed.pose, 'in'), K(tRim, -58, { eyes: 'wide', mouth: 'o', head: { pitch: -16 } }),
+        K(tCatch + .5, 50, { ...BB.hold.pose, eyes: 'happy' }), K(tCatch + .95, -55, { ...BB.hold.pose, eyes: 'focus', head: { pitch: -8 } }), ...(SHOT ? SHOT.map((k) => ({ ...k, t: tShot + k.t })) : [K(tShot - .35, BB.aim.th, BB.aim.pose), K(tShot - .08, -64, { ...BB.shot.pose, y: -22, arms: { L: { hand: [-6, 80, 42] }, R: { hand: [6, 78, 44] } } }, 'out'), K(tShot, BB.shot.th, BB.shot.pose),
+        K(tShot + .3, BB.landed.th, BB.landed.pose, 'in')]), K(tRim, -58, { eyes: 'wide', mouth: 'o', head: { pitch: -16 } }),
         ...(make ? [K(tCheer, -30, CHEER(0)), K(tCheer + .22, 0, CHEER(-20), 'out'), K(tCheer + .44, 30, CHEER(0), 'in'), K(tCheer + .72, 40, CHEER(-18), 'out'), K(tCheer + .94, 40, CHEER(0), 'in'), ...hopKeys(80), ...five(SH, SH.per)]
           : [K(tRim + .3, -50, { eyes: 'wide', mouth: 'o', arms: { L: { hand: [-19, 70, 22] }, R: { hand: [19, 70, 22] } } }), K(tRim + .9, -20, { head: { pitch: 14 }, eyes: 'sad', mouth: 'flat', sq: .95 }), K(end, 15, { eyes: 'sad' })])];
       const PT = track(PK), ST = track(SK);
@@ -825,7 +855,7 @@
         if (h.on) for (const c of [p, s]) { const hp = HOP(h.u); c.pose = { ...c.pose, y: hp.y * .7, sq: hp.sq, tailUp: hp.tailUp }; }
         p.dx = make ? sgP * h.m : 0; s.dx = make ? sgS * h.m : 0;
         if (ball.held === 'P') p.pose.props = [{ t: 'bball', hand: 'both', off: [0, -5], s: t < .45 ? Math.max(.05, (t - .2) * 4) : 1 }];
-        if (ball.held === 'S') s.pose.props = [{ t: 'bball', hand: 'both', off: [0, t > tShot - .12 ? -12 : -5] }];
+        if (ball.held === 'S') { const bo = SHOT && t > tShot - .3 ? pw([[tShot - .3, 0], [tShot - .24, -3], [tShot - .08, -7], [tShot, -10]])(t) : null; s.pose.props = [{ t: 'bball', hand: 'both', off: bo != null ? [-(6 * (bo / -10)), bo - 0] : [0, -5] }]; }
         if (ball.u != null) { fr.world.push({ k: 'bball', u: ball.u, h: ball.h, rot: ball.spin, o: ball.o }); if (t > tD) { watch(p, PS, baseP, sgP, ball, t < tPass ? .25 : .6); if (t > tPass) watch(s, SH, baseS, sgS, ball, .6); } }
         if (t < .45 && t > .2) p.pose.props = p.pose.props || [];
         const ho = Math.min(1, t * 3, (end - t) * 3);

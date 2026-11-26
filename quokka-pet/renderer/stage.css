@@ -4,17 +4,21 @@ body.hidden #stage, body.hidden #fx { display: none; }
 #stage, #fx { position: absolute; inset: 0; pointer-events: none; }
 #fx { z-index: 100000; }
 .actor { position: absolute; left: 0; top: 0; will-change: transform; cursor: grab; pointer-events: auto; }
-.actor img, .actor .live { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; transform-origin: 50% 80%; }
+.actor img, .actor .live { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; transform-origin: 50% 92.6%; }   /* 以腳底為基準 */
 .actor .live svg { width: 100%; height: 100%; overflow: visible; }
 .actor.live-on img { visibility: hidden; }
 .actor img.wide { left: -27.78%; width: 155.56%; }   /* 寬畫框（x −60…220，平常是 −10…170） */
-.actor.idle.near img, .actor.near:not(.live-on):not(.asleep):not(.ringing):not(.dragging) img { animation: breathe 3.6s ease-in-out infinite; }   /* 只有游標靠近時才呼吸 */
+/* 呼吸：常駐，只做 transform（交給合成器，不重畫）；每隻用 animation-delay 錯開；睡覺時更慢更深 */
+.actor img { will-change: transform; animation: breathe 3.2s ease-in-out infinite; }
+.actor.asleep img { animation: breathe-sleep 5.4s ease-in-out infinite; }
+.actor.dragging img { animation: none; }
 .actor.dragging { cursor: grabbing; }
-@keyframes breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.012, .988); } }
-
-/* 響鈴：同一張揮手圖，用 CSS 輕輕晃（不重畫） */
-.actor.ringing img { animation: ring 1.1s ease-in-out infinite; }
-@keyframes ring { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-3deg); } 40% { transform: rotate(3deg); } 60% { transform: rotate(-2deg); } 80% { transform: rotate(1deg); } }
+@keyframes breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(.994, 1.012); } }
+@keyframes breathe-sleep { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(.99, 1.022); } }
+/* 兩隻互動播放中：各自的圖先藏起來，畫在共用的那一張（.duet）裡；元素本身留著接滑鼠 */
+.actor.in-duet img, .actor.in-duet .live { visibility: hidden; }
+.duet { position: absolute; pointer-events: none; contain: layout style; }
+.duet svg { display: block; width: 100%; height: 100%; overflow: visible; }
 
 /* 睡覺時偶爾冒 zZ（CSS 動畫，不重畫） */
 .actor .zz { position: absolute; left: 64%; top: 14%; display: none; font: 700 15px/1 "Noto Sans TC", Arial, sans-serif; color: #7c8696; pointer-events: none; opacity: 0; }
@@ -64,8 +68,8 @@ body.hidden #stage, body.hidden #fx { display: none; }
 @keyframes burst { 0% { opacity: 1; transform: translate(calc(-50% + var(--ox, 0px)), calc(-50% + var(--oy, 0px))) scale(.4); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(calc(-50% + var(--ox, 0px) + var(--dx)), calc(-50% + var(--oy, 0px) + var(--dy) + 24px)) scale(1); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .actor img, .actor.ringing img, .bubble.alert { animation: none !important; }
+  .actor img, .bubble.alert { animation: none !important; }
   .actor.asleep .zz { animation: none; opacity: .7; }
 }
-body.reduce .actor img, body.reduce .actor.ringing img, body.reduce .bubble.alert { animation: none !important; }
+body.reduce .actor img, body.reduce .bubble.alert { animation: none !important; }
 body.reduce .actor.asleep .zz { animation: none; opacity: .7; }
