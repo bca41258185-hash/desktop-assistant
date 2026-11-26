@@ -515,6 +515,23 @@
     }
 
     // ---- 刪除（第 7.4、5.5 節）：在呼叫端把牠從 quokkas 移除「之前」呼叫 -------------------
+    // 放生後回信、牠回來了：放回名單、墓碑紀錄取消、恢復放生前的關係（友情、愛情；伴侶還單身才恢復成一對）
+    //   q＝放生時存下的資料（不含懷孕、育兒袋）；rels＝[{ other, affinity, love, couple, ... }]
+    function onReturn(q, rels = []) {
+      const events = [];
+      if (!q || !q.id || byId(q.id)) return events;
+      data.quokkas.push(q);
+      if (data.lineage[q.id]) data.lineage[q.id].deletedAt = null;
+      recordLineage(q);
+      for (const r of rels) {
+        if (!r || !byId(r.other) || r.other === q.id) continue;
+        const { other, ...rest } = r;
+        const couple = !!rest.couple && !partnerOf(other) && !partnerOf(q.id);
+        data.relations[pairKey(q.id, other)] = { ...rest, couple, since: couple ? rest.since || nowISO() : null };
+        if (couple) events.push({ type: 'couple-again', a: q.id, b: other });
+      }
+      return events;
+    }
     function deleteWarning(qid) { const q = byId(qid); return q && q.pregnancy ? 'pregnant' : null; }
     function onDelete(qid) {
       const q = byId(qid), events = [];
@@ -574,7 +591,7 @@
 
     return {
       onTogether, onInterrupted, onPass, dailyDecay, canPair, tickClock, ageMonths, onDelete, deleteWarning,
-      canRegenerate, onRegenerate, refreshAges, isKin, partnerOf, crushOf, isCouple, isFriend, guardianOf, canOwnTasks,
+      canRegenerate, onRegenerate, onReturn, refreshAges, isKin, partnerOf, crushOf, isCouple, isFriend, guardianOf, canOwnTasks,
       tempName, resolveNameClash, relation: (a, b) => rel(a, b, false), pairKey, constants: C
     };
   }

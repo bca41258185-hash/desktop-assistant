@@ -542,7 +542,26 @@
     return `<article class="postcard${c.read ? '' : ' unread'}" data-pc="${esc(c.id)}" aria-label="${esc(c.from.name)}寄來的明信片">
       <div class="pc-stamp">${from.traits ? avatar(from, 'md') : ''}<span class="pc-mark" aria-hidden="true">📮</span></div>
       <div class="pc-body"><div class="pc-meta">${esc(c.from.name)} → ${esc(to ? to.name : '大家')}<span class="pc-time">${esc(t)}</span>${c.read ? '' : '<span class="pc-new">新</span>'}</div>
-      <p class="pc-text">${esc(c.text || '').split(String.fromCharCode(10)).join('<br>')}</p></div></article>`;
+      <p class="pc-text">${esc(c.text || '').split(String.fromCharCode(10)).join('<br>')}</p>${replyHTML(c)}</div></article>`;
+  }
+  // 回信：寫幾句（可以不寫）→ 約 1 分鐘後禿鷹把牠帶回來
+  function replyHTML(c) {
+    const name = esc(c.from.name);
+    if (c.returned || qById(c.from.id)) return `<p class="pc-state">✓ ${name}已經回來了</p>`;
+    if (c.replied) return `<p class="pc-state">✉️ 已回信，${name}正在回來的路上…</p>`;
+    if (ui.replying !== c.id) return `<div class="pc-actions"><button type="button" class="btn" data-act="pcReply" data-pc="${esc(c.id)}" data-fk="pc:reply:${esc(c.id)}">✉️ 回信</button></div>`;
+    return `<div class="pc-reply"><label class="field-l" for="pcText">寫給${name}</label>
+      <textarea id="pcText" class="text-in" rows="3" maxlength="200" placeholder="寫點什麼給${name}…（可以不寫）" data-fk="pc:text">${esc(ui.pcDraft || '')}</textarea>
+      <div class="btns"><button type="button" class="btn primary" data-act="pcSend" data-pc="${esc(c.id)}" data-fk="pc:send">寄出，請牠回來</button>
+      <button type="button" class="btn" data-act="pcCancel" data-fk="pc:cancel">取消</button></div></div>`;
+  }
+  async function sendReply(id) {
+    const c = (S.postcards || []).find((x) => x.id === id); if (!c) return;
+    const res = await api.replyPostcard({ id, text: ui.pcDraft || '' }).catch(() => ({ ok: false }));
+    ui.replying = null; ui.pcDraft = '';
+    if (res && res.ok) { c.replied = true; showToast(`信寄出了，${c.from.name}大約 1 分鐘後回來`); }
+    else showToast((res && res.message) || '信沒有寄出去');
+    render();
   }
   const postcardsHTML = (list) => list.map(postcardHTML).join('');
   function postcardsCardHTML() {
@@ -1153,6 +1172,9 @@
       case 'gearCancel': ui.gearMode = null; render(); break;
       case 'infoToggle': ui.infoOpen = !ui.infoOpen; render(); break;
       case 'pcMore': ui.pcMore = !ui.pcMore; render(); break;
+      case 'pcReply': ui.replying = b.dataset.pc; ui.pcDraft = ''; render(); { const t = $('pcText'); if (t) t.focus(); } break;
+      case 'pcSend': sendReply(b.dataset.pc); break;
+      case 'pcCancel': ui.replying = null; ui.pcDraft = ''; render(); break;
       case 'rename': doRename(); break;
       case 'color': doAccessory($('gAcc').value, b.dataset.c); break;
       case 'regenAsk': ui.gearMode = 'regen'; render(); break;
@@ -1219,6 +1241,7 @@
     if (t.classList.contains('edit-in')) ui.editDraft = t.value;
     if (t.id === 'newName' && ui.adding) { ui.adding.name = t.value; }
     if (t.id === 'rosterSearch') { ui.moreQuery = t.value; filterMore(); }
+    if (t.id === 'pcText') ui.pcDraft = t.value;
   });
   document.addEventListener('change', (e) => {
     const t = e.target;

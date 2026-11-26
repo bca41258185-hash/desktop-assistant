@@ -507,3 +507,28 @@ test('特殊性別：和生理性別分開、約 4%、不影響原本抽出來�
   w.now.days(1); w.R.onTogether('m', 'f');
   assert.ok(w.q('f').pregnancy);                            // 生理一公一母、愛情滿：照常
 });
+
+test('回來：放回名單、恢復放生前的友情和愛情；伴侶還單身才恢復成一對', () => {
+  const w = couple();
+  w.data.quokkas.push(mk(w.now, 'x', 'female'));
+  setAff(w, 'm', 'x', 60);
+  const snap = JSON.parse(JSON.stringify(w.q('m')));
+  const rels = Object.entries(w.data.relations).filter(([k]) => k.split('|').includes('m')).map(([k, r]) => ({ other: k.split('|').find((p) => p !== 'm'), ...r }));
+  w.R.onDelete('m'); w.data.quokkas = w.data.quokkas.filter((q) => q.id !== 'm');
+  assert.equal(w.R.partnerOf('f'), null);
+  const ev = w.R.onReturn(snap, rels);
+  assert.ok(w.q('m'));
+  assert.equal(w.R.partnerOf('m'), 'f');                    // 伴侶還單身：恢復成一對
+  assert.equal(w.R.relation('m', 'x').affinity, 60);
+  assert.equal(w.data.lineage.m.deletedAt, null);
+  assert.ok(ev.some((e) => e.type === 'couple-again'));
+  assert.deepEqual(w.R.onReturn(snap, rels), []);          // 已經在了：不重複加
+  // 伴侶已經跟別隻在一起：不恢復成一對，愛情還在
+  const w2 = couple(); w2.data.quokkas.push(mk(w2.now, 'm2', 'male'));
+  const s2 = JSON.parse(JSON.stringify(w2.q('m'))), r2 = [{ other: 'f', affinity: 70, love: 100, couple: true, attracted: true }];
+  w2.R.onDelete('m'); w2.data.quokkas = w2.data.quokkas.filter((q) => q.id !== 'm');
+  setLove(w2, 'm2', 'f', 100); w2.R.onTogether('m2', 'f');
+  w2.R.onReturn(s2, r2);
+  assert.equal(w2.R.partnerOf('m'), null);
+  assert.equal(w2.R.relation('m', 'f').love, 100);
+});

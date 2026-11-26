@@ -14,8 +14,12 @@
     const lover = partner || crush || null;
     const friends = rs.filter((r) => (!lover || r.other !== lover.other) && (r.friend || (r.affinity || 0) >= 30))
       .sort((a, b) => (b.affinity || 0) - (a.affinity || 0)).slice(0, 3);
+    // 回信讓牠回來時要用的：牠自己的資料（不含懷孕、育兒袋）、放生前的關係
+    const keep = ['id', 'name', 'traits', 'home', 'pos', 'createdAt', 'stage', 'mom', 'dad', 'lastBirthAt', 'growth'];
+    const snapshot = JSON.parse(JSON.stringify(Object.fromEntries(keep.filter((k) => from[k] !== undefined).map((k) => [k, from[k]]))));
     return {
       id: 'pc' + now.toString(36) + Math.floor(rnd() * 1e6).toString(36),
+      snapshot, rels: JSON.parse(JSON.stringify(relations)),
       from: { id: from.id, name: from.name, traits: from.traits || null },
       lover: lover ? { id: lover.other, name: nameOf(lover.other), partner: !!lover.couple } : null,
       friends: friends.map((r) => ({ id: r.other, name: nameOf(r.other) })),

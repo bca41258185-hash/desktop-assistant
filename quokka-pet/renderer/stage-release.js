@@ -158,6 +158,79 @@
     S.actors.delete(a.id);
     S.reportRects();
   }
+  // 回來（回信之後）：放生的倒帶——禿鷹橫抓著牠從遠的那一邊飛來（2.2 秒）→ 降到牠原本的家、邊放下邊扶正（0.8 秒）
+  //   → 鬆爪飛走（1.6 秒），庫卡落地說一句話。主行程先把牠加回名單（舞台已經建好這隻），再送 stage:arrive
+  const A_IN = 2200, A_DOWN = 800, A_OUT = 1600;
+  S.arrive = function (qid, line) {
+    const a = S.actors.get(qid);
+    if (!a || a.arriving) return false;
+    if (S.reduceMotion || S.mode === 'hidden') { if (line) a.say(line, { ms: 2600 }); return true; }
+    a.arriving = true;
+    if (a.job) { const j = a.job; a.job = null; try { j.interrupt && j.interrupt('arrive'); } catch (e) { /* 剛建好通常沒有活動 */ } }
+    const homeX = a.x, ground = a.y;
+    const sc = S.clamp(a.w * 1.9 / W, .8, 2.4);
+    const fromRight = homeX < innerWidth / 2, dir = fromRight ? -1 : 1;
+    const v = document.createElement('div');
+    v.className = 'vulture';
+    v.innerHTML = vultureSVG();
+    v.style.transformOrigin = '0 0';
+    S.fxEl.appendChild(v);
+    const C_OFF = (S.FOOT.y - S.VB.y) * a.k - a.h / 2, GRIP = 30 * a.k, ROT = 84 * dir;
+    const TH = ROT * Math.PI / 180, px = -GRIP * Math.sin(TH), py = -GRIP * Math.cos(TH);
+    const turned = (deg) => { const r = deg * Math.PI / 180; return { x: px * Math.cos(r) - py * Math.sin(r), y: px * Math.sin(r) + py * Math.cos(r) }; };
+    const put = (x, y, tilt, d = dir) => {
+      const left = d < 0 ? x - TALON[0] * sc : x + TALON[0] * sc;
+      v.style.transform = `translate3d(${left.toFixed(1)}px, ${(y - TALON[1] * sc).toFixed(1)}px, 0) scale(${d < 0 ? sc : -sc}, ${sc}) rotate(${tilt.toFixed(1)}deg)`;
+    };
+    a.el.style.transformOrigin = '50% 50%';
+    let rot = ROT;
+    const hold = (gx, gy) => { const q = turned(rot); a.x = gx - q.x; a.y = gy - q.y + C_OFF; a.place(); a.el.style.transform += ` rotate(${rot.toFixed(1)}deg)`; };
+    // 落地時爪子的位置（直立、腳踩地時，抓的那一點）
+    const g1 = { x: homeX + px, y: ground - C_OFF + py };
+    const start = { x: fromRight ? innerWidth + W * sc + 40 : -W * sc - 40, y: -H * sc - a.h };
+    const above = { x: g1.x, y: g1.y - 70 };
+    const exit = { x: fromRight ? -W * sc - 80 : innerWidth + W * sc + 80, y: -H * sc - 120 };
+    a.setFrame('lift', 0, ANIM.STILL.lift); a.el.classList.add('dragging'); a.zBoost = 20000; if (a.tag) a.tag.style.display = 'none';
+    hold(start.x, start.y); put(start.x, start.y, 0);
+    let t0 = 0, landed = false;
+    const job = { name: 'arrive', ticks: true, layer: 0,
+      tick(now) {
+        if (!t0) t0 = now;
+        const t = now - t0;
+        if (t < A_IN) {                                          // 飛回來：從高處滑翔下來，庫卡橫著在爪子下晃
+          const u = ease(t / A_IN), mid = { x: (start.x + above.x) / 2, y: above.y - 160 };
+          const vx = bez(start.x, mid.x, above.x, u), vy = bez(start.y, mid.y, above.y, u);
+          rot = ROT + Math.sin(t / 190) * 5 * (1 - u);
+          hold(vx, vy); put(vx, vy, -6 * dir * (1 - u));
+          return true;
+        }
+        if (t < A_IN + A_DOWN) {                                 // 放下：降到地面，同時把牠扶正
+          const u = ease((t - A_IN) / A_DOWN);
+          rot = ROT * (1 - u);
+          const gx = g1.x, gy = bez(above.y, above.y + 10, g1.y, u);
+          hold(gx, gy); put(gx, gy, 0);
+          return true;
+        }
+        if (!landed) {                                           // 鬆爪：站好、說話、冒星星
+          landed = true; rot = 0;
+          a.x = homeX; a.y = ground; a.el.style.transformOrigin = ''; a.el.classList.remove('dragging'); a.zBoost = 0;
+          if (a.tag) a.tag.style.display = '';
+          a.place(); a.showRest();
+          S.burst(a.x, a.y - a.h * .7, 'stars');
+          if (line) a.say(line, { ms: 3000 });
+        }
+        const u = Math.min(1, (t - A_IN - A_DOWN) / A_OUT), e = u * u;   // 禿鷹飛走（往原本的方向繼續飛）
+        put(bez(g1.x, g1.x + dir * 160, exit.x, e), bez(g1.y, g1.y - 120, exit.y, e), -10 * dir);
+        if (u >= 1) { v.remove(); a.arriving = false; return false; }   // 交給 finish()：回到待機、存位置
+        return true;
+      },
+      interrupt() { /* 回來的途中不能被打斷 */ }
+    };
+    a.job = job; a.setLayer && a.setLayer(0);
+    S.kick();
+    return true;
+  };
   S.vultureSVG = vultureSVG;                                     // 預覽、測試用
   if (S.api && S.api.onRelease) S.api.onRelease((p) => { if (p && p.qid) S.release(p.qid); });
+  if (S.api && S.api.onArrive) S.api.onArrive((p) => { if (p && p.qid) S.arrive(p.qid, typeof p.line === 'string' ? p.line.slice(0, 40) : ''); });
 })();

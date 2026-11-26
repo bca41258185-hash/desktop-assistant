@@ -350,6 +350,8 @@ function start() {
   setInterval(checkPresence, 5000);
   // 明信片：到時間就寄給愛人（不在了就給朋友、預設負責人）；程式關著時到期的，下次開啟時寄到
   function deliverPostcards() {
+    // 回過信的：時間到就讓牠回來
+    for (const c of (data.postcards || []).filter((x) => x.replied && !x.returned && Date.now() >= x.returnAt)) returnQuokka(c);
     const due = (data.postcards || []).filter((c) => !c.sent && Date.now() >= c.dueAt);
     if (!due.length) return;
     for (const c of due) {
@@ -362,6 +364,33 @@ function start() {
     changed();
   }
   setInterval(deliverPostcards, 15000);
+  // 回信：約 1 分鐘後（信寄到小島要一點時間）禿鷹把牠帶回來
+  ipcMain.handle('postcard:reply', (e, { id, text } = {}) => {
+    const c = (data.postcards || []).find((x) => x.id === id);
+    if (!c || !c.sent) return { ok: false, message: '找不到這張明信片' };
+    if (c.returned || qById(c.from.id)) return { ok: false, message: `${c.from.name}已經回來了` };
+    if (c.replied) return { ok: true, returnAt: c.returnAt };
+    c.replied = true; c.replyText = str(text, LIMITS.text); c.repliedAt = new Date().toISOString(); c.returnAt = Date.now() + 60000;
+    changed();
+    setTimeout(deliverPostcards, 61000);
+    return { ok: true, returnAt: c.returnAt };
+  });
+  function returnQuokka(c) {
+    c.returned = true; c.returnedAt = new Date().toISOString();
+    for (const x of data.postcards || []) if (x.from.id === c.from.id) { x.replied = true; x.returned = true; }   // 同一隻的其他明信片也算回來了
+    if (qById(c.from.id)) { changed(); return; }
+    const q = JSON.parse(JSON.stringify(c.snapshot || { id: c.from.id, name: c.from.name, traits: c.from.traits, createdAt: new Date().toISOString() }));
+    if (!q.traits) q.traits = TR.generate();
+    TR.ensurePersonality(q.traits); TR.ensureAccessory(q.traits); if (TR.ensureGender) TR.ensureGender(q.traits);
+    if (data.quokkas.some((x) => x.name === q.name)) q.name = uniqueName(q.name);
+    if (!q.home && q.pos) { q.home = q.pos; delete q.pos; }
+    const events = romance.onReturn(q, c.rels || []);
+    changed({ quokkas: true });
+    toStage('stage:arrive', { qid: q.id, line: c.replyText ? '我回來了！謝謝你的信 💌' : '我回來了！' });
+    const lover = c.lover && qById(c.lover.id);
+    if (lover) setTimeout(() => event(lover.id, 'note', { text: `💕 ${q.name}回來了！` }), 5500);
+    onRomanceEvents(events); syncCrush();
+  }
   setTimeout(deliverPostcards, 8000);
   ipcMain.handle('postcard:read', (e, { id } = {}) => { const c = (data.postcards || []).find((x) => x.id === id); if (c && !c.read) { c.read = true; changed(); } return { ok: true }; });
   // 滑鼠快速繞圈（1.5 秒內繞 2 圈）→ 從繞圈的位置下一陣落葉雨；冷卻 20 秒。睡著、藏起來時不理
