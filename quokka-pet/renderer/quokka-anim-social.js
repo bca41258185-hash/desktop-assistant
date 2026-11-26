@@ -716,6 +716,7 @@
             K(pick - .45, 78, { lean: 10, eyes: 'open', head: { pitch: 10 } }), K(pick, 80, { ...ANIM.FETCH.reach(1), arms: { L: { hand: [-16, 112, 30] }, R: { hand: [8, 142, 44] } } }), K(pick + .5, 62, { eyes: 'happy', mouth: 'open', arms: { R: { hand: [20, 84, 34] }, L: { hand: [-16, 110, 30] } } }), K(end - .4, 60, { eyes: 'happy' }), K(end, TH0));
           ang.push([tL - (smash ? .34 : .5), BAD.ready.ang], [tL - .04, 100], [tL + .7, 78], [end - .4, 70]);
           foot[p].push([tL - (smash ? .32 : .5), foot[p][foot[p].length - 1][1]], [tL - .06, foot[p][foot[p].length - 1][1] + 10 * pl[p].k]);
+          { const f0 = foot[p][foot[p].length - 1][1]; foot[p].push([pick - .7, f0], [pick - .35, f0 + 30 * pl[p].k]); }   // 走上前一小步再彎腰撿（羽球在腳尖前面）
         }
         return { tr: track(ks), ang: pw(ang), dx: pw(foot[p]), flags };
       };
