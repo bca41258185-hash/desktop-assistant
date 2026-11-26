@@ -683,7 +683,8 @@
         hits.push({ p, T, kind, st, c: { u: base[p] + sg[p] * (st + o.f), h: o.h } });
       }
       // 最後一球：落在輸的那隻前面，牠往前撲但來不及
-      const last = hits[n - 1], smash = last.kind === 'smash', landU = base[L] + sg[L] * 66 * pl[L].k, Fl = smash ? .36 : F * 1.05, tL = last.T + Fl;
+      // 落點在輸的那隻「腳尖前面」：從牠最後站的位置（含往前撲的一小步）再往前 74 單位，彈一下後停在腳尖前約 30 單位，不會落在腳上
+      const lastSt = foot[L][foot[L].length - 1][1], last = hits[n - 1], smash = last.kind === 'smash', landU = base[L] + sg[L] * (lastSt + 10 * pl[L].k + 74 * pl[L].k), Fl = smash ? .36 : F * 1.05, tL = last.T + Fl;
       const segs = [];
       for (let i = 0; i < n - 1; i++) segs.push({ t0: hits[i].T, t1: hits[i + 1].T, f: flight(hits[i].c, hits[i + 1].c, hits[i].T, F, GRAV, 1.45) });
       segs.push({ t0: last.T, t1: tL, f: flight(last.c, { u: landU, h: 4 }, last.T, Fl, smash ? 260 : GRAV, smash ? 1 : 1.45) });
