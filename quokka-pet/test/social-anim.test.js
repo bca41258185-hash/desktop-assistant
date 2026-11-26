@@ -67,7 +67,8 @@ test('一起打球：球連續運動（不瞬移），擊球那一格在拍面�
     for (let t = I.tPass + .01; t < I.tCatch; t += 1 / 60) { const b = I.ballAt(t); if (prev) assert.ok(Math.hypot(b.u - prev.u, b.h - prev.h) < 20, '傳球連續'); prev = b; }
     const end = I.ballAt(I.tRim - .001);
     if (I.make) assert.ok(Math.abs(end.u - I.rimC.u) < 2 && Math.abs(end.h - I.rimH) < 2, '進球：球心過框心');
-    assert.strictEqual(!!sc.handoff, !I.make, '沒進才把球交給舞台去撿');
+    assert.ok(sc.handoff && ['a', 'b'].includes(sc.handoff.owner), '球最後一定交給其中一隻去撿（不淡出）');
+    if (I.make) assert.ok(sc.handoff.vu === 0 && sc.handoff.vh === 0 && sc.handoff.owner === I.shooter, '進球：球停在籃下，由投籃的去撿');
   }
 });
 

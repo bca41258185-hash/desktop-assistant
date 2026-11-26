@@ -227,8 +227,9 @@
     }
     const isCouple = (a, b) => { const r = rel(a, b, false); return !!(r && r.couple); };
     const isFriend = (a, b) => { const r = rel(a, b, false); return !!(r && r.friend); };
+    // 好朋友：不分性別，好感達門檻就是（情侶另計）。性別不可影響社交主動性與互動頻率。
     function refreshFriend(r, a, b) {
-      r.friend = !!(a && b && sexOf(a) && sexOf(a) === sexOf(b) && r.affinity >= C.friendAt);
+      r.friend = !!(a && b && r.affinity >= C.friendAt);
     }
     // 加好感，受每對每天上限限制；回傳實際加了多少
     function gain(r, amount) {

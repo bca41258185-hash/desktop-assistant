@@ -89,15 +89,21 @@ test('衰退：連續 7 天沒互動後每天 −2，補扣不重複，最低 0'
   assert.equal(r.affinity, v);
 });
 
-test('好朋友：同性好感 ≥ 80；異性不算好朋友', () => {
-  const w = world([(n) => mk(n, 'a', 'female'), (n) => mk(n, 'b', 'female'), (n) => mk(n, 'c', 'male')]);
+test('好朋友：不分性別，好感 ≥ 80 就是好朋友（性別不影響社交主動性）', () => {
+  const w = world([(n) => mk(n, 'a', 'female'), (n) => mk(n, 'b', 'female'), (n) => mk(n, 'c', 'male'), (n) => mk(n, 'd', 'male')]);
   setAff(w, 'a', 'b', 78);
   const r = w.R.onTogether('a', 'b');
   assert.ok(r.friend);
   assert.ok(r.events.some((e) => e.type === 'friend'));
   assert.ok(w.R.isFriend('a', 'b'));
-  setAff(w, 'a', 'c', 99);
-  assert.equal(w.R.onTogether('a', 'c').friend, false);
+  setAff(w, 'a', 'c', 85);                                       // 異性 80–99：一樣是好朋友
+  const x = w.R.onTogether('a', 'c');
+  assert.equal(x.friend, true);
+  assert.ok(w.R.isFriend('a', 'c'));
+  setAff(w, 'c', 'd', 85);                                       // 公公也是
+  assert.equal(w.R.onTogether('c', 'd').friend, true);
+  setAff(w, 'b', 'd', 50);                                       // 沒到門檻：不是
+  assert.equal(w.R.onTogether('b', 'd').friend, false);
 });
 
 test('成為一對：一公一母、成年、單身、好感 100', () => {

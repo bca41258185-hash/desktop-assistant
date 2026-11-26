@@ -85,6 +85,38 @@ test('走路不滑步：前爪撐地的那一段，前爪在地面上的位置�
   for (let u = 0; u < I.plant[0]; u += .05) assert.strictEqual(A.GAIT.walk(u).advance, 0);
 });
 
+test('走路（五足步態）：後腳有離地擺盪相位，腳在地上時不滑步，一步剛好前進 stride', () => {
+  const I = A.GAIT.info.walk, before = [], after = [];
+  let lift = 0, seenAir = false;
+  for (let i = 0; i <= 200; i++) {
+    const fr = A.GAIT.walk(i / 200), p = fr.pose, fs = p.footShift || [0, 0, 0];
+    const h = -(p.y || 0) + (fs[1] || 0);                                // 後腳離地高度
+    const x = (p.x || 0) - I.stride * fr.advance - fs[0] / Math.sqrt(p.sq || 1);   // 後腳在地面上的位置（往左走為負）
+    lift = Math.max(lift, h);
+    if (h > .3) seenAir = true; else (seenAir ? after : before).push(x);
+    if (h > .3) assert.ok(i / 200 > I.plant[0] && i / 200 < I.plant[1], '後腳只在前爪撐地的那一段離地');
+  }
+  assert.ok(lift >= 8, `後腳離地高度 ${lift.toFixed(1)}（要看得出來，至少 8 單位）`);
+  const span = (a) => Math.max(...a) - Math.min(...a);
+  assert.ok(before.length > 50 && after.length > 10);
+  assert.ok(span(before) < .8, `離地前後腳滑了 ${span(before).toFixed(2)}`);
+  assert.ok(span(after) < .8, `落地後後腳滑了 ${span(after).toFixed(2)}`);
+  assert.ok(Math.abs((before[0] - after[after.length - 1]) - I.stride) < .5, '後腳一步的落點要剛好前進 stride');
+  // 連續走：一步結束的姿勢＝下一步開始的姿勢
+  const a = A.GAIT.walk(0).pose, b = A.GAIT.walk(1).pose;
+  for (const k of ['x', 'y', 'lean', 'sq']) assert.ok(Math.abs(a[k] - b[k]) < 1e-6, `walk 首尾 ${k} 不連續`);
+  assert.ok(Math.abs(a.footShift[0] - b.footShift[0]) < 1e-6 && Math.abs(a.arms.R.hand[2] - b.arms.R.hand[2]) < 1e-6);
+});
+
+test('小跳：前爪與耳朵跟著節奏動，首尾相接', () => {
+  const ys = [], es = [];
+  for (let i = 0; i <= 20; i++) { const p = A.GAIT.hop(i / 20).pose; ys.push(p.arms.L.hand[1]); es.push(p.earFlop.L); }
+  assert.ok(Math.max(...ys) - Math.min(...ys) > 10, '前爪要有上下動作');
+  assert.ok(Math.max(...es) - Math.min(...es) > 10, '耳朵要有甩動');
+  const a = A.GAIT.hop(0).pose, b = A.GAIT.hop(1).pose;
+  assert.ok(Math.abs(a.arms.L.hand[1] - b.arms.L.hand[1]) < 1e-6 && Math.abs(a.sq - b.sq) < 1e-6);
+});
+
 test('三種球的事件（丟球時間點）還在，欄位沒變', () => {
   assert.deepStrictEqual(Object.keys(A.ANIMS).sort(), ['badminton', 'basketball', 'volleyball']);
   const v = A.ANIMS.volleyball.events.find((e) => e.name === 'throw'), b = A.ANIMS.basketball.events.find((e) => e.name === 'throw');

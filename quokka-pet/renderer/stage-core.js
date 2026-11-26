@@ -125,12 +125,16 @@
   function loop(now) {
     raf = 0;
     if (S.paused) return;
-    if (now - lastFrame < 30) { raf = requestAnimationFrame(loop); return; }   // 每秒最多約 30 格
+    if (now - lastFrame < (S.frameGap || 30)) { raf = requestAnimationFrame(loop); return; }   // 每秒最多約 30 格（互動太吃力時降到 20 格）
     lastFrame = now;
     let busy = false;
     const dt = Math.min(0.05, (now - (lastBall || now)) / 1000); lastBall = now;
-    for (const b of [...S.balls]) if (b.tick(dt, now)) busy = true;
-    for (const a of [...S.actors.values()]) if (a.tick(now)) busy = true;
+    for (const b of [...S.balls]) { try { if (b.tick(dt, now)) busy = true; } catch (e) { console.warn('球的更新出錯，收掉這顆球', e); try { b.remove(); } catch (e2) { /* 已經移除 */ } } }
+    // 每一隻各自保護：某一隻的活動出錯，就強制結束牠的活動（互動中會送 social:abort），其他隻照常
+    for (const a of [...S.actors.values()]) {
+      try { if (a.tick(now)) busy = true; }
+      catch (e) { console.warn('活動出錯，強制結束：' + (a.job && a.job.name), e); S.failJob(a); busy = true; }
+    }
     if (busy) { raf = requestAnimationFrame(loop); S.reportRectsThrottled(); }
     else { lastBall = 0; wakeLater(); S.reportRects(); }
   }
@@ -142,6 +146,13 @@
     const wait = Math.max(200, Math.min(5000, next - performance.now()));
     idleTimer = setTimeout(() => S.kick(), wait);
   }
+  // 強制結束某一隻目前的活動（出錯時用）：照正常的打斷流程收尾，再回待機
+  S.failJob = function (a) {
+    const j = a.job;
+    a.job = null;
+    try { if (j && j.duet) j.duet.fail(a); else if (j && j.interrupt) j.interrupt('error'); } catch (e) { /* 收尾也出錯就算了 */ }
+    try { a.hideLive(); a.depth = 0; a.zBoost = 0; a.dy = 0; a.el.classList.remove('in-duet', 'ringing', 'dragging', 'bang-on'); a.duetOn = false; a.th = Math.round((a.th || 0) / 15) * 15 || -15; a.setLayer(8); a.showRest(); a.place(); } catch (e) { /* 盡量恢復 */ }
+  };
   S.kick = function () { if (!raf && !S.paused) { lastBall = 0; raf = requestAnimationFrame(loop); } };
   S.running = () => !!raf;
 

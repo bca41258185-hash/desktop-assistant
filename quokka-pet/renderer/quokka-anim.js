@@ -280,12 +280,18 @@
   // 步態：一步的進度 u（0–1）→ { th, pose, advance }，以「往左走」為準（往右用 mirrorFrame() 鏡射）。
   // advance＝這一步已經前進的比例（0–1）。舞台請用 x = x0 + 方向 × stride × k × advance 來移動，
   // 腳（或撐地的前爪）著地的那一段 advance 不變，就不會滑步。每種步態建議的一步時間與位移在 GAIT.info。
-  //   walk  慢慢移動：四肢著地。前半步（u 0–.42）後腳踩著不動、前爪離地往前伸（advance＝0）；
-  //         後半步（u .42–.9）前爪撐地不動、身體和後腳一起跟上（advance 0→1，位移和前爪後退的量對齊）；最後 .1 站穩。
+  //   walk  慢慢移動：五足步態（前爪＋尾巴撐地，兩隻後腳一起往前擺）。
+  //         前半步（u 0–.42）後腳踩著不動、身體往前送、前爪離地往前伸（advance＝0）；
+  //         後半步（u .42–.9）前爪撐地不動、臀部抬高拱背、後腳離地往前擺到前爪後面再落地（advance 0→1）；最後 .1 站穩。
+  //         腳和爪在地上時位移為零：身體自己的前後移動用 pose.x，後腳用 pose.footShift 抵銷（見 quokka-pose.js）
   //   hop   中距離：小步跳。u 0–.2 蹲低蹬地（腳在地上，advance＝0）→ .2–.8 騰空（等速前進）→ .8–1 落地擠壓（advance＝1）
+  //         前爪與耳朵跟著節奏：蹬地時前爪收到胸口、耳朵後甩 → 騰空微張 → 落地前爪往下緩衝、耳朵被甩一下再彈回
   //   dash  趕路／撿球衝刺：大步跳，身體壓低拉長、腳往後收。u 0–.14 蹬地 → .14–.86 騰空 → 落地
   // ---------------------------------------------------------------------------
-  const WALK_LEAN = 52, WALK_ZB = 30, WALK_ZF = 60;                      // 前爪在身體座標的前後範圍；對應畫面位移約 22 單位（量出來的，近似線性）
+  const WALK_SW = [.1, .9], WALK_LIFT = 12, WALK_ARCH = 1.5, WALK_TOE = 6, WALK_BODY = 6;   // 後腳擺盪區間（撐地段內的比例）、離地高度、每抬高 1 單位多前傾幾度（肩膀才壓得住前爪）、腳尖下垂、身體前後送的幅度
+  const WALK_LEAN = 59, WALK_ZB = 44, WALK_ZF = 56.2;                    // 前傾（前爪要搆得到地至少約 58°）；前爪在身體座標的前後範圍，對應畫面位移 stride − 2×WALK_BODY（量出來的）
+  // 小跳的前爪關鍵位置 [u, 左右張開, 高度, 前後]（身體座標；左爪 x 取負）
+  const HOP_ARMS = [[0, 8, 131, 33], [.2, 6, 113, 27], [.5, 12, 121, 37], [.8, 9.5, 126, 38], [1, 8, 131, 33]];
   const GAIT = {
     info: {
       walk: { dur: .8, stride: 22, plant: [.42, .9] },                   // plant＝前爪撐地、身體前移的區間
@@ -294,24 +300,32 @@
     },
     walk(u) {
       u = clamp(u, 0, 1);
-      const inA = u < .42, eB = EASE.io(clamp((u - .42) / .48, 0, 1));
-      // 前爪：左爪先伸、右爪晚一點（只有離地的時候錯開，著地後一起撐）
+      const inA = u < .42, w = clamp((u - .42) / .48, 0, 1), eB = EASE.io(w), eA = EASE.io(clamp(u / .42, 0, 1));
+      const stride = GAIT.info.walk.stride, adv = inA ? 0 : eB;
+      // 身體相對「步伐原點」的前後位移 cf（往前為正）：前半步後腳踩著、身體往前送（−C→+C），
+      // 後半步前爪撐著、後腳往前擺到身體下方（+C→−C）。這樣身體是連續往前走的，不是走一下停一下
+      const cf = inA ? lerp(-WALK_BODY, WALK_BODY, eA) : lerp(WALK_BODY, -WALK_BODY, eB);
+      // 前爪：左爪先伸、右爪晚一點（只有離地的時候錯開，著地後一起撐）；撐地時往回收的量剛好抵銷身體前進 → 不滑
       const reach = (d) => EASE.io(clamp((u - d) / .34, 0, 1));
       const hand = (k, d) => {
         const e = inA ? reach(d) : 1 - eB, lift = inA ? 7 * Math.sin(Math.PI * reach(d)) : 0;
         return { hand: [k * 7, 174 - lift, lerp(WALK_ZB, WALK_ZF, e)] };
       };
-      const sw = Math.sin(Math.PI * eB);                                 // 後腳跟上時的起伏
-      // 身體：前爪往前伸時跟著伸長壓低（前傾變大），後腳跟上時拱起來（前傾變小、臀部抬高一點），最後站穩
-      const eA = EASE.io(clamp(u / .42, 0, 1));
-      const lean = inA ? lerp(WALK_LEAN - 3, WALK_LEAN + 5, eA) : u < .9 ? lerp(WALK_LEAN + 5, WALK_LEAN - 6, eB) : lerp(WALK_LEAN - 6, WALK_LEAN - 3, (u - .9) / .1);
+      // 後腳（五足步態的擺盪相位）：前爪和尾巴撐著，兩隻後腳一起離地往前擺。
+      // sw＝擺盪進度；fW＝後腳在地面上已前進的比例。腳在地上時 footShift 抵銷身體的位移（腳留在原地）→ 不滑步
+      const sw = clamp((w - WALK_SW[0]) / (WALK_SW[1] - WALK_SW[0]), 0, 1), fW = EASE.io(sw), arc = Math.sin(Math.PI * sw);
+      const up = WALK_LIFT * arc;                                        // 臀部連同後腳抬高（腳離地的高度）
+      // 前傾：前爪往前伸時伸長壓低；後腳擺盪時臀部抬高、背拱起來（上半身多往下彎，肩膀才留在前爪上方）；落地後回到蹲姿
+      const lean = (inA ? lerp(WALK_LEAN, WALK_LEAN + 3, eA) : u < .9 ? lerp(WALK_LEAN + 3, WALK_LEAN + 1, eB) : lerp(WALK_LEAN + 1, WALK_LEAN, (u - .9) / .1)) + WALK_ARCH * up;
+      const sq = (inA ? lerp(1, .985, eA) : lerp(.985, 1, eB)) + .035 * arc;
       return {
-        th: -90, advance: inA ? 0 : eB,
+        th: -90, advance: adv,
         pose: {
-          lean, feet: 'stand', sq: inA ? lerp(1, .985, eA) : lerp(.985, 1.02, sw) + (u >= .9 ? 0 : 0),
+          x: -cf, y: -up, lean, feet: 'stand', sq,
+          footShift: [(stride * (fW - adv) - cf) * Math.sqrt(sq), 0, WALK_TOE * arc * (1 - sw)],   // 剛離地時腳尖下垂，落地前放平
           head: { pitch: -(lean - 12) + 3 * Math.sin(2 * Math.PI * u) },    // 身體前傾，頭往回抬 → 平視前方，隨步伐輕輕點頭
-          tailUp: .04 + .16 * sw,                                        // 後腳跟上時尾巴被帶起來一點，再拖回地上
-          earFlop: { L: 3 + 6 * sw, R: 3 + 6 * sw },                     // 身體前移時耳朵往後壓一點
+          tailUp: -up / 30,                                              // 臀部抬高時尾端仍拖在地上（尾巴是第五隻腳）
+          earFlop: { L: 3 + 6 * arc, R: 3 + 6 * arc },                   // 身體前移時耳朵往後壓一點
           eyes: 'open', mouth: 'smile', look: [-1, .3],
           arms: { L: hand(-1, 0), R: hand(1, .08) }
         }
@@ -321,11 +335,27 @@
       u = clamp(u, 0, 1);
       const v = clamp((u - .2) / .6, 0, 1), air = u > .2 && u < .8, h = Math.sin(Math.PI * v);
       const sq = u < .2 ? lerp(.9, 1.06, EASE.in(u / .2)) : u < .8 ? lerp(1.06, 1.03, v) : lerp(1.03, .9, EASE.out((u - .8) / .2));
+      // 前爪跟著跳躍節奏：蹲低時垂在身前（＝上一步落地緩衝的位置，連續跳才接得起來）→ 蹬地時收到胸口 →
+      // 騰空時微微張開往前 → 落地時往下往前伸、緩衝後沉到最低
+      const armAt = (uu) => {
+        const P = HOP_ARMS; let i = 0;
+        while (i < P.length - 2 && P[i + 1][0] <= uu) i++;
+        const e = EASE.io(clamp((uu - P[i][0]) / (P[i + 1][0] - P[i][0]), 0, 1));
+        return [1, 2, 3].map((j) => lerp(P[i][j], P[i + 1][j], e));
+      };
+      const [ax, ay, az] = armAt(u), [bx, by, bz] = armAt(clamp(u - .05, 0, 1));          // 右爪晚 0.05 步（不會兩隻完全同步像機器）
+      // 耳朵：蹲低時先豎起來一點 → 蹬出去往後甩 → 最高點回正、下墜時往上飄 → 落地被慣性往下甩一下再彈回；右耳晚一點
+      const ear = (uu) => {
+        if (uu < .2) { const t = uu / .2; return 9.6 * EASE.in(t) - 4 * Math.sin(Math.PI * t); }
+        if (uu < .8) return 9.6 * Math.cos(Math.PI * clamp((uu - .2) / .6 - .1, 0, 1));
+        const t = (uu - .8) / .2; return lerp(-9.1, 0, EASE.out(t)) + 11 * Math.sin(Math.PI * t) * (1 - .5 * t);
+      };
+      const g = u < .2 ? 1 - u / .2 : u > .8 ? (u - .8) / .2 : 0;                           // 在地上蹲多低（0–1）
       return {
         th: -90, advance: v,
         pose: { y: -16 * h, sq, lean: u < .2 ? lerp(8, 14, u / .2) : u < .8 ? 14 : lerp(14, 8, (u - .8) / .2), feet: air ? 'air' : 'stand', tailUp: .5 * Math.sin(Math.PI * clamp((u - .28) / .6, 0, 1)),
-          head: { pitch: -8 }, earFlop: { L: flopOf(-80 * Math.cos(Math.PI * clamp(v - .1, 0, 1))) * (air ? 1 : .4), R: flopOf(-80 * Math.cos(Math.PI * clamp(v - .1, 0, 1))) * (air ? 1 : .4) },
-          eyes: 'open', mouth: 'smile', arms: { L: { hand: [-7, 120, 32] }, R: { hand: [7, 120, 32] } } }
+          head: { pitch: -8 - 3 * h + 4 * EASE.io(g) }, earFlop: { L: ear(u), R: ear(clamp(u - .04, 0, 1)) },
+          eyes: 'open', mouth: 'smile', arms: { L: { hand: [-ax, ay, az] }, R: { hand: [bx, by, bz] } } }
       };
     },
     dash(u) {

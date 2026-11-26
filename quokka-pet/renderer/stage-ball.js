@@ -59,6 +59,19 @@
           this.owner.ballScored && this.owner.ballScored(this);
         }
       }
+      // 碰到庫卡的身體或頭：反彈、被擋下（球不會穿過牠們）；被碰到的那隻縮一下、看球
+      if (!this.picked) for (const a of S.actors.values()) {
+        if (a.inPouch || (this.noHit && this.noHit.has(a) && performance.now() - this.born < 450)) continue;
+        if (Math.abs(a.x - this.x) > 80 * a.k + this.r) continue;
+        const gy = a.y - (a.depth || 0);
+        for (const [cy, cr] of [[gy - 128 * a.k, 30 * a.k], [gy - 62 * a.k, 40 * a.k]]) {
+          const dx = this.x - a.x, dy = this.y - cy, d = Math.hypot(dx, dy), min = cr + this.r * .8;
+          if (d >= min || d < 1e-3) continue;
+          const nx = dx / d, ny = dy / d, vn = this.vx * nx + this.vy * ny;
+          this.x = a.x + nx * min; this.y = cy + ny * min;
+          if (vn < 0) { this.vx -= 1.4 * vn * nx; this.vy -= 1.4 * vn * ny; this.vx *= .7; if (Math.abs(vn) > 90 * this.k && a.ballHit) a.ballHit(this); }
+        }
+      }
       // 螢幕邊
       if (this.x - this.r < 0) { this.x = this.r; this.vx = Math.abs(this.vx) * .6; }
       if (this.x + this.r > innerWidth) { this.x = innerWidth - this.r; this.vx = -Math.abs(this.vx) * .6; }

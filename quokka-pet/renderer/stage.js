@@ -149,8 +149,9 @@
     S.paused = true;
     // 看不到就停：收掉 L2 以下的活動（提醒照常），球淡出
     for (const a of S.actors.values()) if (a.job && a.job.layer >= 4) { const j = a.job; a.job = null; j.interrupt && j.interrupt('pause'); a.hideLive(); a.setLayer(8); a.showRest(); }
+    for (const a of S.actors.values()) a.stopLife();                    // 看不到的時候：眨眼、耳朵的計時器也停
   });
-  api.onResume(() => { S.paused = false; for (const a of S.actors.values()) a.nextAt = Math.max(a.nextAt, performance.now() + 3000); S.kick(); });
+  api.onResume(() => { S.paused = false; for (const a of S.actors.values()) { a.nextAt = Math.max(a.nextAt, performance.now() + 3000); if (a.mode === 'awake') a.startLife(); } S.kick(); });
   let hideTimer = 0;
   function setHidden(h) {
     document.body.classList.toggle('hidden', h);

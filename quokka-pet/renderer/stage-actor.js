@@ -177,7 +177,16 @@
       this.setFrame(r.key + tag, r.th, { ...r.pose, ...extra });
       this.lifeT2 = setTimeout(() => { if (this.canLife()) { if (then) then(); else this.showRest(); } }, ms);
     }
+    // 呼吸（CSS）：只在游標 400 px 內、或剛動完的 10 秒內播放，其餘時間停在靜止格（省資源）
+    breathe(ms = 10000) {
+      if (!this.breathing) { this.breathing = true; this.el.classList.add('breathe'); }
+      clearTimeout(this.breathT);
+      this.breathT = setTimeout(() => { this.breathing = false; this.el.classList.remove('breathe'); }, ms);
+    }
+    stopLife() { clearTimeout(this.blinkT); clearTimeout(this.earT); clearTimeout(this.lifeT2); this.blinkT = this.earT = 0; this.lifeOn = false; }
     startLife() {
+      if (this.lifeOn) return;
+      this.lifeOn = true;
       const blink = () => {
         this.blinkT = setTimeout(blink, 3000 + Math.random() * 3000);
         if (!this.canLife()) return;
@@ -246,6 +255,7 @@
       this.setLayer(8);
       if (line) this.say(line, { tone });
       if (rest) S.api.rest(this.id, Math.round(this.x), Math.round(this.y));
+      this.breathe();
       this.afterJob();
     }
     // 做完一件事之後：還在響鈴 → 回 L1；佇列有東西 → 間隔 1.2 秒再報；撿球；否則待機
@@ -344,7 +354,9 @@
           a.el.classList.remove('asleep', 'ringing');
           // 先平順轉到動畫的起始角度（不瞬間切換）
           const th0 = (opts.flip ? -1 : 1) * anim.keys[0].th;
-          if (!a.liveOn && Math.abs(th0 - a.th) > 12 && !S.reduceMotion) job.pre = a.turner(th0, Math.min(170, Math.abs(th0 - a.th) * 1.3));
+          if (a.preAnim && performance.now() < a.preAnim.until && !S.reduceMotion) job.pre = a.preAnim;                       // 依偎／打盹被打斷：先起身 0.4 秒
+          else if (!a.liveOn && Math.abs(th0 - a.th) > 12 && !S.reduceMotion) job.pre = a.turner(th0, S.clamp(Math.abs(th0 - a.th) * 3.2, 120, 300));
+          a.preAnim = null;
           if (opts.start) opts.start(job);
         },
         tick(now) {
@@ -400,7 +412,7 @@
         start(now) {
           a.el.classList.remove('asleep'); a.el.classList.add('ringing'); a.lookBucket = null;
           if (S.reduceMotion) { a.th = 0; a.setFrame('ring', 0, ANIM.STILL.ring); a.place(); return; }
-          job.pre = a.turner(0, Math.min(170, Math.abs(a.th) * 1.3));
+          job.pre = a.turner(0, S.clamp(Math.abs(a.th) * 3.2, 120, 300));
         },
         tick(now) {
           if (job.pre) { if (job.pre.tick(now)) return true; job.pre = null; job.t0 = now; }
@@ -491,12 +503,13 @@
           len = Math.min(stride * 1.2, Math.abs(rem) / Math.max(1, Math.round(Math.abs(rem) / stride)));
           m.step = len;
           if (o.check && o.check(a.x + dir * len, dir) === false) { m.blocked = true; m.done = true; return false; }
-          if (S.avoid) S.avoid(a, a.x, a.x + dir * len, o.ignore);
           dur = GINFO(gait).dur * 1000 / speed; p0 = now; x0 = a.x; y0 = a.y; phase = 'step';
         }
         if (phase === 'turn') { if (turn.tick(now)) return true; phase = 'plan'; return m.tick(now); }
         const u = Math.min(1, (now - p0) / dur), adv = a.gaitFrame(gait, m.dir, u);
         a.x = x0 + m.dir * len * adv;
+        // 繞過家人（小袋鼠從媽媽腳邊繞到另一側）：走靠鏡頭的那一道，畫在前面，看得出是繞過去而不是穿過去
+        if (o.lane) { let near = 0; for (const q of o.lane) if (q && !q.inPouch) near = Math.max(near, 1 - Math.abs(q.x - a.x) / (70 * Math.max(q.k, .6))); near = S.clamp(near * 1.6, 0, 1); a.depth = -18 * a.k / .5 * .5 * near; a.zBoost = near > 0 ? 80 : 0; }
         if (o.toY != null && Math.abs(o.toY() - y0) > .5) a.y = y0 + (o.toY() - y0) * adv;      // 跳到另一個高度（小袋鼠回媽媽身邊）
         a.place();
         if (u >= 1) { m.steps++; phase = 'plan'; if (o.onStep) o.onStep(m); }
@@ -636,6 +649,16 @@
       this.throwX = this.x;                                              // 撿回來要回到這裡
       new S.Ball(this, ev.kind, p.x, p.y, vx, vy, hoop);
     }
+    ballHit(ball) {
+      const now = performance.now();
+      if (now - (this.hitAt || 0) < 1200) return;
+      this.hitAt = now;
+      if (this.job || this.mode !== 'awake' || this.isFollow || S.reduceMotion) return;
+      const side = ball.x >= this.x ? 1 : -1, th = Math.round(this.th);
+      const keys = [{ t: 0, th, pose: {} }, { t: .12, th, pose: { sq: .88, roll: -side * 5, head: { pitch: 8, roll: -side * 8 }, eyes: 'closed', mouth: 'o', earFlop: { L: 8, R: 8 } }, ease: 'out' },
+        { t: .45, th, pose: { sq: 1.02, head: { yaw: S.clamp(side * 60 - th, -45, 45), pitch: 10 }, eyes: 'wide', mouth: 'o', look: [side * 2, 1.5] } }, { t: .9, th, pose: { head: { yaw: S.clamp(side * 60 - th, -45, 45), pitch: 12 }, eyes: 'open', look: [side * 2, 1.5] } }, { t: 1.2, th, pose: {} }];
+      this.requestActivity(6, this.animJob('flinch', { dur: 1.2, keys }));
+    }
     ballScored() { if (!this.bubble.kind) this.say('唰！空心！', { ms: 1600 }); }
     // 球停下來了：正在看球就直接接著去撿；否則等有空（L4）
     ballStopped() {
@@ -670,7 +693,7 @@
       const standX = ball.x - dir * NOSE;
       const P = {                                                        // 各段長度（毫秒）與格數
         discover: [Math.max(600, 250 + (1 - a.act) * 1200), 6], dash: [hopMs, 8], brake: [300, 4], sniff: [600, 8], scoop: [750, 10],
-        sit: [650, 8], turnHome: [400, 6], carry: [GINFO('hop').dur * 1000 * .95, 8], homeToss: [700, 10], turnFront: [340, 6], drop: [400, 5], nudge: [600, 8], rescoop: [900, 8], homeB: [1300, 6], homeV: [1600, 12], homeVNudge: [1300, 10]
+        sit: [650, 8], turnHome: [400, 6], carry: [GINFO('hop').dur * 1000 * .95, 8], homeToss: [700, 10], turnFront: [340, 6], wait: [1, 1], waitHome: [1, 1], drop: [400, 5], nudge: [600, 8], rescoop: [900, 8], homeB: [1300, 6], homeV: [1600, 12], homeVNudge: [1300, 10]
       };
       const job = { name: 'fetch', ticks: true, phase: 'discover', mode };
       const go = (ph, now) => { job.phase = ph; job.p0 = now; job.x0 = a.x; };
@@ -687,16 +710,22 @@
         const left = Math.abs(standX - a.x);
         job.dashHops = Math.max(0, Math.round(left / (DASH.stride * k)));
         job.dashStep = job.dashHops ? (standX - a.x) / job.dashHops : 0;
-        if (S.avoid) S.avoid(a, a.x, standX, null, true);                // 路上有別隻：請牠往旁邊讓一步
+        job.waitT0 = 0;
       };
       job.tick = (now) => {
         const ph = job.phase, u = Math.min(1, (now - job.p0) / P[ph][0]);
         switch (ph) {
-          case 'discover': frame(ph, u, m); if (u >= 1) go(job.dashHops ? 'dash' : 'brake', now); break;
+          case 'discover': frame(ph, u, m); if (u >= 1) go('wait', now); break;
+          case 'wait': {                                                 // 路上有別隻：請牠橫向跳開，等路清空再衝（不穿過別隻）
+            frame('discover', 1, m);
+            if (now - (job.lastChk || 0) > 220) { job.lastChk = now; job.clear = S.clearPath ? S.clearPath(a, a.x, ball.x + dir * 30 * k) : true; }
+            if (job.clear) { const left = Math.abs(standX - a.x); job.dashHops = Math.max(0, Math.round(left / (DASH.stride * k))); job.dashStep = job.dashHops ? (standX - a.x) / job.dashHops : 0; go(job.dashHops ? 'dash' : 'brake', now); }
+            else if (now - job.p0 > 9000) { ball.fade(); job.endOpts = { line: '被擋住了，等一下再撿～' }; return false; }
+            break;
+          }
           case 'dash':                                                   // 大步跳（步距約散步的 1.4 倍）
             frame(ph, u, m);
             a.x = job.x0 + job.dashStep * advOf('dash', u); a.place();
-            if (u < .1 && S.avoid) S.avoid(a, a.x, standX, null, true);
             if (u >= 1) { job.dashHops--; go(job.dashHops > 0 ? 'dash' : 'brake', now); }
             break;
           case 'brake': frame(ph, u, m); if (u >= 1) go('sniff', now); break;
@@ -709,12 +738,17 @@
               else go('turnHome', now);
             }
             break;
-          case 'turnHome': frame(ph, u, m); if (u >= 1) go(mode === 'carry' ? 'carry' : 'drop', now); break;
+          case 'turnHome': frame(ph, u, m); if (u >= 1) go('waitHome', now); break;
+          case 'waitHome':                                               // 回程的路上有別隻：抱著球等牠讓開（最多 6 秒）
+            frame('turnHome', 1, m);
+            if (now - (job.lastChk || 0) > 220) { job.lastChk = now; job.clear = S.clearPath ? S.clearPath(a, a.x, home) : true; }
+            if (job.clear) go('carry', now);
+            else if (now - job.p0 > 6000) { job.home2 = a.x; go('turnFront', now); }             // 還是擋著：就在這裡放下
+            break;
           case 'carry': {                                                // 抱著球小步蹦回去（步距約散步的 0.7 倍）
             frame(ph, u, mh);
             const st = Math.min(GINFO('hop').stride * k * .8, Math.abs(home - job.x0)) * Math.sign(home - job.x0);
             a.x = job.x0 + st * carryAdv(u); a.place();
-            if (u < .1 && S.avoid) S.avoid(a, a.x, home, null, true);
             if (u >= 1) { if (Math.abs(home - a.x) < 2) go('turnFront', now); else go('carry', now); }
             break;
           }
@@ -885,18 +919,31 @@
       return job;
     }
 
-    // 放下時和非伴侶的距離 < 60 px：往空的方向跳一步（規格 6.1）
-    stepAway() {
+    // 附近找一個空位（離所有非家人 ≥ gap px、在螢幕內），從最近的開始找；找不到回傳 null
+    freeSpot(gap = 100) {
+      const others = [...S.actors.values()].filter((o) => o !== this && !o.inPouch && Math.abs(o.y - this.y) <= 40 && !(S.family && S.family.close(this, o)));
+      const okAt = (x) => x > 44 && x < innerWidth - 44 && others.every((o) => Math.abs(o.x - x) >= gap);
+      if (okAt(this.x)) return this.x;
+      const cands = [];
+      for (const o of others) cands.push(o.x - gap - 2, o.x + gap + 2);
+      cands.sort((p, q) => Math.abs(p - this.x) - Math.abs(q - this.x));
+      // 不能越過別隻去找空位（那樣會穿過牠）
+      const crosses = (x) => others.some((o) => (o.x - this.x) * (o.x - x) < 0);
+      for (const x of cands) if (okAt(x) && !crosses(x)) return x;
+      for (const x of cands) if (okAt(x)) return x;
+      return null;
+    }
+    // 放下時（或剛長大時）和非伴侶的距離 < 60 px：往空的方向跳開（規格 6.1）
+    stepAway(minGap = 60) {
       if (this.job || this.mode !== 'awake' || this.isFollow) return;
-      let near = null;
+      let near = false;
       for (const o of S.actors.values()) {
         if (o === this || o.inPouch || Math.abs(o.y - this.y) > 40 || (S.family && S.family.close(this, o))) continue;
-        if (Math.abs(o.x - this.x) < 60 && (!near || Math.abs(o.x - this.x) < Math.abs(near.x - this.x))) near = o;
+        if (Math.abs(o.x - this.x) < minGap) near = true;
       }
       if (!near) return;
-      let dir = Math.sign(this.x - near.x) || (Math.random() < .5 ? -1 : 1);
-      let tx = near.x + dir * 96;
-      if (tx < 40 || tx > innerWidth - 40) { dir = -dir; tx = near.x + dir * 96; }
+      const tx = this.freeSpot(100);
+      if (tx == null || Math.abs(tx - this.x) < 3) return;
       const a = this, m = this.mover(tx, { gait: 'hop' });
       let sub = null;
       this.requestActivity(6, { name: 'stepAway', ticks: true, tick(now) { if (!sub && m.tick(now)) return true; if (!sub) sub = a.turner(m.dir * 30, 220); return sub.tick(now); }, end() { a.home = a.x; S.api.savePos(a.id, { x: Math.round(a.x), y: Math.round(a.y) }); } });
@@ -906,6 +953,7 @@
     onCursor(c, now) {
       const dx = c.x - this.x, dy = c.y - (this.y - 120 * this.k), dist = Math.hypot(dx, dy);
       this.el.classList.toggle('near', dist < 300);
+      if (dist < 400) this.breathe(2500);
       if (this.isFollow || this.inPouch) return;
       const moved = !this.lastC || Math.hypot(c.x - this.lastC.x, c.y - this.lastC.y) > 3;
       this.lastC = { x: c.x, y: c.y };
@@ -932,6 +980,7 @@
       if (mode === this.mode) return;
       const prev = this.mode;
       this.mode = mode;
+      if (mode === 'awake') this.startLife(); else this.stopLife();
       if (mode === 'asleep' || mode === 'hidden') {
         // 只留 L0、L1；其他活動收掉（還沒報的留在佇列）
         if (this.job && this.job.layer >= 2) { const j = this.job; this.job = null; j.interrupt && j.interrupt(mode); this.hideLive(); this.setLayer(8); }
@@ -958,7 +1007,9 @@
     }
     destroy() {
       if (this.job) { const j = this.job; this.job = null; j.interrupt && j.interrupt('remove'); }
-      clearTimeout(this.drainTimer); clearTimeout(this.lookTimer); clearTimeout(this.blinkT); clearTimeout(this.earT); clearTimeout(this.lifeT2); clearTimeout(this.peekT);
+      clearTimeout(this.drainTimer); clearTimeout(this.lookTimer); clearTimeout(this.peekT); clearTimeout(this.breathT); clearTimeout(this.growT); clearTimeout(this.waitT);
+      this.stopLife();
+      for (const k of [...passSeen]) if (k.split('|').includes(this.id)) passSeen.delete(k);
       if (S.family) S.family.removed(this);
       if (this.ball) this.ball.remove();
       this.bubble.destroy();

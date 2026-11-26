@@ -209,7 +209,7 @@
 
   // ---- 揮手打招呼：a 揮手 → b 看到，也揮手（酷酷的、害羞的只點頭）→ 相視而笑 --------------------
   TYPES.wave = {
-    gap: (ctx) => polite(ctx, 118),
+    gap: (ctx) => polite(ctx, 138),
     build(ctx) {
       const pa = ctx.a.per, pb = ctx.b.per, d = pb.delay;
       const UP = (z) => ({ L: { hand: [-54 + z * 13, 70 - z * 12, 0 + z * 5] } });   // 手舉到頭的外側，側身也看得到
@@ -260,7 +260,7 @@
   };
 
   // ---- 碰碰手掌：走近到鼻子不相碰，轉成 3/4 側身，伸出靠對方那一側的手在胸前輕拍一下 -------------
-  const PAW_HIT = (yy) => ({ th: 50, pose: { lean: 2, arms: { R: { hand: [22, yy, 40], paw: 150 } } } });
+  const PAW_HIT = (yy) => ({ th: 58, pose: { lean: 13, head: { yaw: -26, pitch: -8 }, arms: { R: { hand: [22, yy, 40], paw: 150 } } } });   // 身體前傾把手伸出去，頭往後收並轉向觀眾，鼻子不會碰到
   function pawFit(ctx) {
     const h = 98 * ctx.kk;                                   // 拍掌的高度（胸前）
     const A = PAW_HIT(yFor(ctx.a, h) - 4), B = PAW_HIT(yFor(ctx.b, h) - 4);
@@ -274,9 +274,9 @@
       const seq = (c, per, d0) => {
         const hy = c.pose.arms.R.hand[1];
         return track(introHop(per, [K(0, TH0), K(.6 + d0, 52, { eyes: 'happy', mouth: 'open', arms: { R: { hand: [28, hy - 16, 26], paw: 150 } } }),
-          K(T - .28, 46, { lean: -5, sq: .96, eyes: 'happy', mouth: 'open', arms: { R: { hand: [30, hy - 14, 18], paw: 150 } } }),
-          K(T, 50, { ...c.pose, y: -7, eyes: 'happy', mouth: 'open', tailUp: .6, blush: 1.2 }, 'in'),
-          K(T + .16, 50, { lean: 0, sq: .95, eyes: 'happy', mouth: 'open', arms: { R: { hand: [24, hy + 2, 32], paw: 150 } }, blush: 1.2 }, 'out'),
+          K(T - .28, 50, { lean: -4, sq: .96, eyes: 'happy', mouth: 'open', arms: { R: { hand: [30, hy - 14, 18], paw: 150 } } }),
+          K(T, 58, { ...c.pose, y: -7, eyes: 'happy', mouth: 'open', tailUp: .6, blush: 1.2 }, 'in'),
+          K(T + .16, 58, { lean: 9, sq: .95, head: { yaw: -22, pitch: -6 }, eyes: 'happy', mouth: 'open', arms: { R: { hand: [24, hy + 2, 32], paw: 150 } }, blush: 1.2 }, 'out'),
           K(T + .7, 56, { eyes: 'happy', mouth: 'open', y: per.lively ? -12 : -4, tailUp: .5, arms: { R: { hand: [30, hy - 12, 24] } } }),
           K(T + 1.1, 58, { eyes: 'happy', mouth: 'smile', sq: .96 }), K(T + 1.9, TH0)]));
       };
@@ -288,7 +288,7 @@
   };
 
   // ---- 分享葉子：a 拿出葉子遞過去 → b 聞一聞、探頭咬一口、嚼 → a 自己也吃一口 ------------------
-  const LEAF_S = 1.35;
+  const LEAF_S = 1.6;
   function leafFit(ctx) {
     const Bp = { th: 72, pose: { lean: 17, head: { pitch: 8 } } }, mb = mouthOf(ctx.b, Bp);
     const mk = (y) => ({ th: 68, pose: { lean: 5, arms: { L: { hand: [-5, y, 40] }, R: { hand: [5, y + 2, 38] } } } });
@@ -298,7 +298,7 @@
     return { A, Bp, y, gap: tip + mb.f - 3 * ctx.kk, ha };
   }
   TYPES.leaf = {
-    gap: (ctx) => clamp(leafFit(ctx).gap, 96 * ctx.kk, 132 * ctx.kk),
+    gap: (ctx) => clamp(leafFit(ctx).gap, 118 * ctx.kk, 150 * ctx.kk),
     build(ctx) {
       const F = leafFit(ctx), pa = ctx.a.per, pb = ctx.b.per, d = pb.delay, y = F.y;
       const hold = (yy, z) => ({ L: { hand: [-5, yy, z] }, R: { hand: [5, yy + 2, z - 2] } });
@@ -329,49 +329,53 @@
   // ---- 追逐跳跳：a 壓低身體邀玩 → b 嚇一跳、轉身跑、回頭笑 → a 追 → 停下來面對面喘氣笑 ----------
   const HOP = (u) => ANIM.FETCH.hop(u);
   TYPES.chase = {
-    gap: (ctx) => polite(ctx, 126),
+    gap: (ctx) => polite(ctx, 142),
     build(ctx) {
-      const pa = ctx.a.per, pb = ctx.b.per;
-      // 往哪邊跑：b 背後有空間就 b 跑（a 追）；否則 a 跑（b 追）
+      // 先跑的那隻（R）往自己背後有空間的方向跑、另一隻（C）追；追到了換 C 轉身跑回來、R 追回來 → 來回一趟，回到原位
       const step = 42 * ctx.kk, bRuns = ctx.room.b >= step * 3 || ctx.room.b >= ctx.room.a;
-      const roomRun = bRuns ? ctx.room.b : ctx.room.a, N = clamp(Math.floor((roomRun - 20) / step), 1, 5);
-      const R = bRuns ? ctx.b : ctx.a, Cz = bRuns ? ctx.a : ctx.b;            // 跑的、追的
-      const hopT = .36, t0 = 1.15, lag = .46, run = N * hopT, tEnd = t0 + run + lag;
-      // 一段跳：回傳 { pose, 進度 0–N }
-      const hops = (t, start) => { const v = clamp((t - start) / hopT, 0, N), i = Math.min(N - 1, Math.floor(v)), u = v - i; return { v: i + EASE.io(u), u, moving: v > 0 && v < N }; };
+      const roomRun = bRuns ? ctx.room.b : ctx.room.a, N = clamp(Math.floor((roomRun - 20) / step), 1, 4);
+      const R = bRuns ? ctx.b : ctx.a, Cz = bRuns ? ctx.a : ctx.b;
+      const hopT = .36, t0 = 1.15, lag = .46, run = N * hopT, tTag = t0 + lag + run, t1 = tTag + .95, tEnd = t1 + lag + run, dur = tEnd + 2.0;
+      const hops = (t, start) => { const v = clamp((t - start) / hopT, 0, N), i = Math.min(N - 1, Math.floor(v)), u = v - i, g = ANIM.GAIT ? ANIM.GAIT.hop(u) : null; return { v: i + (g ? g.advance : EASE.io(u)), u, moving: v > 0 && v < N }; };
+      const bow = { lean: 12, sq: .9, tailUp: .9, eyes: 'happy', mouth: 'open', arms: { L: { hand: [-8, 148, 36] }, R: { hand: [8, 148, 36] } } };
+      const laugh = (e) => ({ y: -6 * Math.abs(sin(e * 7)) * Math.max(0, 1 - e), sq: 1 - .03 * sin(e * 9), eyes: 'happy', mouth: 'open', blush: 1.3, tailUp: .3 });
+      // x＝沿「往對方」的方向離開起點幾 px（跑開是負的、追過去是正的）
       const runner = (t) => {
-        if (t < .55) return tw({ th: TH0 }, { th: 62, pose: { eyes: 'wide', mouth: 'o', head: { pitch: -4 } } }, EASE.io(t / .55));
-        if (t < .85) return { th: 62, pose: { y: -12 * sin(PI * (t - .55) / .3), eyes: 'wide', mouth: 'open', tailUp: .7, sq: 1.03 } };
-        if (t < t0) return { th: lerp(60, -90, EASE.io((t - .85) / (t0 - .85))), pose: { eyes: 'happy', mouth: 'open', sq: .95 } };
-        const h = hops(t, t0);
-        if (h.moving) {
-          const look = bump(t, t0 + hopT * Math.max(1, N - 3), hopT * 2.4);      // 回頭笑
-          return { th: -90, dx: -h.v * step, pose: { ...HOP(h.u), eyes: 'happy', mouth: 'open', blush: 1.2, head: { yaw: 78 * look, roll: 6 * look } } };
-        }
-        const e = t - (t0 + run);
-        if (e < .4) return { th: lerp(-90, 62, EASE.io(e / .4)), dx: -N * step, pose: { eyes: 'happy', mouth: 'open', sq: lerp(.9, 1, e / .4) } };
-        return { th: 62, dx: -N * step, pose: { y: -6 * Math.abs(sin((e - .4) * 7)) * Math.max(0, 1 - (e - .4)), sq: 1 - .03 * sin(e * 9), eyes: 'happy', mouth: 'open', blush: 1.3, tailUp: .3 } };
+        if (t < .55) return { ...tw({ th: TH0 }, { th: 62, pose: { eyes: 'wide', mouth: 'o', head: { pitch: -4 } } }, EASE.io(t / .55)), x: 0 };
+        if (t < .85) return { th: 62, x: 0, pose: { y: -12 * sin(PI * (t - .55) / .3), eyes: 'wide', mouth: 'open', tailUp: .7, sq: 1.03 } };
+        if (t < t0) return { th: lerp(62, -90, EASE.io((t - .85) / (t0 - .85))), x: 0, pose: { eyes: 'happy', mouth: 'open', sq: .95 } };
+        if (t < t0 + run) { const h = hops(t, t0), look = bump(t, t0 + hopT * Math.max(.6, N - 2.6), hopT * 2.2); return { th: -90, x: -h.v * step, pose: { ...HOP(h.u), eyes: 'happy', mouth: 'open', blush: 1.2, head: { yaw: 78 * look, roll: 6 * look } } }; }
+        const X = -N * step;
+        if (t < t0 + run + .4) { const e = (t - t0 - run) / .4; return { th: lerp(-90, 62, EASE.io(e)), x: X, pose: { eyes: 'happy', mouth: 'open', sq: lerp(.9, 1, e) } }; }
+        if (t < t1 + lag - .3) return { th: 62, x: X, pose: t > tTag + .1 && t < tTag + .5 ? { y: -10 * sin(PI * (t - tTag - .1) / .4), eyes: 'wide', mouth: 'open', tailUp: .7 } : laugh(t - t0 - run - .4) };
+        if (t < t1 + lag) return { th: lerp(62, 90, EASE.io((t - (t1 + lag - .3)) / .3)), x: X, pose: { sq: .92, lean: 6, eyes: 'focus', mouth: 'open' } };
+        if (t < tEnd) { const h = hops(t, t1 + lag); return { th: 90, x: X + h.v * step, pose: { ...HOP(h.u), eyes: 'focus', mouth: 'open' } }; }
+        const e = t - tEnd;
+        if (e < .35) return { th: lerp(90, 62, EASE.io(e / .35)), x: 0, pose: { sq: lerp(.88, 1, e / .35), eyes: 'happy', mouth: 'open' } };
+        return { th: 62, x: 0, pose: laugh(e - .35) };
       };
       const chaser = (t) => {
-        if (t < .5) return tw({ th: TH0 }, { th: 66, pose: { lean: 24, sq: .88, tailUp: .9, eyes: 'happy', mouth: 'open', arms: { L: { hand: [-8, 150, 36] }, R: { hand: [8, 150, 36] } } } }, EASE.io(t / .5));
-        if (t < t0 + lag) { const w = sin(t * 16) * 3; return { th: 66 + w, pose: { lean: 24, sq: .88, tailUp: .9, roll: w * .5, eyes: 'happy', mouth: 'open', arms: { L: { hand: [-8, 150, 36] }, R: { hand: [8, 150, 36] } } } }; }
-        const h = hops(t, t0 + lag);
-        if (h.moving) return { th: 90, dx: h.v * step, pose: { ...HOP(h.u), eyes: 'focus', mouth: 'open' } };
-        const e = t - (t0 + lag + run);
-        if (e < 0) return { th: 90, dx: 0, pose: {} };
-        if (e < .35) return { th: lerp(90, 62, EASE.io(e / .35)), dx: N * step, pose: { sq: lerp(.88, 1, e / .35), lean: lerp(-8, 0, e / .35), eyes: 'happy', mouth: 'open' } };
-        return { th: 62, dx: N * step, pose: { y: -8 * Math.abs(sin((e - .35) * 6)) * Math.max(0, 1 - (e - .35) * .8), eyes: 'happy', mouth: 'open', blush: 1.2 } };
+        if (t < .5) return { ...tw({ th: TH0 }, { th: 66, pose: bow }, EASE.io(t / .5)), x: 0 };
+        if (t < t0 + lag - .2) { const w = sin(t * 16) * 3; return { th: 66 + w, x: 0, pose: { ...bow, roll: w * .5 } }; }
+        if (t < t0 + lag) return { ...tw({ th: 66, pose: bow }, { th: 90, pose: { sq: .9, lean: 10, eyes: 'focus', mouth: 'open' } }, (t - (t0 + lag - .2)) / .2), x: 0 };
+        if (t < tTag) { const h = hops(t, t0 + lag); return { th: 90, x: h.v * step, pose: { ...HOP(h.u), eyes: 'focus', mouth: 'open' } }; }
+        const X = N * step;
+        if (t < tTag + .3) { const e = (t - tTag) / .3; return { th: lerp(90, 66, EASE.io(e)), x: X, pose: { sq: lerp(.88, 1, e), lean: lerp(-6, 0, e), eyes: 'happy', mouth: 'open' } }; }
+        if (t < t1 - .32) return { th: 66, x: X, pose: { y: -8 * Math.abs(sin((t - tTag - .3) * 9)), eyes: 'happy', mouth: 'open', blush: 1.2, tailUp: .5 } };       // 「抓到了！換你追我」
+        if (t < t1) return { th: lerp(66, -90, EASE.io((t - (t1 - .32)) / .32)), x: X, pose: { eyes: 'happy', mouth: 'open', sq: .95 } };
+        if (t < t1 + run) { const h = hops(t, t1), look = bump(t, t1 + hopT * Math.max(.6, N - 2.6), hopT * 2.2); return { th: -90, x: X - h.v * step, pose: { ...HOP(h.u), eyes: 'happy', mouth: 'open', blush: 1.2, head: { yaw: 78 * look, roll: 6 * look } } }; }
+        const e = t - t1 - run;
+        if (e < .4) return { th: lerp(-90, 62, EASE.io(e / .4)), x: 0, pose: { eyes: 'happy', mouth: 'open', sq: lerp(.9, 1, e / .4) } };
+        return { th: 62, x: 0, pose: laugh(Math.max(0, e - .4) * .6) };
       };
-      const dur = tEnd + 2.2;
-      const close = (c, t) => (t > dur - .5 ? { ...tw(c, { th: TH0 }, EASE.io((t - (dur - .5)) / .5)), dx: c.dx } : c);
+      const close = (c, t) => (t > dur - .5 ? { ...tw(c, { th: TH0 }, EASE.io((t - (dur - .5)) / .5)), x: c.x } : c);
       return finish(ctx, dur, (t) => {
-        let r = close(runner(t), t), c = close(chaser(t), t);
-        if (r.dx == null) r.dx = 0; if (c.dx == null) c.dx = 0;
-        // 跑的那隻的位移：往自己背後（遠離對方）
-        const fr = bRuns ? { a: { ...c, dx: c.dx }, b: { ...r, dx: -r.dx } } : { a: { ...r, dx: r.dx }, b: { ...c, dx: -c.dx } };
-        const ru = bRuns ? ctx.d - r.dx : r.dx, cu = bRuns ? c.dx : ctx.d - c.dx;
-        fr.world = [...(t > t0 && t < t0 + run ? [{ k: 'dust', u: ru + (bRuns ? -14 : 14), h: 2, s: .6, o: .8 }] : []),
-          ...floatUp('sweat', t, tEnd + .5, cu + (bRuns ? 16 : -16), 150 * Cz.k, 1, 1, -18), ...floatUp('sparkle', t, tEnd + .6, (ru + cu) / 2, 150 * ctx.kk, .8, 1.2, 18), ...floatUp('note', t, tEnd + .9, ru, 170 * R.k, .9, 1.1, 18)];
+        const r = close(runner(t), t), c = close(chaser(t), t);
+        const fr = bRuns ? { a: { th: c.th, pose: c.pose, dx: c.x }, b: { th: r.th, pose: r.pose, dx: -r.x } } : { a: { th: r.th, pose: r.pose, dx: r.x }, b: { th: c.th, pose: c.pose, dx: -c.x } };
+        const ru = bRuns ? ctx.d - r.x : r.x, cu = bRuns ? c.x : ctx.d - c.x, away = bRuns ? 1 : -1;
+        fr.world = [...(t > t0 && t < t0 + run ? [{ k: 'dust', u: ru - away * 14, h: 2, s: .6, o: .8 }] : []), ...(t > t1 && t < t1 + run ? [{ k: 'dust', u: cu + away * 14, h: 2, s: .6, o: .8 }] : []),
+          ...floatUp('star', t, tTag + .05, (ru + cu) / 2, 150 * ctx.kk, .6, .8, 16),
+          ...floatUp('sweat', t, tEnd + .5, cu - away * 16, 150 * Cz.k, 1, 1, -18), ...floatUp('sparkle', t, tEnd + .6, (ru + cu) / 2, 156 * ctx.kk, .8, 1.2, 18), ...floatUp('note', t, tEnd + .9, ru, 172 * R.k, .9, 1.1, 18)];
         fr.moves = true;
         return fr;
       });
@@ -380,7 +384,7 @@
 
   // ---- 並排曬太陽：各自坐好、仰頭瞇眼，一隻伸懶腰，慵懶的那隻打起盹；最後相視而笑 ---------------
   TYPES.sunbathe = {
-    gap: (ctx) => polite(ctx, 126),
+    gap: (ctx) => polite(ctx, 146),
     build(ctx) {
       const pa = ctx.a.per, pb = ctx.b.per, sitA = { sq: .93, lean: -5, head: { pitch: -9, roll: 5 }, eyes: 'closed', mouth: 'smile', arms: { L: { hand: [-9, 134, 28] }, R: { hand: [9, 134, 28] } } };
       const br = (t, ph) => 1 + .012 * sin(t * 2 + ph);
@@ -453,8 +457,8 @@
     build(ctx) {
       const F = groomFit(ctx), pb = ctx.b.per, y = F.y, bp = F.Bp.pose;
       const st = (z, yy, rz, ry) => ({ L: { hand: [-12, y + yy, 31 + z] }, R: { hand: [9, y + 14 + ry, 30 + rz] } });
-      const aKeys = [K(0, TH0), K(.9, 62, { eyes: 'happy', mouth: 'smile', head: { pitch: 4 } }), K(1.6, 64, { lean: 13, arms: st(-3, 6, -6, 8), eyes: 'happy', head: { pitch: -3, yaw: -22 } })];
-      for (let i = 0; i < 4; i++) { const t0 = 1.9 + i * .95; aKeys.push(K(t0, 64, { lean: 13, arms: st(0, 0, -5, 6), eyes: 'happy', mouth: 'smile', head: { pitch: -3, yaw: -22, roll: -3 } }), K(t0 + .5, 64, { lean: 13, arms: st(-4, 8, 0, 0), eyes: 'happy', mouth: i % 2 ? 'open' : 'smile', head: { pitch: -1, yaw: -20, roll: 3 } })); }
+      const aKeys = [K(0, TH0), K(.9, 62, { eyes: 'happy', mouth: 'smile', head: { pitch: 4 } }), K(1.6, 64, { lean: 13, arms: st(-3, 6, -6, 8), eyes: 'happy', head: { pitch: -8, yaw: -36 } })];
+      for (let i = 0; i < 4; i++) { const t0 = 1.9 + i * .95; aKeys.push(K(t0, 64, { lean: 13, arms: st(0, 0, -5, 6), eyes: 'happy', mouth: 'smile', head: { pitch: -8, yaw: -36, roll: -3 } }), K(t0 + .5, 64, { lean: 13, arms: st(-4, 8, 0, 0), eyes: 'happy', mouth: i % 2 ? 'open' : 'smile', head: { pitch: -7, yaw: -34, roll: 3 } })); }
       aKeys.push(K(6.0, 62, { lean: 5, eyes: 'happy', mouth: 'open', arms: { L: { hand: [-14, 104, 30] }, R: { hand: [10, 110, 28] } } }), K(6.7, 62, { eyes: 'happy', mouth: 'smile', blush: 1.3 }), K(7.5, TH0));
       const A = track(aKeys);
       const bow = (dr, ef) => ({ ...bp, head: { ...bp.head, roll: bp.head.roll + dr }, eyes: 'closed', mouth: 'smile', blush: 1.6, earFlop: ef });
@@ -707,15 +711,15 @@
   };
   TYPES.volleyball = {
     ball: true,
-    gap: (ctx) => clamp(192 * ctx.kk, 160, 220),
+    gap: (ctx) => clamp(206 * ctx.kk, 170, 220),
     build(ctx) {
-      const pl = [ctx.a, ctx.b], sg = [1, -1], base = [0, ctx.d], F = 1.22, R = 12;
+      const pl = [ctx.a, ctx.b], sg = [1, -1], base = [0, ctx.d], F = 1.06, R = 12;
       const aWins = winA(ctx, 'volleyball'), spike = ctx.rnd() < .6;
       let n = 3 + Math.floor(ctx.rnd() * 3); if (((n - 1) % 2 === 0) !== aWins) n += n >= 5 ? -1 : 1;
       const W = aWins ? 0 : 1, L = 1 - W;
       // 墊球重用單人排球動畫（蹲低併成平台 → 觸球 → 往上送）
       const AV = ANIM.ANIMS && ANIM.ANIMS.volleyball, BUMP = AV && AV.hitT ? borrow('volleyball', .92, 1.6, AV.hitT, 0, true) : null, bHit = BUMP && BUMP.find((k) => Math.abs(k.t) < 1e-6);
-      const off = [0, 1].map((i) => { const m0 = handsOf(pl[i], bHit || VB.hit).mid, m = bHit ? { f: m0.f + 6 * pl[i].k, h: m0.h - 5 * pl[i].k } : m0, sp = handsOf(pl[i], VB.spike).L, hd = handsOf(pl[i], VB.hold).mid; return { bump: { f: m.f, h: m.h + (R + 3) * pl[i].k }, spike: { f: sp.f + 4 * pl[i].k, h: sp.h + (R + 2) * pl[i].k }, hold: { f: hd.f, h: hd.h + 4 * pl[i].k } }; });
+      const off = [0, 1].map((i) => { const m0 = handsOf(pl[i], bHit || VB.hit).mid, m = bHit ? { f: m0.f + 15 * pl[i].k, h: m0.h - 7 * pl[i].k } : { f: m0.f + 10 * pl[i].k, h: m0.h }, /* 擊球點在前臂前端、身體外側（球不會掠過臉） */ sp = handsOf(pl[i], VB.spike).L, hd = handsOf(pl[i], VB.hold).mid; return { bump: { f: m.f, h: m.h + (R + 3) * pl[i].k }, spike: { f: sp.f + 4 * pl[i].k, h: sp.h + (R + 2) * pl[i].k }, hold: { f: hd.f, h: hd.h + 4 * pl[i].k } }; });
       const hits = [], foot = [[[0, 0]], [[0, 0]]];
       for (let i = 0; i < n; i++) {
         const p = i % 2, T = 1.3 + i * F, kind = spike && i === n - 1 && i > 0 ? 'spike' : 'bump';
@@ -770,7 +774,7 @@
         return fr;
       });
       // 扣球之後：球交給舞台做物理，由輸的那隻去撿
-      if (isSpike) { const tg = base[L] + sg[L] * 30 * pl[L].k, tt = .42; res.handoff = { t: last.T, kind: 'vball', u: last.c.u, h: last.c.h, vu: (tg - last.c.u) / tt, vh: (0 - last.c.h) / tt + .5 * 1500 * ctx.kk * tt * -1 + 40, owner: L ? 'b' : 'a' }; }
+      if (isSpike) { const tg = base[L] + sg[L] * 82 * pl[L].k, tt = .4; res.handoff = { t: last.T, kind: 'vball', u: last.c.u, h: last.c.h, vu: (tg - last.c.u) / tt, vh: (R * ctx.kk - last.c.h) / tt + .5 * 1500 * ctx.kk * tt, owner: L ? 'b' : 'a', from: W ? 'b' : 'a' }; }
       res.info = { n, winner: W ? 'b' : 'a', hits, ballAt, isSpike };
       return res;
     }
@@ -826,8 +830,8 @@
       const gapPaw = pawA.f + pawB.f + 1.5 * ctx.kk, mv = Math.max(0, (ctx.d - gapPaw) / 2);
       const tCheer = tRim + .25, tGo = tCheer + 1.15, hopT = .36, tClap = tGo + 2 * hopT + .5, end = make ? tClap + 1.9 : tRim + 1.6;
       const five = (o, per) => { const c = PAW_HIT(yFor(o, 98 * ctx.kk) - 4), hy = c.pose.arms.R.hand[1]; return [
-        K(tClap - .28, 46, { lean: -5, sq: .96, eyes: 'happy', mouth: 'open', arms: { R: { hand: [30, hy - 14, 18], paw: 150 } } }), K(tClap, 50, { ...c.pose, y: -7, eyes: 'happy', mouth: 'open', tailUp: .6, blush: 1.2 }, 'in'),
-        K(tClap + .16, 50, { sq: .95, eyes: 'happy', mouth: 'open', arms: { R: { hand: [24, hy + 2, 32], paw: 150 } }, blush: 1.2 }, 'out'), K(tClap + .8, 56, { eyes: 'happy', mouth: 'open', y: per.lively ? -10 : -3 }), K(tClap + 1.2, 58, { eyes: 'happy', sq: .96 }), K(end, TH0)]; };
+        K(tClap - .28, 50, { lean: -4, sq: .96, eyes: 'happy', mouth: 'open', arms: { R: { hand: [30, hy - 14, 18], paw: 150 } } }), K(tClap, 58, { ...c.pose, y: -7, eyes: 'happy', mouth: 'open', tailUp: .6, blush: 1.2 }, 'in'),
+        K(tClap + .16, 58, { lean: 9, sq: .95, head: { yaw: -22, pitch: -6 }, eyes: 'happy', mouth: 'open', arms: { R: { hand: [24, hy + 2, 32], paw: 150 } }, blush: 1.2 }, 'out'), K(tClap + .8, 56, { eyes: 'happy', mouth: 'open', y: per.lively ? -10 : -3 }), K(tClap + 1.2, 58, { eyes: 'happy', sq: .96 }), K(end, TH0)]; };
       const hopKeys = (th) => [K(tGo - .25, th, { eyes: 'happy', mouth: 'open' }), K(tGo + 2 * hopT, th, { eyes: 'happy', mouth: 'open' })];
       const PK = [K(0, TH0), K(.45, 60, BB.hold.pose), K(tD, 62, BB.drib(124)), K(tD + dT * .3, 62, BB.drib(134)), K(tD + dT * .7, 62, BB.drib(120)), K(tD + dT, 62, BB.drib(124)), K(tD + dT * 1.3, 62, BB.drib(134)), K(tD + dT * 1.7, 62, BB.drib(120)), K(tD + dT * 2, 62, BB.drib(124)),
         K(tPass - .5, 60, BB.hold.pose), K(tPass - .2, 62, BB.wind.pose), K(tPass, 66, BB.pass.pose, 'in'), K(tPass + .2, 66, { ...BB.pass.pose, lean: 12, arms: { L: { hand: [-12, 108, 44] }, R: { hand: [12, 110, 44] } } }, 'out'), K(tPass + .7, 60, { eyes: 'focus', mouth: 'smile' }), K(tShot, 58, { eyes: 'wide', mouth: 'o', sq: .97 }), K(tRim, 58, { eyes: 'wide', mouth: 'o', sq: 1.02 }),
@@ -846,7 +850,7 @@
         if (t < tCatch) return { ...pass(t), spin: t * 500 };
         if (t < tShot) return { held: 'S' };
         if (t < tRim) return { ...shot(t), spin: -t * 400 };
-        if (make) { for (const s of fall) if (t <= s.t1) return { ...s.f(t), spin: t * 200 }; return { u: rimC.u - away * 22, h: floor, spin: 0, o: clamp((end - .5 - t) * 2, 0, 1) }; }
+        if (make) { for (const s of fall) if (t <= s.t1) return { ...s.f(t), spin: t * 200 }; return { u: rimC.u - away * 22, h: floor, spin: 0 }; }
         return { gone: true };
       };
       const res = finish(ctx, end, (t) => {
@@ -867,7 +871,16 @@
         return fr;
       });
       // 沒進：球打到框緣彈出來，交給舞台做物理，由傳球的那隻去撿
-      if (!make) res.handoff = { t: tRim, kind: 'bball', u: rimNear - away * 3, h: rimH + R * .8, vu: -away * (150 + 90 * ctx.rnd()) * ctx.kk, vh: 250 * ctx.kk, owner: hoopB ? 'a' : 'b' };
+      // 球最後一定有人用手撿回來（不淡出）：
+      //   進球：球掉在籃下停住 → 交給舞台，互動結束後由投籃的那隻走過去撿
+      //   沒進：打到框緣高高彈起，越過兩隻的頭頂落在傳球那隻的背後 → 傳球的轉身去撿；背後沒空間就輕輕彈到投籃那隻的腳前（碰到身體會被擋下）
+      const keyS = hoopB ? 'b' : 'a', keyP = hoopB ? 'a' : 'b', roomP = hoopB ? ctx.room.a : ctx.room.b;
+      if (make) res.handoff = { t: tDown, kind: 'bball', u: rimC.u - away * 22, h: floor, vu: 0, vh: 0, owner: keyS };
+      else {
+        const u0 = rimNear - away * 3, h0 = rimH + R * .8, G = 1500 * ctx.kk;
+        if (roomP >= 120 * ctx.kk) { const vh = 640 * ctx.kk, tt = (vh + Math.sqrt(vh * vh + 2 * G * (h0 - R))) / G, land = baseP - away * 92 * ctx.kk; res.handoff = { t: tRim, kind: 'bball', u: u0, h: h0, vu: (land - u0) / tt, vh, owner: keyP }; }
+        else res.handoff = { t: tRim, kind: 'bball', u: u0, h: h0, vu: -away * 55 * ctx.kk, vh: 210 * ctx.kk, owner: keyS };
+      }
       res.info = { make, hoopU, rimH, rimC, ballAt, shooter: hoopB ? 'b' : 'a', tRim, tShot, tPass, tCatch };
       return res;
     }

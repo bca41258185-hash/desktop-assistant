@@ -19,7 +19,9 @@
 //   noseTwitch  −1…1 鼻子抽動（「聞一聞」用）：正＝鼻子往上抬約 0.8 單位並放大 6%，負＝往下並縮小 6%
 //   mouth       smile | open | o | flat | chew
 //   blush       腮紅濃度 0–1.5
-//   feet        auto | stand | air（騰空時腳尖朝下）；tailUp 尾巴上揚 0–1
+//   feet        auto | stand | air（騰空時腳尖朝下）；tailUp 尾巴上揚 0–1（負值＝尾巴往下壓：身體抬高時尾端仍拖在地上）
+//   footShift   [dz, up, toe] 後腳掌相對身體的位移（步態用，站姿腳掌才有效）：dz 往前（口鼻方向）、up 抬高、toe 腳尖下垂量。
+//               慢走時後腳離地往前擺、著地後留在原地讓身體先走，靠這個才不會滑步
 //   accessory   飾品：'straw' 或 {type,color} 或陣列；省略＝用目前套用的個體特徵（traits.accessory，舊資料＝頭帶）；'none'＝不戴
 //   props       [{t:'racket', hand:'R', ang, len}, {t:'shuttle'|'vball'|'bball'|'leaf', at:[X,Y], rot, s}, {t:'hoop', at, s, flip}, {t:'fx', kind, at, rot, s}]
 //               道具可加 hand:'L'|'R'|'both'（黏在手上）、off:[dx,dy]、behind:true（畫在身體後面）、
@@ -146,53 +148,64 @@
     <radialGradient id="vb${id}" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#efece4"/><stop offset="1" stop-color="#c9c3b5"/></radialGradient>
     <radialGradient id="bb${id}" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#f8b276"/><stop offset=".6" stop-color="#e3813a"/><stop offset="1" stop-color="#b05a22"/></radialGradient>
     <linearGradient id="lf${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8cc06b"/><stop offset="1" stop-color="#4d8a3a"/></linearGradient>
-    <linearGradient id="lg${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cdd6c2"/><stop offset=".45" stop-color="#a9b79d"/><stop offset="1" stop-color="#7f9076"/></linearGradient>
+    <linearGradient id="lg${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c3d6a8"/><stop offset=".45" stop-color="#8fb277"/><stop offset="1" stop-color="#5a8650"/></linearGradient>
     <radialGradient id="fg${id}" cx="40%" cy="30%" r="80%"><stop offset="0" stop-color="#f0c9e6"/><stop offset=".55" stop-color="#cf93c3"/><stop offset="1" stop-color="#9c5c92"/></radialGradient>
     <linearGradient id="sg${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a08a6c"/><stop offset="1" stop-color="#6e5a44"/></linearGradient>
     <filter id="lz${id}" x="-20%" y="-60%" width="140%" height="220%"><feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="2" seed="7"/><feDisplacementMap in="SourceGraphic" scale="1.1" xChannelSelector="R" yChannelSelector="G"/></filter>
     <filter id="lb${id}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation=".7"/></filter>
     <filter id="lc${id}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="1.6"/></filter>
-    <linearGradient id="tg${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a9c77f"/><stop offset=".5" stop-color="#7fa35a"/><stop offset="1" stop-color="#557a3c"/></linearGradient>
-    <linearGradient id="rf${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6d9fd6"/><stop offset=".5" stop-color="#3f74b3"/><stop offset="1" stop-color="#2a5189"/></linearGradient>
+    <linearGradient id="tg${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b9d884"/><stop offset=".5" stop-color="#82b256"/><stop offset="1" stop-color="#4f8438"/></linearGradient>
+    <linearGradient id="rf${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7fb0d8"/><stop offset=".5" stop-color="#4d82b5"/><stop offset="1" stop-color="#35618f"/></linearGradient>
     <linearGradient id="gr${id}" gradientUnits="userSpaceOnUse" x1="-2" y1="0" x2="2" y2="0"><stop offset="0" stop-color="#f6efe0"/><stop offset=".55" stop-color="#ddd2bb"/><stop offset="1" stop-color="#b3a58a"/></linearGradient>
-    <linearGradient id="sh${id}" gradientUnits="userSpaceOnUse" x1="-1.2" y1="0" x2="1.2" y2="0"><stop offset="0" stop-color="#d5dae1"/><stop offset="1" stop-color="#7f8794"/></linearGradient>
+    <linearGradient id="sh${id}" gradientUnits="userSpaceOnUse" x1="-1.2" y1="0" x2="1.2" y2="0"><stop offset="0" stop-color="#e2ddd2"/><stop offset="1" stop-color="#9a9084"/></linearGradient>
     <radialGradient id="ck${id}" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#fff8ea"/><stop offset=".7" stop-color="#e8d6b4"/><stop offset="1" stop-color="#c8b08a"/></radialGradient>
-    <linearGradient id="fe${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9dde3"/></linearGradient>
+    <linearGradient id="fe${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff"/><stop offset=".7" stop-color="#f3ecdf"/><stop offset="1" stop-color="#d8cdb9"/></linearGradient>
+    <linearGradient id="po${id}" gradientUnits="userSpaceOnUse" x1="21" y1="0" x2="25.4" y2="0"><stop offset="0" stop-color="#ddd5c6"/><stop offset=".45" stop-color="#b3a999"/><stop offset="1" stop-color="#857b6d"/></linearGradient>
+    <filter id="pw${id}" x="-15%" y="-15%" width="130%" height="130%"><feTurbulence type="fractalNoise" baseFrequency=".3" numOctaves="2" seed="4"/><feDisplacementMap in="SourceGraphic" scale="1.5" xChannelSelector="R" yChannelSelector="G"/></filter>
     <linearGradient id="rm${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f08a4e"/><stop offset="1" stop-color="#c4522a"/></linearGradient>
-    <linearGradient id="bd${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#dcdad2"/></linearGradient>
+    <linearGradient id="bd${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fffdf6"/><stop offset="1" stop-color="#e6dccb"/></linearGradient>
     <radialGradient id="fl${id}"><stop offset="0" stop-color="#fff" stop-opacity="1"/><stop offset=".5" stop-color="#fff6c8" stop-opacity=".7"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>`;
   // ---- 道具：畫風與庫卡一致（漸層、柔邊、模糊亮面與陰影，不用黑色硬邊）----
   const soft = (id, d, dx = .8, dy = 1.2, op = .18) => `<path d="${d}" fill="#4a3a2e" opacity="${op}" transform="translate(${dx} ${dy})" filter="url(#lb${id})"/>`;
   // 球拍：握把在原點（手掌握在 y≈0），拍面朝 -y。預設比舊版大 1.5 倍；握把與拍桿的漸層用 userSpaceOnUse
   //（垂直線的外框寬度是 0，objectBoundingBox 漸層會整條不畫）
+  // OL＝道具共用的描邊色（和庫卡毛色同一系的暖棕，半透明、圓角）；pw 濾鏡讓線條輕微抖動，像手繪而不是向量線
+  const OL = '#6b4f3a';
   function racket(id, hx, hy, ang, len = 1, hit = false, swoosh = false) {
     // ang：拍子方向（0＝朝上，順時針為正）；握把從手掌往外
     return `<g transform="translate(${f1(hx)} ${f1(hy)}) rotate(${f1(ang)}) scale(${(len * 1.5).toFixed(2)})">
       <path d="M0 4.5 L0 -14" stroke="#4a3a2e" stroke-width="3.2" stroke-linecap="round" opacity=".16" transform="translate(.8 1)" filter="url(#lb${id})"/>
-      <path d="M0 -3 L0 -14.5" stroke="url(#sh${id})" stroke-width="1.9" stroke-linecap="round"/>
-      <path d="M0 5 L0 -4.5" stroke="url(#gr${id})" stroke-width="3.6" stroke-linecap="round"/>
-      <path d="M-1.7 2.6 L1.7 1.5 M-1.7 .2 L1.7 -.9 M-1.7 -2.2 L1.7 -3.3" stroke="#a89a7e" stroke-width=".5" opacity=".75"/>
-      <path d="M-1.8 5 H1.8" stroke="#8a7c62" stroke-width="1.2" stroke-linecap="round"/>
-      <path d="M0 -14.5 L-2.6 -17.5 M0 -14.5 L2.6 -17.5" stroke="url(#rf${id})" stroke-width="1.5" stroke-linecap="round"/>
       <ellipse cx="0" cy="-27" rx="9" ry="11.5" fill="none" stroke="#4a3a2e" stroke-width="2.6" opacity=".15" transform="translate(.8 1)" filter="url(#lb${id})"/>
-      <ellipse cx="0" cy="-27" rx="9" ry="11.5" fill="#ffffff" fill-opacity=".35"/>
-      <path d="M-5 -36 V-18 M0 -38.5 V-15.5 M5 -36 V-18 M-8 -32 H8 M-8.8 -27 H8.8 M-8 -22 H8" stroke="#c9d6e4" stroke-width=".55" fill="none" opacity=".9"/>
-      <ellipse cx="0" cy="-27" rx="9" ry="11.5" fill="none" stroke="url(#rf${id})" stroke-width="2.3"/>
-      <path d="M-6 -34 Q-7.5 -29 -6.6 -23" fill="none" stroke="#cfe2f6" stroke-width=".9" stroke-linecap="round" opacity=".7" filter="url(#lb${id})"/>
+      <g filter="url(#pw${id})">
+      <path d="M0 -3 L0 -14.5 M0 -14.5 L-2.6 -17.5 M0 -14.5 L2.6 -17.5" stroke="${OL}" stroke-width="2.9" stroke-linecap="round" opacity=".6" fill="none"/>
+      <path d="M0 -3 L0 -14.5" stroke="url(#sh${id})" stroke-width="1.9" stroke-linecap="round"/>
+      <path d="M0 5 L0 -4.5" stroke="${OL}" stroke-width="4.7" stroke-linecap="round" opacity=".6"/>
+      <path d="M0 5 L0 -4.5" stroke="url(#gr${id})" stroke-width="3.6" stroke-linecap="round"/>
+      <path d="M-1.7 2.6 L1.7 1.5 M-1.7 .2 L1.7 -.9 M-1.7 -2.2 L1.7 -3.3" stroke="#9a8666" stroke-width=".55" opacity=".8"/>
+      <path d="M-1.8 5 H1.8" stroke="#8a7458" stroke-width="1.2" stroke-linecap="round"/>
+      <ellipse cx="0" cy="-27" rx="9" ry="11.5" fill="#fff8ea" fill-opacity=".4"/>
+      <path d="M-5 -36 V-18 M0 -38.5 V-15.5 M5 -36 V-18 M-8 -32 H8 M-8.8 -27 H8.8 M-8 -22 H8" stroke="#a8946f" stroke-width=".5" fill="none" opacity=".75"/>
+      <ellipse cx="0" cy="-27" rx="9" ry="11.5" fill="none" stroke="${OL}" stroke-width="3.5" opacity=".6"/>
+      <path d="M0 -14.5 L-2.6 -17.5 M0 -14.5 L2.6 -17.5" stroke="url(#rf${id})" stroke-width="1.6" stroke-linecap="round"/>
+      <ellipse cx="0" cy="-27" rx="9" ry="11.5" fill="none" stroke="url(#rf${id})" stroke-width="2.4"/>
+      </g>
+      <path d="M-6 -34 Q-7.5 -29 -6.6 -23" fill="none" stroke="#e4f0fa" stroke-width="1" stroke-linecap="round" opacity=".75" filter="url(#lb${id})"/>
       ${swoosh ? `<path d="M14 -6 Q20 -30 2 -44" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".75" filter="url(#lb${id})"/><path d="M14 -6 Q20 -30 2 -44" fill="none" stroke="#c9d6e4" stroke-width="1.4" stroke-linecap="round" opacity=".8"/>` : ''}
       ${hit ? fx(id, 'impact', 0, -27, 0, .8) : ''}
     </g>`;
   }
-  const FEATHER = 'M-2 0 L-13 -6.5 L-13 6.5 Z';
+  // 羽球：球頭朝 +x、羽毛裙朝 −x。淺色背景上要看得到 → 暖棕描邊、羽毛一片片的輪廓、裙邊扇貝形、藍色束帶＋紅色球頭邊
+  const FEATHER = 'M-2 -1.9 L-13.4 -7.9 Q-14.6 -6.6 -14 -5.2 Q-15.4 -3.9 -14.6 -2.6 Q-15.8 -1.3 -14.9 0 Q-15.8 1.3 -14.6 2.6 Q-15.4 3.9 -14 5.2 Q-14.6 6.6 -13.4 7.9 L-2 1.9 Z';
   const shuttle = (id, x, y, rot = 0, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
-      ${soft(id, FEATHER)}
-      <path d="${FEATHER}" fill="url(#fe${id})"/>
-      <path d="M-2 0 L-12.5 -3 M-2 0 L-12.5 3 M-2 0 L-13 0" stroke="#c7ccd3" stroke-width=".5" opacity=".8"/>
-      <path d="M-12.6 -6.2 L-12.6 6.2" stroke="#e9ecf0" stroke-width="1.2" stroke-linecap="round"/>
-      <circle cx=".6" cy=".8" r="3.4" fill="#4a3a2e" opacity=".16" filter="url(#lb${id})"/>
-      <circle cx="0" cy="0" r="3.4" fill="url(#ck${id})"/>
-      <path d="M-2.3 -2.4 Q-3.4 0 -2.3 2.4" fill="none" stroke="#d6685a" stroke-width="1.5" stroke-linecap="round"/>
-      <ellipse cx=".8" cy="-1.3" rx="1.2" ry=".8" fill="#fff" opacity=".8" filter="url(#lb${id})"/></g>`;
+      ${soft(id, FEATHER, .8, 1.2, .22)}
+      <path d="${FEATHER}" fill="url(#fe${id})" stroke="${OL}" stroke-width="1.15" stroke-linejoin="round" stroke-opacity=".8"/>
+      <path d="M-2.6 -.9 L-14 -5.2 M-2.6 -.3 L-14.6 -2.6 M-2.6 0 L-14.9 0 M-2.6 .3 L-14.6 2.6 M-2.6 .9 L-14 5.2" stroke="#8a7460" stroke-width=".55" stroke-linecap="round" opacity=".7"/>
+      <path d="M-6.4 -4 Q-7.3 0 -6.4 4" fill="none" stroke="#4d82b5" stroke-width="1.5" stroke-linecap="round" opacity=".95"/>
+      <path d="M-9.4 -5.4 Q-10.5 0 -9.4 5.4" fill="none" stroke="#8a7460" stroke-width=".5" opacity=".6"/>
+      <circle cx=".6" cy=".8" r="3.6" fill="#4a3a2e" opacity=".18" filter="url(#lb${id})"/>
+      <circle cx="0" cy="0" r="3.5" fill="url(#ck${id})" stroke="${OL}" stroke-width="1" stroke-opacity=".8"/>
+      <path d="M-2.4 -2.5 Q-3.5 0 -2.4 2.5" fill="none" stroke="#d6584a" stroke-width="1.6" stroke-linecap="round"/>
+      <ellipse cx=".9" cy="-1.3" rx="1.2" ry=".8" fill="#fff" opacity=".8" filter="url(#lb${id})"/></g>`;
   const ballShade = (id) => `<circle cx="1.6" cy="2.2" r="12" fill="#4a3a2e" opacity=".16" filter="url(#lb${id})"/>`;
   const ballHi = (id) => `<ellipse cx="-4.2" cy="-5" rx="3.6" ry="2.4" fill="#fff" opacity=".55" transform="rotate(-30 -4.2 -5)" filter="url(#lb${id})"/><path d="M-12 0 A12 12 0 0 0 12 0" fill="none" stroke="#4a3a2e" stroke-width="3" opacity=".08" filter="url(#lb${id})"/>`;
   const vball = (id, x, y, rot = 0, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) scale(${s})">${ballShade(id)}<g transform="rotate(${f1(rot)})">
@@ -219,9 +232,9 @@
     return `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
       ${soft(id, d, 1, 1.6, .2)}
       <path d="M2 .4 L0 0" stroke="url(#sg${id})" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${d}" fill="url(#tg${id})" filter="url(#lz${id})"/>
-      <path d="${vein}" fill="none" stroke="#c6dba8" stroke-width=".9" stroke-linecap="round" opacity=".85"/>
-      <path d="${side}" fill="none" stroke="#c6dba8" stroke-width=".55" stroke-linecap="round" opacity=".6"/>
+      <path d="${d}" fill="url(#tg${id})" stroke="#3f6a30" stroke-width="1.1" stroke-linejoin="round" stroke-opacity=".6" filter="url(#lz${id})"/>
+      <path d="${vein}" fill="none" stroke="#dcebbd" stroke-width="1" stroke-linecap="round" opacity=".9"/>
+      <path d="${side}" fill="none" stroke="#dcebbd" stroke-width=".6" stroke-linecap="round" opacity=".7"/>
       <ellipse cx="-11" cy="-4.5" rx="8" ry="3" fill="#eef5e2" opacity=".35" filter="url(#lb${id})"/>
     </g>`;
   };
@@ -231,36 +244,42 @@
   // flip＝水平鏡射（框在右、籃板在左），x 座標全部變號；大小仍由數字 s 決定
   const hoop = (id, x, y, s = 1, flip = false) => `<g transform="translate(${f1(x)} ${f1(y)}) scale(${flip ? -s : s} ${s})">
       <path d="M24 10 L24 133" stroke="#4a3a2e" stroke-width="5" opacity=".14" stroke-linecap="round" filter="url(#lb${id})"/>
-      <path d="M23 8 L23 132" stroke="#8f97a3" stroke-width="3.6" stroke-linecap="round"/>
-      <path d="M22.2 9 L22.2 131" stroke="#dfe3e9" stroke-width="1.1" stroke-linecap="round" opacity=".85"/>
+      <path d="M21.3 9 Q20.9 40 21.4 70 Q21.1 104 21.3 131.6 Q23.2 132.8 25 131.6 Q25.3 100 24.9 68 Q25.2 38 24.9 9 Q23.1 7.6 21.3 9 Z" fill="url(#po${id})" stroke="${OL}" stroke-width="1" stroke-linejoin="round" stroke-opacity=".65"/>
+      <path d="M22.2 11 Q21.9 60 22.2 129" fill="none" stroke="#f6f0e2" stroke-width=".9" stroke-linecap="round" opacity=".7"/>
       <ellipse cx="23" cy="133" rx="9" ry="2.2" fill="#4a3a2e" opacity=".14" filter="url(#lb${id})"/>
-      <path d="M23 4 L17 2" stroke="#8f97a3" stroke-width="2.4" stroke-linecap="round"/>
       <path d="M15 -29 L25 -36 L25 9 L15 15 Z" fill="#4a3a2e" opacity=".16" transform="translate(1 1.4)" filter="url(#lb${id})"/>
-      <path d="M15 -29 L25 -36 L25 9 L15 15 Z" fill="url(#bd${id})" stroke="#c9ccd1" stroke-width=".8" stroke-linejoin="round"/>
-      <path d="M17.6 -12 L22.6 -15.4 L22.6 -1.6 L17.6 1.6 Z" fill="none" stroke="#e08a6a" stroke-width="1" stroke-linejoin="round" opacity=".9"/>
-      <path d="M-19 1 L-13 22 M-10 3.6 L-7 23.5 M-1 4 L-1.5 24 M8 3.2 L4 23.5 M14 1 L9 22 M-16.4 10 Q-3 14 11.6 10 M-14.4 17 Q-3 20.4 10 17" stroke="#f1f2f3" stroke-width="1.1" fill="none" opacity=".95" stroke-linecap="round"/>
-      <path d="M-19 1 L-13 22 M14 1 L9 22 M-13 22 Q-3 25.6 9 22" stroke="#b9bdc4" stroke-width=".5" fill="none" opacity=".7"/>
       <ellipse cx="-3" cy="1.2" rx="17" ry="4.6" fill="none" stroke="#4a3a2e" stroke-width="3.2" opacity=".14" filter="url(#lb${id})"/>
+      <g filter="url(#pw${id})">
+      <path d="M23 4 L17 2" stroke="${OL}" stroke-width="3.4" stroke-linecap="round" opacity=".6"/>
+      <path d="M23 4 L17 2" stroke="#a39989" stroke-width="2.2" stroke-linecap="round"/>
+      <path d="M15 -29 L25 -36 L25 9 L15 15 Z" fill="url(#bd${id})" stroke="${OL}" stroke-width="1.3" stroke-linejoin="round" stroke-opacity=".65"/>
+      <path d="M17.6 -12 L22.6 -15.4 L22.6 -1.6 L17.6 1.6 Z" fill="none" stroke="#dd7a52" stroke-width="1.2" stroke-linejoin="round" opacity=".95"/>
+      <path d="M-19 1 L-13 22 M-10 3.6 L-7 23.5 M-1 4 L-1.5 24 M8 3.2 L4 23.5 M14 1 L9 22 M-16.4 10 Q-3 14 11.6 10 M-14.4 17 Q-3 20.4 10 17 M-13 22 Q-3 25.6 9 22" stroke="#8a7460" stroke-width="2" fill="none" opacity=".5" stroke-linecap="round"/>
+      <path d="M-19 1 L-13 22 M-10 3.6 L-7 23.5 M-1 4 L-1.5 24 M8 3.2 L4 23.5 M14 1 L9 22 M-16.4 10 Q-3 14 11.6 10 M-14.4 17 Q-3 20.4 10 17 M-13 22 Q-3 25.6 9 22" stroke="#fffaf0" stroke-width="1.15" fill="none" stroke-linecap="round"/>
+      <ellipse cx="-3" cy="0" rx="17" ry="4.6" fill="none" stroke="${OL}" stroke-width="4.3" opacity=".6"/>
       <ellipse cx="-3" cy="0" rx="17" ry="4.6" fill="none" stroke="url(#rm${id})" stroke-width="3"/>
-      <path d="M-18 -2.2 Q-10 -5 0 -4.9" fill="none" stroke="#ffd0b0" stroke-width=".9" stroke-linecap="round" opacity=".7" filter="url(#lb${id})"/></g>`;
+      </g>
+      <path d="M-18 -2.2 Q-10 -5 0 -4.9" fill="none" stroke="#ffd9bd" stroke-width="1" stroke-linecap="round" opacity=".8" filter="url(#lb${id})"/></g>`;
   // 葉子：短尾矮袋鼠在羅特尼斯島最偏好的食物 Guichenotia ledifolia（錦葵科）
   // 特徵：葉片細長（約 1.5–6 cm × 2–5 mm）、邊緣反捲、兩面密生白色星狀毛 → 銀灰綠；花為下垂的粉紫色鐘形小花（7–11 月）
   // 畫法：一小段枝條，上面幾片細長銀灰葉（淺色中線表現反捲的邊），枝頭一朵下垂小花
   const leaf = (id, x, y, rot = 0, s = 1, flower = true) => {
-    // 畫風與庫卡一致：漸層上色、柔邊細毛質感（輕微擾動）、模糊的亮面與陰影，不用硬黑邊
-    const shape = (len) => `M0 0 C${len * .25} -1.6 ${len * .8} -1.4 ${len} 0 C${len * .8} 1.4 ${len * .25} 1.6 0 0 Z`;
-    const L = (ax, ay, ang, len) => `<g transform="translate(${ax} ${ay}) rotate(${ang})">
-        <path d="${shape(len)}" fill="#4a3a2e" opacity=".18" transform="translate(.5 .9)" filter="url(#lb${id})"/>
-        <path d="${shape(len)}" fill="url(#lg${id})" filter="url(#lz${id})"/>
-        <path d="M1 -.25 Q${len * .5} -.7 ${len - 1.6} -.2" fill="none" stroke="#f4f7ef" stroke-width=".9" stroke-linecap="round" opacity=".7" filter="url(#lb${id})"/></g>`;
+    // 畫風與庫卡一致：漸層上色、柔邊細毛質感（輕微擾動）、模糊的亮面與陰影，不用硬黑邊。
+    // 實際大小（一片葉子不到 10px）也要看得出是綠葉：葉片畫寬一點（披針形）、鼠尾草綠＋深綠細邊、葉與枝的夾角拉開、枝條用暖棕色
+    const shape = (len, w) => `M0 0 C${f1(len * .22)} ${-w} ${f1(len * .72)} ${f1(-w * .95)} ${len} 0 C${f1(len * .72)} ${f1(w * .95)} ${f1(len * .22)} ${w} 0 0 Z`;
+    const L = (ax, ay, ang, len, w = 2.7) => `<g transform="translate(${ax} ${ay}) rotate(${ang})">
+        <path d="${shape(len, w)}" fill="#4a3a2e" opacity=".18" transform="translate(.5 .9)" filter="url(#lb${id})"/>
+        <path d="${shape(len, w)}" fill="url(#lg${id})" stroke="#44663a" stroke-width=".8" stroke-linejoin="round" stroke-opacity=".6" filter="url(#lz${id})"/>
+        <path d="M1.4 -.2 Q${len * .5} -.7 ${len - 2} -.1" fill="none" stroke="#eef5e0" stroke-width=".8" stroke-linecap="round" opacity=".8"/></g>`;
     return `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
-      <path d="M0 .6 C-8 -.4 -16 -1.4 -27 -4.4" fill="none" stroke="#4a3a2e" stroke-width="1.6" opacity=".16" stroke-linecap="round" filter="url(#lb${id})"/>
-      <path d="M0 0 C-8 -1 -16 -2 -27 -5" fill="none" stroke="url(#sg${id})" stroke-width="1.4" stroke-linecap="round" filter="url(#lz${id})"/>
-      ${L(-5, -.6, -150, 13)}${L(-9, -1.2, 155, 15)}${L(-14, -1.9, -140, 14)}${L(-18, -2.6, 150, 15)}${L(-23, -3.8, -160, 12)}${L(-27, -5, 175, 10)}
+      <path d="M0 .6 C-9 -.4 -18 -1.6 -30 -4.9" fill="none" stroke="#4a3a2e" stroke-width="1.8" opacity=".16" stroke-linecap="round" filter="url(#lb${id})"/>
+      ${L(-22.5, -3.4, 142, 13)}${L(-13, -1.7, 140, 15)}${L(-4.5, -.5, 143, 12.5)}
+      <path d="M0 0 C-9 -1 -18 -2.2 -30 -5.5" fill="none" stroke="#7a5c40" stroke-width="1.7" stroke-linecap="round" filter="url(#lz${id})"/>
+      ${L(-8.5, -1.1, -140, 14)}${L(-17.5, -2.4, -138, 15.5)}${L(-26, -4.3, -146, 13)}${L(-29.5, -5.4, -172, 11.5, 2.4)}
       ${flower ? `<g transform="translate(-21 -3.3) rotate(${f1(-rot)})">
-        <path d="M0 0 Q.6 3 0 5" fill="none" stroke="#8a7a62" stroke-width=".7" opacity=".9"/>
+        <path d="M0 0 Q.6 3 0 5" fill="none" stroke="#8a6a52" stroke-width=".8" opacity=".9"/>
         <path d="M-2.8 5.2 Q-3.2 9.6 0 10.2 Q3.2 9.6 2.8 5.2 Q0 3.8 -2.8 5.2 Z" fill="#4a3a2e" opacity=".18" transform="translate(.5 .8)" filter="url(#lb${id})"/>
-        <path d="M-2.8 5.2 Q-3.2 9.6 0 10.2 Q3.2 9.6 2.8 5.2 Q0 3.8 -2.8 5.2 Z" fill="url(#fg${id})" filter="url(#lz${id})"/>
+        <path d="M-2.8 5.2 Q-3.2 9.6 0 10.2 Q3.2 9.6 2.8 5.2 Q0 3.8 -2.8 5.2 Z" fill="url(#fg${id})" stroke="#8a4f80" stroke-width=".6" stroke-opacity=".6" filter="url(#lz${id})"/>
         <ellipse cx="-1" cy="6.6" rx=".8" ry="1.6" fill="#fbe8f5" opacity=".6" filter="url(#lb${id})"/></g>` : ''}
     </g>`;
   };
@@ -347,7 +366,8 @@
     // 腳：站著時腳掌貼地、朝前（後寬前窄）；騰空時腳尖朝下
     const air = pose.feet === 'air' || (pose.feet !== 'stand' && dy < -4);
     [-1, 1].forEach((k) => {
-      const heel = PF(air ? [k * 17, 166, -4] : [k * 18, 171.4, -12]), toe = PF(air ? [k * 17, 182, 12] : [k * 18, 173.2, 30]);
+      const fs = (!air && pose.footShift) || [0, 0, 0], fz = fs[0] || 0, fu = fs[1] || 0, ft = fs[2] || 0;
+      const heel = PF(air ? [k * 17, 166, -4] : [k * 18, 171.4 - fu, -12 + fz]), toe = PF(air ? [k * 17, 182, 12] : [k * 18, 173.2 - fu + ft, 30 + fz - ft * .35]);
       const vx = toe.X - heel.X, vy = toe.Y - heel.Y, L = Math.hypot(vx, vy);
       const farSide = PF([k * 18, 172, 10]).Z < -2;
       let d, extra = '';

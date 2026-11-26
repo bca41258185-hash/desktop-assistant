@@ -11,9 +11,9 @@
   const HEAD_VB = '27 -8 106 106';            // 頭像取景：頭＋帽子
   const BODY_VB = '-4 -14 168 206';           // 新增卡的全身大圖
   const NAME_MAX = 12;
+  const ROSTER_MAX = 6;                       // 名單最多直接顯示 6 隻，其他放進「更多…」（規格 7.1）
   const DONE_LINGER_MS = 3000;                // 完成的待辦劃線後停留 3 秒再移到「已完成」
   const UNDO_MS = 5000;                       // 刪除後 5 秒內可以復原
-  const MISSED_MS = 2 * 60 * 1000;            // 晚了超過 2 分鐘算錯過
   const PREGNANCY_MS = 27 * 60 * 1000;
   const POUCH_MS = 10 * 60 * 1000, FOLLOW_MS = 50 * 60 * 1000;
   const WD = ['日', '一', '二', '三', '四', '五', '六'];
@@ -45,6 +45,9 @@
     hidden: new Set(),       // 已經按了刪除、等主行程確認的項目 'kind:id'
     doneOpen: false,         // 「已完成」是否展開
     ringingSeen: new Set(),
+    recent: [],              // 最近選過的庫卡 id（新的在前），決定名單直接顯示哪 6 隻
+    moreOpen: false,         // 「更多…」是否展開
+    moreQuery: '',           // 「更多…」的搜尋字
     menu: null               // 右鍵選單 { kind, id }
   };
   let initialized = false;
@@ -71,7 +74,7 @@
   function nameError(name, exceptId) {
     const n = String(name || '').trim();
     if (!n) return '名字不能空白';
-    if ([...n].length > NAME_MAX) return `名字最多 ${NAME_MAX} 個字`;
+    if (n.length > NAME_MAX) return `名字最多 ${NAME_MAX} 個字`;      // 和輸入框 maxlength、主行程的上限一樣用 UTF-16 長度算
     const k = normName(n);
     const dup = S.quokkas.find((q) => q.id !== exceptId && normName(q.name) === k);
     if (dup) return `已經有一隻叫「${dup.name}」了`;
@@ -160,12 +163,10 @@
     }
     return Infinity;
   }
+  // 錯過：主行程報「錯過」時寫入 missedAt；一直顯示到使用者按「知道了」（清掉 missedAt）或下次正常響起
   function isMissed(r) {
-    if (r.missed != null) return !!r.missed;
-    if (isRinging(r) || r.enabled === false || !r.rule || r.rule.type !== 'once' || r.lastFiredAt) return false;
-    const at = scheduledAt(r);
-    const created = r.createdAt ? new Date(r.createdAt).getTime() : 0;
-    return Date.now() - at > MISSED_MS && created < at;
+    if (!r || isRinging(r)) return false;
+    return !!r.missedAt && !isNaN(new Date(r.missedAt).getTime());
   }
   // 提醒的大字時間與規則標籤
   function ruleTag(rule) {
@@ -245,6 +246,7 @@
       document.documentElement.dataset.motion = S.settings.reducedMotion || 'system';
       pruneAvatars();
       renderRoster();
+      renderRosterMore();
       renderComposer();
       renderGlobal();
       renderCard();
@@ -273,19 +275,71 @@
       <span class="chip-av">${avatar(q)}${!small && c ? `<span class="badge" aria-hidden="true">${c > 99 ? '99+' : c}</span>` : ''}${marks.join('')}${preg}</span>
       <span class="chip-name">${esc(q.name)}</span></button>`;
   }
+  // 名單直接顯示哪幾隻：不超過 6 隻就全部；超過時取最近選過的（目前選的那隻一定在內），其餘照原本順序補滿
+  function rosterPick() {
+    const w = workers();
+    if (w.length <= ROSTER_MAX) return { shown: w, many: false };
+    const rank = new Map();
+    const sel = qById(ui.sel);
+    const selWorker = sel ? (isJoey(sel) ? qById(sel.mom) || S.quokkas.find((q) => q.joey && q.joey.id === sel.id) : sel) : null;
+    if (selWorker) rank.set(selWorker.id, -1);
+    ui.recent.forEach((id, i) => { if (!rank.has(id)) rank.set(id, i); });
+    const pick = new Set(w.map((q, i) => ({ q, r: rank.has(q.id) ? rank.get(q.id) : 1e6 + i })).sort((a, b) => a.r - b.r).slice(0, ROSTER_MAX).map((x) => x.q.id));
+    return { shown: w.filter((q) => pick.has(q.id)), many: true };
+  }
   function renderRoster() {
     const all = ui.sel === 'all';
     const parts = [`<button type="button" class="chip all${all ? ' sel' : ''}" data-act="sel" data-q="all" data-fk="chip:all" aria-pressed="${all}" aria-label="全部，顯示所有庫卡負責的事">
       <span class="chip-av"><span class="av av-all" aria-hidden="true">全</span></span><span class="chip-name">全部</span></button>`];
     const shown = new Set();
-    workers().forEach((q) => {
+    const { shown: list, many } = rosterPick();
+    list.forEach((q) => {
       parts.push(chip(q, false)); shown.add(q.id);
       joeysOf(q).forEach((j) => { parts.push(chip(j, true)); shown.add(j.id); });
     });
-    S.quokkas.filter((q) => !shown.has(q.id)).forEach((j) => parts.push(chip(j, true)));
+    if (!many) S.quokkas.filter((q) => !shown.has(q.id)).forEach((j) => parts.push(chip(j, true)));
+    else {
+      const rest = S.quokkas.length - shown.size;
+      if (!ui.moreOpen && ui.moreQuery) ui.moreQuery = '';
+      parts.push(`<button type="button" class="chip more${ui.moreOpen ? ' sel' : ''}" data-act="more" data-fk="chip:more" aria-expanded="${ui.moreOpen}" aria-controls="rosterMore"
+        aria-label="更多庫卡（還有 ${rest} 隻），可以搜尋名字" title="更多庫卡（還有 ${rest} 隻）">
+        <span class="chip-av"><span class="av av-more" aria-hidden="true">+${rest > 99 ? '99' : rest}</span></span><span class="chip-name">更多…</span></button>`);
+    }
+    if (!many && ui.moreOpen) ui.moreOpen = false;
     parts.push(`<button type="button" class="chip add${ui.adding ? ' sel' : ''}" data-act="new" data-fk="chip:new" aria-label="新增一隻庫卡" title="新增一隻庫卡">
       <span class="chip-av"><span class="av av-add" aria-hidden="true">＋</span></span><span class="chip-name">新增</span></button>`);
     $('roster').innerHTML = parts.join('');
+  }
+  // 「更多…」：搜尋框＋可捲動的完整名單（只在展開時才畫頭像）
+  function moreRow(q) {
+    const joey = isJoey(q), c = joey ? 0 : total(counts(q.id)), sel = ui.sel === q.id;
+    const mom = joey ? qById(q.mom) : null;
+    const sub = joey ? `小袋鼠${mom ? `・${esc(mom.name)}的孩子` : ''}` : c ? `盯著 ${c} 件事` : '還沒有事';
+    return `<li data-name="${esc(normName(q.name))}"><button type="button" class="more-item${sel ? ' sel' : ''}" data-act="sel" data-q="${esc(q.id)}" data-fk="more:${esc(q.id)}" aria-pressed="${sel}"
+      ${joey ? '' : `data-drop="${esc(q.id)}"`}>${avatar(q, 'sm')}<span class="more-name">${esc(q.name)}</span><span class="more-sub">${sub}</span></button></li>`;
+  }
+  function renderRosterMore() {
+    const el = $('rosterMore');
+    if (!el) return;
+    if (!ui.moreOpen || !rosterPick().many) { el.hidden = true; el.innerHTML = ''; return; }
+    el.hidden = false;
+    // 依原本順序列出：每一隻後面接牠的小袋鼠
+    const order = [], seen = new Set();
+    workers().forEach((q) => { order.push(q); seen.add(q.id); joeysOf(q).forEach((j) => { order.push(j); seen.add(j.id); }); });
+    S.quokkas.forEach((q) => { if (!seen.has(q.id)) order.push(q); });
+    el.innerHTML = `<div class="more-h"><input type="search" id="rosterSearch" class="text-in more-search" placeholder="找名字…" aria-label="找庫卡的名字" data-fk="more:search" autocomplete="off" spellcheck="false" value="${esc(ui.moreQuery)}">
+      <span class="more-count" aria-live="polite"></span>
+      <button type="button" class="icon-btn" data-act="more" data-fk="more:close" aria-label="收起更多">✕</button></div>
+      <ul class="more-list" role="list">${order.map(moreRow).join('')}</ul><p class="note more-none" hidden>找不到這個名字</p>`;
+    filterMore();
+  }
+  function filterMore() {
+    const el = $('rosterMore'); if (!el || el.hidden) return;
+    const k = normName(ui.moreQuery);
+    let n = 0;
+    el.querySelectorAll('.more-list > li').forEach((li) => { const hit = !k || li.dataset.name.includes(k); li.hidden = !hit; if (hit) n++; });
+    const none = el.querySelector('.more-none'); if (none) none.hidden = n > 0;
+    const cnt = el.querySelector('.more-count'); if (cnt) cnt.textContent = `${n} 隻`;
   }
 
   // ---- 輸入框 ----------------------------------------------------------------
@@ -438,7 +492,7 @@
       <p class="newq-desc">${esc(traitLine(a.traits))}</p>
       <div class="center"><button type="button" class="btn" data-act="reroll" data-fk="n:reroll"><span class="sym" aria-hidden="true">↻</span> 換一隻</button></div>
       <label class="field-l" for="newName">幫牠取名字</label>
-      <input type="text" id="newName" class="text-in" maxlength="24" value="${esc(a.name)}" placeholder="最多 12 個字" data-fk="n:name" aria-describedby="newErr" autocomplete="off">
+      <input type="text" id="newName" class="text-in" maxlength="${NAME_MAX}" value="${esc(a.name)}" placeholder="最多 ${NAME_MAX} 個字" data-fk="n:name" aria-describedby="newErr" autocomplete="off">
       <p class="err" id="newErr" role="alert">${esc(a.err || '')}</p>
       <button type="button" class="btn primary wide" data-act="create" data-fk="n:create">好了！</button>
     </div>`;
@@ -485,7 +539,7 @@
     return `<div class="card gear" role="group" aria-label="${esc(q.name)}的設定">
       <div class="card-h">${avatar(q, 'md')}<h2>${esc(q.name)}的設定</h2><button type="button" class="icon-btn" data-act="gear" data-fk="g:close" aria-label="收起設定">✕</button></div>
       <label class="field-l" for="gName">名字</label>
-      <div class="inline"><input type="text" id="gName" class="text-in" maxlength="24" value="${esc(q.name)}" data-fk="g:name" aria-describedby="gErr" autocomplete="off">
+      <div class="inline"><input type="text" id="gName" class="text-in" maxlength="${NAME_MAX}" value="${esc(q.name)}" data-fk="g:name" aria-describedby="gErr" autocomplete="off">
         <button type="button" class="btn" data-act="rename" data-fk="g:rename">改名</button></div>
       <p class="err" id="gErr" role="alert">${esc(ui.gearMsg || '')}</p>
       <label class="field-l" for="gAcc">飾品</label>
@@ -506,7 +560,7 @@
       <div class="card-h">${avatar(j, 'md')}<h2>小袋鼠 ${esc(j.name)}</h2></div>
       <p class="note">${status}。長大以後就可以交辦事情。</p>
       <label class="field-l" for="jName">幫牠取名字</label>
-      <div class="inline"><input type="text" id="jName" class="text-in" maxlength="24" value="${esc(j.name)}" data-fk="j:name" aria-describedby="jErr" autocomplete="off">
+      <div class="inline"><input type="text" id="jName" class="text-in" maxlength="${NAME_MAX}" value="${esc(j.name)}" data-fk="j:name" aria-describedby="jErr" autocomplete="off">
       <button type="button" class="btn primary" data-act="nameBaby" data-fk="j:go">取名</button></div>
       <p class="err" id="jErr" role="alert">${esc(ui.gearMsg || '')}</p>
     </div>`;
@@ -530,7 +584,7 @@
   function reminderRow(r) {
     const ringing = isRinging(r), missed = !ringing && isMissed(r), on = r.enabled !== false;
     const tags = [`<span class="tag">${esc(ruleTag(r.rule))}</span>`];
-    if (missed) tags.push('<span class="tag tag-miss">錯過</span>');
+    if (missed) tags.push(`<span class="tag tag-miss" title="${esc('報告錯過的時間：' + hm(r.missedAt))}">錯過</span>`);
     if (!ringing && r.snoozeUntil && new Date(r.snoozeUntil).getTime() > Date.now()) tags.push(`<span class="tag tag-soft">貪睡到 ${esc(hm(r.snoozeUntil))}</span>`);
     return `<li class="row rem${ringing ? ' is-ringing' : ''}${missed ? ' is-missed' : ''}${on ? '' : ' is-off'}" ${rowAttrs('reminder', r)}>
       ${ownerAv(r)}<span class="when">${esc(ruleTime(r.rule))}</span>
@@ -539,7 +593,9 @@
       ${delBtn('reminder', r, r.text)}
       ${ringing ? `<div class="ring"><span class="ring-l"><span class="bell" aria-hidden="true">🔔</span> 響鈴中</span>
         <button type="button" class="btn sm primary" data-act="ack" data-fk="reminder:${esc(r.id)}:ack" aria-label="知道了：${esc(r.text)}">知道了</button>
-        <button type="button" class="btn sm" data-act="snooze" data-fk="reminder:${esc(r.id)}:snz" aria-label="5 分鐘後再提醒：${esc(r.text)}">5 分後</button></div>` : ''}</li>`;
+        <button type="button" class="btn sm" data-act="snooze" data-fk="reminder:${esc(r.id)}:snz" aria-label="5 分鐘後再提醒：${esc(r.text)}">5 分後</button></div>` : ''}
+      ${missed ? `<div class="ring miss-row"><span class="ring-l">錯過了這次提醒</span>
+        <button type="button" class="btn sm primary" data-act="ackMissed" data-fk="reminder:${esc(r.id)}:ackm" aria-label="知道了，清掉錯過標記：${esc(r.text)}">知道了</button></div>` : ''}</li>`;
   }
   function fmtPrice(p) {
     if (p == null || !isFinite(p)) return '—';
@@ -688,8 +744,11 @@
     if (qid !== 'all' && !qById(qid)) qid = 'all';
     const changed = ui.sel !== qid;
     ui.sel = qid; ui.adding = null; ui.globalOpen = false; ui.editing = null;
+    if (qid !== 'all') ui.recent = [qid].concat(ui.recent.filter((x) => x !== qid)).slice(0, 100);
+    const fromMore = ui.moreOpen; ui.moreOpen = false;
     if (changed) { ui.gear = false; ui.gearMode = null; ui.gearMsg = null; ui.forceType = null; ui.msg = null; }
     render();
+    if (fromMore) { const c = document.querySelector(`[data-fk="chip:${CSS.escape(qid)}"]`); if (c) { c.focus({ preventScroll: true }); c.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } }
     if (changed && api.setSettings) api.setSettings({ panelOwner: qid }).catch(() => {});
   }
   function findItem(kind, id) { return (S[LIST_OF[kind]] || []).find((x) => x.id === id); }
@@ -880,6 +939,12 @@
     switch (b.dataset.act) {
       case 'closeReport': ui.report = null; renderLists(); break;
       case 'sel': select(b.dataset.q); break;
+      case 'more': {
+        ui.moreOpen = !ui.moreOpen; render();
+        const f = ui.moreOpen ? $('rosterSearch') : document.querySelector('[data-fk="chip:more"]');
+        if (f) f.focus();
+        break;
+      }
       case 'new': ui.adding ? (ui.adding = null, render()) : openNew(); break;
       case 'cancelNew': ui.adding = null; render(); $('roster').querySelector('[data-act="new"]').focus(); break;
       case 'reroll': ui.adding.traits = TR.generate(); ui.adding.name = $('newName').value; render(); break;
@@ -894,6 +959,11 @@
         break;
       }
       case 'ack': api.ackAlert({ reminderId: id }); break;
+      case 'ackMissed': {                                   // 先畫出來，主行程清掉 missedAt 後回送快照
+        const r = findItem('reminder', id); if (r) { delete r.missedAt; render(); }
+        api.ackAlert({ reminderId: id });
+        break;
+      }
       case 'snooze': api.snoozeAlert({ reminderId: id }); break;
       case 'pickFolder': {
         const owner = targetOwner(); if (!owner) break;
@@ -962,6 +1032,7 @@
     const t = e.target;
     if (t.classList.contains('edit-in')) ui.editDraft = t.value;
     if (t.id === 'newName' && ui.adding) { ui.adding.name = t.value; }
+    if (t.id === 'rosterSearch') { ui.moreQuery = t.value; filterMore(); }
   });
   document.addEventListener('change', (e) => {
     const t = e.target;
@@ -985,6 +1056,12 @@
       if (t.id === 'newName') { e.preventDefault(); createQuokka(); return; }
       if (t.id === 'gName') { e.preventDefault(); doRename(); return; }
       if (t.id === 'jName') { e.preventDefault(); doNameBaby(); return; }
+      if (t.id === 'rosterSearch') {                       // Enter：選第一個符合的
+        e.preventDefault();
+        const first = [...$('rosterMore').querySelectorAll('.more-list > li:not([hidden]) .more-item')][0];
+        if (first) select(first.dataset.q);
+        return;
+      }
     }
     if (ui.menu) {
       const items = [...$('menu').querySelectorAll('.menu-item:not([hidden])')];
@@ -995,7 +1072,8 @@
       return;
     }
     if (e.key === 'Escape') {
-      if (ui.adding) { ui.adding = null; render(); }
+      if (ui.moreOpen) { ui.moreOpen = false; render(); const m = document.querySelector('[data-fk="chip:more"]'); if (m) m.focus(); }
+      else if (ui.adding) { ui.adding = null; render(); }
       else if (ui.globalOpen) { ui.globalOpen = false; render(); $('globalGear').focus(); }
       else if (ui.gearMode) { ui.gearMode = null; render(); }
       else if (ui.gear) { ui.gear = false; render(); }
@@ -1042,7 +1120,8 @@
     document.body.classList.remove('dragging');
     document.querySelectorAll('.is-drag, .drop-over').forEach((x) => x.classList.remove('is-drag', 'drop-over'));
   });
-  const roster = $('roster');
+  // 名單與「更多…」清單都可以當放下的目標
+  [$('roster'), $('rosterMore')].filter(Boolean).forEach((roster) => {
   roster.addEventListener('dragover', (e) => {
     const c = e.target.closest('[data-drop]');
     if (!c || !e.dataTransfer.types.includes('application/x-quokka-item')) return;
@@ -1062,6 +1141,7 @@
     try { d = JSON.parse(e.dataTransfer.getData('application/x-quokka-item')); } catch (err) { return; }
     c.classList.remove('drop-over');
     if (d) reassign(d.kind, d.id, c.dataset.drop);
+  });
   });
 
   // ---------------------------------------------------------------------------
@@ -1084,7 +1164,7 @@
     S.quokkas.forEach((q) => { if (q.traits) { TR.ensureAccessory(q.traits); TR.ensurePersonality(q.traits); } });
     if (!initialized) {
       const po = S.settings.panelOwner;
-      if (po && (po === 'all' || qById(po))) ui.sel = po;
+      if (po && (po === 'all' || qById(po))) { ui.sel = po; if (po !== 'all') ui.recent = [po]; }
     }
     if (pendingSelectName) {
       const q = S.quokkas.find((x) => normName(x.name) === normName(pendingSelectName));

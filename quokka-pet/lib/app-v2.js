@@ -69,7 +69,8 @@ function start() {
     growScale: (q.traits && q.traits.growScale) || null, pregnant: !!q.pregnancy, hasJoey: q.joey ? q.joey.id : null, partner: partnerId(q.id) });
   function partnerId(qid) { try { return romance.partnerOf(qid) || null; } catch (e) { return null; } }
   let away = false;
-  const digest = {};                    // 離開期間各隻的待報告事項：{ qid: ['文字', …] }，回來時由各隻報告
+  const digest = {};                    // 離開期間各隻的待報告事項：{ qid: R.digestPush 的累積 }，回來時由各隻報告（R.digestTexts 轉成文字）
+  const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
   // ---- 戀愛與家族（RomanceDirector）、社交（SocialDirector） --------------------------
   const romance = createRomance({ data, now: () => Date.now(), random: Math.random, TR });
   const layers = {}, positions = {};
@@ -154,7 +155,7 @@ function start() {
   };
   const event = (qid, kind, payload) => {
     if (!qById(qid)) return;
-    if (away && DIGEST_TEXT[kind]) { const list = (digest[qid] = digest[qid] || []); if (list.length < 8) list.push(DIGEST_TEXT[kind](payload || {})); return; }
+    if (away && DIGEST_TEXT[kind]) { digest[qid] = R.digestPush(digest[qid], kind, DIGEST_TEXT[kind](payload || {})); return; }
     toStage('q:event', { qid, kind, payload, prio: 2 });
   };
 
@@ -164,15 +165,15 @@ function start() {
     onFire: (due) => {
       const now = new Date(), missed = {};
       for (const { rem, missed: m } of due) {
-        R.markFired(rem, now);
+        R.markFired(rem, now, { missed: !!m });              // 錯過的寫入 missedAt，正常響起就清掉
         if (m) { (missed[rem.owner] = missed[rem.owner] || []).push(rem.text); continue; }
         rem.ringing = true;
         toStage('q:alert', { qid: rem.owner, reminderId: rem.id, text: rem.text, speak: !!data.settings.reminderVoice });
-        notify(qById(rem.owner), `⏰ ${rem.text}`, rem.owner);
+        notifyReminder(rem.owner, `⏰ ${rem.text}`, rem.text);
       }
       for (const [qid, items] of Object.entries(missed)) {
         event(qid, 'missed', { items });
-        notify(qById(qid), `錯過的提醒：${items.join('、')}`.slice(0, 200), qid);
+        notifyReminder(qid, `錯過的提醒：${items.join('、')}`.slice(0, 200), `錯過：${items.join('、')}`);
       }
       if (!stageVisible && due.some((d) => !d.missed)) unhide();     // 提醒優先：藏起來時也要出來響
       changed();
@@ -184,6 +185,14 @@ function start() {
     n.on('click', () => showPanel(qid));
     n.show();
   }
+  // 提醒的系統通知：2 秒內多筆合併成一則「3 則提醒：A、B、C」（規格 4.1、4.4）
+  const reminderNotes = R.createNotifyBatcher({ send: ({ title, body, qid }) => {
+    if (!Notification.isSupported()) return;
+    const n = new Notification({ title, body, silent: false });
+    n.on('click', () => showPanel(qid && qById(qid) ? qid : null));
+    n.show();
+  } });
+  function notifyReminder(qid, body, label) { const q = qById(qid); reminderNotes.push({ title: q ? q.name : '庫卡助理', body, label, qid }); }
   powerMonitor.on('resume', () => clock.check());
   powerMonitor.on('unlock-screen', () => clock.check());
 
@@ -195,7 +204,7 @@ function start() {
       quotes[u.symbol] = { price: u.price, pct: u.pct, stale: !!u.stale, recovered: !!u.recovered, name: u.name, time: u.time, market: u.market,
         prevClose: u.prevClose, open: u.open, high: u.high, low: u.low, volume: u.volume, day: u.day };
       toPanel('stock:tick', { symbol: u.symbol, market: u.market, ...quotes[u.symbol] });
-      if (u.stale || !isFinite(u.pct)) return;
+      if (u.stale || !isNum(u.pct)) return;
       if (u.recovered) steps._state.delete(u.symbol);          // 斷線恢復：重新當基準
       const r = steps.update(u.symbol, { pct: u.pct, day: u.day, market: u.market });
       if (!r) return;
@@ -293,7 +302,9 @@ function start() {
     if (nowAway === away) return;
     away = nowAway;
     stage.pause(away || !stageVisible);
-    toStage('presence', { away, locked, digest: away ? null : { ...digest } });
+    const texts = {};
+    if (!away) for (const [qid, d] of Object.entries(digest)) { const t = R.digestTexts(d); if (t.length) texts[qid] = t; }
+    toStage('presence', { away, locked, digest: away ? null : texts });
     if (!away) for (const k of Object.keys(digest)) delete digest[k];
   }
   setInterval(checkPresence, 5000);
@@ -302,6 +313,7 @@ function start() {
 
   // ---- 面板 → 主行程 ---------------------------------------------------------------
   const str = (v, n = LIMITS.text) => String(v == null ? '' : v).trim().slice(0, n);
+  const nameTooLong = (v) => String(v == null ? '' : v).trim().length > LIMITS.name;   // 名字上限 12 字：超過就擋下，不偷偷截斷
   const findItem = (kind, id) => (KINDS[kind] ? data[KINDS[kind]].find((x) => x.id === id) : null);
   const countOf = (kind, owner) => data[KINDS[kind]].filter((x) => x.owner === owner).length;
   const LIM = { task: LIMITS.tasksPerQuokka, reminder: LIMITS.remindersPerQuokka, stock: LIMITS.stocksPerQuokka, folder: 50 };
@@ -409,6 +421,7 @@ function start() {
   ipcMain.handle('quokka:create', (e, { name, traits } = {}) => {
     const nm = str(name, LIMITS.name);
     if (!nm) return { ok: false, message: '幫牠取個名字吧' };
+    if (nameTooLong(name)) return { ok: false, message: `名字最多 ${LIMITS.name} 個字` };
     romance.resolveNameClash(nm, null);                       // 小袋鼠的暫名讓位
     if (data.quokkas.some((q) => q.name === nm)) return { ok: false, message: '已經有同名的庫卡了' };
     // 不直接信任面板傳來的特徵：用同一個 seed 在主行程重新生成（保證格式正確）
@@ -421,6 +434,7 @@ function start() {
   ipcMain.handle('quokka:rename', (e, { qid, name } = {}) => {
     const q = qById(qid), nm = str(name, LIMITS.name);
     if (!q || !nm) return { ok: false, message: '名字不能空白' };
+    if (nameTooLong(name)) return { ok: false, message: `名字最多 ${LIMITS.name} 個字` };
     romance.resolveNameClash(nm, qid);
     if (data.quokkas.some((x) => x !== q && x.name === nm)) return { ok: false, message: '已經有同名的庫卡了' };
     q.name = nm; q.nameTemp = false; changed({ quokkas: true });
@@ -476,7 +490,7 @@ function start() {
     const S = data.settings, n = (v, a, b) => Math.max(a, Math.min(b, Number(v)));
     if ('stockStepPct' in patch && [1, 2, 3].includes(Number(patch.stockStepPct))) { S.stockStepPct = Number(patch.stockStepPct); steps.setStep(S.stockStepPct); }
     if ('reminderVoice' in patch) S.reminderVoice = !!patch.reminderVoice;
-    if ('awayMinutes' in patch && isFinite(patch.awayMinutes)) S.awayMinutes = n(patch.awayMinutes, 0, 240);
+    if ('awayMinutes' in patch && isNum(Number(patch.awayMinutes)) && patch.awayMinutes !== null && String(patch.awayMinutes).trim() !== '') S.awayMinutes = n(patch.awayMinutes, 0, 240);
     if ('walk' in patch && ['home', 'screen', 'off'].includes(patch.walk)) S.walk = patch.walk;
     for (const k of ['romance', 'babies']) if (k in patch) S[k] = !!patch[k];
     if ('reducedMotion' in patch && ['system', 'on', 'off'].includes(patch.reducedMotion)) S.reducedMotion = patch.reducedMotion;
@@ -496,6 +510,7 @@ function start() {
   });
   ipcMain.handle('baby:name', (e, { qid, name } = {}) => {
     const q = qById(qid), nm = str(name, LIMITS.name);
+    if (q && nameTooLong(name)) return { ok: false, message: `名字最多 ${LIMITS.name} 個字` };
     if (!q || !nm || data.quokkas.some((x) => x !== q && x.name === nm)) return { ok: false, message: '名字不能空白或重複' };
     q.name = nm; q.namedAt = nowISO(); changed({ quokkas: true });
     return { ok: true };
@@ -503,7 +518,7 @@ function start() {
 
   // ---- 提醒：知道了／5 分後（面板與舞台都可以送） -----------------------------------
   function clearAlert(rem) { rem.ringing = false; toStage('q:alert-clear', { qid: rem.owner, reminderId: rem.id }); }
-  const ack = (e, p = {}) => { const r = data.reminders.find((x) => x.id === p.reminderId); if (r) { clearAlert(r); clock.schedule(); changed(); } return { ok: !!r }; };
+  const ack = (e, p = {}) => { const r = data.reminders.find((x) => x.id === p.reminderId); if (r) { clearAlert(r); R.ackMissed(r); clock.schedule(); changed(); } return { ok: !!r }; };
   const snooze = (e, p = {}) => { const r = data.reminders.find((x) => x.id === p.reminderId); if (r) { clearAlert(r); R.snooze(r, 5); clock.schedule(); changed(); } return { ok: !!r }; };
   ipcMain.handle('alert:ack', ack); ipcMain.handle('alert:snooze', snooze);
   ipcMain.on('alert:ack', ack); ipcMain.on('alert:snooze', snooze);
@@ -519,7 +534,7 @@ function start() {
   });
   const savePos = (e, { id, qid, pos, x, y } = {}) => {
     const q = qById(qid || id), px = pos ? pos.x : x, py = pos ? pos.y : y;
-    if (q && isFinite(px) && isFinite(py)) { q.home = { x: Math.round(px), y: Math.round(py) }; store.save(); }
+    if (q && isNum(px) && isNum(py)) { q.home = { x: Math.round(px), y: Math.round(py) }; store.save(); }
   };
   ipcMain.on('stage:save-pos', savePos);
   ipcMain.on('q:rest', savePos);
@@ -574,7 +589,7 @@ function start() {
   clock.check();                       // 啟動時先處理錯過的提醒，再排下一個
   try { romance.refreshAges(); romance.dailyDecay(); } catch (e) {}
   scheduleSocial(90000);               // 開機 1.5 分鐘後才開始安排互動
-  app.on('before-quit', () => { app.isQuitting = true; clearTimeout(socialTimer); stocks.stop(); clock.stop(); store.saveNow(); });
+  app.on('before-quit', () => { app.isQuitting = true; clearTimeout(socialTimer); stocks.stop(); clock.stop(); reminderNotes.flush(); store.saveNow(); });
   return { store, stage, data, showPanel, unhide };
 }
 
