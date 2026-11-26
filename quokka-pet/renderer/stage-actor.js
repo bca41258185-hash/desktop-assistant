@@ -147,6 +147,7 @@
       this.el.classList.toggle('joey', this.isFollow);
       this.beh = S.TR.behavior(this.traits) || null;
       this.act = this.traits.personality ? this.traits.personality.activity : .5;
+      this.soc = this.traits.personality && Number.isFinite(this.traits.personality.sociability) ? this.traits.personality.sociability : .5;
       this.tag.textContent = this.name;
       this.el.setAttribute('aria-label', this.name);
       if (S.family) S.family.refresh(this);
@@ -643,10 +644,14 @@
         const backHome = Math.abs(a.x - a.home) > 250 && Math.random() < .6;
         let dir = backHome ? Math.sign(a.home - a.x) : (Math.random() < .5 ? -1 : 1);
         const P = S.family && S.family.partnerOf(a);                       // 有伴侶：傾向往伴侶那一邊走
-        if (P && !backHome && Math.random() < .7) dir = Math.sign(P.x - a.x) || dir;
+        const toP = P && !backHome && Math.random() < .7;
+        if (toP) dir = Math.sign(P.x - a.x) || dir;
         const dist = (3 + Math.floor(Math.random() * 6 * (0.5 + a.act))) * (30 + a.act * 15);
         target = S.clamp(a.x + dir * dist, lo, hi);
         if (Math.abs(target - a.x) < 40) target = S.clamp(a.x - dir * dist, lo, hi);
+        // 主動走向同伴：越愛社交越常走到最近的同伴身邊（停在禮貌距離），到了之後主行程比較容易安排兩隻互動
+        const B = !backHome && !toP && a.buddy(lo, hi);
+        if (B && Math.random() < .3 + .5 * a.soc) target = S.clamp(B.x, lo, hi);
       }
       let gait = o.gait || a.pickGait(Math.abs(target - a.x));
       // 目的地要和非伴侶保持禮貌距離（四肢著地走時，前方再多留口鼻伸出去的距離）；放不下就縮短
@@ -699,7 +704,19 @@
       return !!this.requestActivity(6, this.animJob('idle:' + pick, an));
     }
     // 兩次散步之間隔多久：活潑的約 30–60 秒、慵懶的 2–4 分鐘
-    restGap() { return (30 + (1 - this.act) * 90) * 1000 * (1 + Math.random()); }
+    // 散步時想去找的同伴：最近的、同一地面、在散步範圍裡、還沒在身邊（250 px 以外）、醒著且沒在忙的成年庫卡
+    buddy(lo, hi) {
+      let best = null, bd = Infinity;
+      for (const o of S.actors.values()) {
+        if (o === this || o.isFollow || o.inPouch || o.mode !== 'awake' || o.dragging) continue;
+        if (o.job && o.job.name === 'social') continue;
+        if (Math.abs(o.y - this.y) >= 40 || o.x < lo || o.x > hi) continue;
+        const d = Math.abs(o.x - this.x);
+        if (d > 250 && d < bd) { best = o; bd = d; }
+      }
+      return best;
+    }
+    restGap() { return (12 + (1 - this.act) * 48) * 1000 * (1 + Math.random()); }   // 活潑的每 12–24 秒、慵懶的每 1–2 分鐘走一次
     // 散步經過別隻（腳底水平 < 120 px、高度差 < 40 px）：同一對每天只報一次
     checkPass() {
       const day = new Date().toDateString();

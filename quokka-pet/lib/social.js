@@ -6,10 +6,13 @@
   const DEFAULTS = {
     maxDistance: 700,            // 社交候選範圍
     groundDiff: 40,              // 同一地面高度差
-    minDelayMs: 3 * MIN_MS,      // 每 3–5 分鐘檢查一次
-    maxDelayMs: 5 * MIN_MS,
+    minDelayMs: 1 * MIN_MS,      // 每 1–2 分鐘檢查一次
+    maxDelayMs: 2 * MIN_MS,
     maxActive: 3,                // 同時進行的互動上限（一對算 1 個名額，另可用 freeSlots() 限制）
     maxStartsPerTick: 2,         // 每次 tick 最多發起幾對
+    nearDistance: 250,           // 同伴在身邊（約兩個身長內）
+    nearMult: 2,                 // 同伴在身邊：發起機率與被挑中的權重 ×2
+    nearDelayK: 0.5,             // 同伴在身邊：下一次檢查提早一半（30–60 秒）
     friendMult: 1.5,             // 好朋友互動頻率 ×1.5
     coupleMult: 2,               // 情侶互動頻率加倍
     dadNoseChance: 0.35,         // 爸爸每輪過來碰鼻的機率
@@ -83,6 +86,12 @@
       if (Math.abs(pa.y - pb.y) > C.groundDiff) return false;
       return Math.hypot(pa.x - pb.x, pa.y - pb.y) <= C.maxDistance;
     }
+    // 同伴就在身邊（同一地面、nearDistance 內）
+    function besides(aId, bId) {
+      const pa = posOf(aId), pb = posOf(bId);
+      if (!pa || !pb || displayId(pa.display) !== displayId(pb.display) || Math.abs(pa.y - pb.y) > C.groundDiff) return false;
+      return Math.abs(pa.x - pb.x) <= C.nearDistance;
+    }
     // 自己可以參加互動：L7 散步或 L8 待機、沒在別的互動裡、沒被擋（游標附近等）
     function available(q) {
       if (!q || busy.has(q.id)) return false;
@@ -155,7 +164,7 @@
       return null;
     }
 
-    // 主排程：回傳下一次 tick 的建議延遲（毫秒，3–5 分鐘，越愛社交越常）
+    // 主排程：回傳下一次 tick 的建議延遲（毫秒，1–2 分鐘，越愛社交越常；同伴在身邊時 30–60 秒）
     function tick() {
       const list = quokkas();
       const started = [];
@@ -172,7 +181,7 @@
         if (!available(a)) continue;
         const cands = list.filter((b) => b.id !== a.id && !isFollowJoey(b) && available(b) && nearEnough(a.id, b.id));
         if (!cands.length) continue;
-        const mult = (b) => (isCouple(a.id, b.id) ? C.coupleMult : isFriend(a.id, b.id) ? C.friendMult : 1);
+        const mult = (b) => (isCouple(a.id, b.id) ? C.coupleMult : isFriend(a.id, b.id) ? C.friendMult : 1) * (besides(a.id, b.id) ? C.nearMult : 1);
         const best = Math.max(...cands.map(mult));
         const pa = P(a);
         if (random() >= clamp(pa.initiative * best, 0, 0.95)) continue;
@@ -196,7 +205,10 @@
       const others = list.filter((q) => !isFollowJoey(q) && q.stage !== 'pouch');
       const soc = others.length ? others.reduce((s, q) => s + P(q).sociability, 0) / others.length : 0.5;
       const jitter = (random() - 0.5) * 40 * 1000;
-      const delay = clamp(lerp(C.maxDelayMs, C.minDelayMs, soc) + jitter, C.minDelayMs, C.maxDelayMs);
+      let delay = clamp(lerp(C.maxDelayMs, C.minDelayMs, soc) + jitter, C.minDelayMs, C.maxDelayMs);
+      // 有兩隻閒著的同伴就在身邊：提早再檢查
+      const idle = others.filter(available);
+      if (idle.some((a, i) => idle.some((b, j) => j > i && besides(a.id, b.id)))) delay *= C.nearDelayK;
       return Math.round(delay);
     }
 

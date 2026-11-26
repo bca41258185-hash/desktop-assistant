@@ -172,17 +172,39 @@ test('膽小的對象先觀察，延後一輪', () => {
   assert.ok(w.started.length > 0);
 });
 
-test('下一次 tick 延遲 3–5 分鐘，越愛社交越短', () => {
+test('下一次 tick 延遲 1–2 分鐘，越愛社交越短', () => {
   const social = setup([mk('a', 'male', { sociability: 1 }), mk('b', 'male', { sociability: 1 })]);
   const shy = setup([mk('a', 'male', { sociability: 0, initiative: 0 }), mk('b', 'male', { sociability: 0, initiative: 0 })]);
+  for (const w of [social, shy]) w.pos.b.x = w.pos.a.x + 600;          // 不在身邊（250 px 以外）
   let s1 = 0, s2 = 0;
   for (let i = 0; i < 50; i++) {
     const d1 = social.S.tick(), d2 = shy.S.tick();
-    for (const d of [d1, d2]) assert.ok(d >= 180000 && d <= 300000, `delay ${d}`);
+    for (const d of [d1, d2]) assert.ok(d >= 60000 && d <= 120000, `delay ${d}`);
     s1 += d1; s2 += d2;
     for (const j of social.S.activePairs()) social.S.done(j.pairId);
   }
   assert.ok(s1 < s2);
+});
+
+test('同伴在身邊（250 px 內）：下一次檢查提早到 30–60 秒', () => {
+  const w = setup([mk('a', 'male', { initiative: 0 }), mk('b', 'male', { initiative: 0 })]);   // 不主動：互動不會開始，兩隻一直閒著
+  for (let i = 0; i < 30; i++) { const d = w.S.tick(); assert.ok(d >= 30000 && d <= 60000, `delay ${d}`); }
+  w.pos.b.x = w.pos.a.x + 600;
+  for (let i = 0; i < 30; i++) { const d = w.S.tick(); assert.ok(d >= 60000 && d <= 120000, `delay ${d}`); }
+});
+
+test('同伴在身邊：比距離遠時更常發起互動', () => {
+  const count = (gap) => {
+    let n = 0;
+    for (let s = 1; s <= 40; s++) {
+      const w = setup([mk('a', 'male', { initiative: 0.25 }), mk('b', 'male', { initiative: 0.25 })], { seed: s });
+      w.pos.b.x = w.pos.a.x + gap;
+      n += runRounds(w, 5).length;
+    }
+    return n;
+  };
+  const near = count(150), far = count(600);
+  assert.ok(near > far * 1.4, `near ${near} far ${far}`);
 });
 
 test('done：一起完成加好感；abort：工作反應 +1、響鈴與拖曳不變', () => {
