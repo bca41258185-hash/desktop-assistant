@@ -144,6 +144,9 @@
       if (anc && anc !== I && anc !== O && !anc.inPouch && Math.abs(anc.y - I.y) <= 40 && (anc.x - I.x) * (anc.x - O.x) < 0) {
         ox = anc.x - side * (anc.w * .3 + O.w * .3 + 14); ix = ox - side * gap; laneFor = anc;
       }
+      // 送禮物：送的那隻走到收禮的那隻面前（收禮的不動）
+      const gift = !!this.soc.gift;
+      if (gift && !anc) { ix = O.x - side * gap; ox = O.x; }
       // 螢幕邊放不下時，整組往內挪
       if (ix < 44) { ix = 44; ox = ix + side * gap; } else if (ix > W - 44) { ix = W - 44; ox = ix + side * gap; }
       else if (ox < 44) { ox = 44; ix = ox - side * gap; } else if (ox > W - 44) { ox = W - 44; ix = ox - side * gap; }
@@ -153,10 +156,12 @@
       const lo = Math.min(I.x, O.x, ix, ox) - S.POLITE - 4, hi = Math.max(I.x, O.x, ix, ox) + S.POLITE + 4;   // 路上和兩隻的站位附近（禮貌距離內）有別隻：請牠讓開
       const all = [...S.actors.values()].filter((o) => !o.inPouch && Math.abs(o.y - I.y) <= 40);
       let blocked = false, n = 0;
+      const passBy = [];                                  // 送禮物時路上的別隻：不等牠讓路，從牠前面（靠鏡頭那一道）繞過去
       for (const o of all) {
         if (o === I || o === O || o === laneFor) continue;
         if (o.isFollow && (momOf(o) === I || momOf(o) === O)) continue;                  // 自己的小袋鼠會跟著讓開
         if (!(o.x > lo && o.x < hi)) continue;
+        if (gift && Math.abs(o.x - O.x) > S.POLITE) { passBy.push(o); continue; }
         if (o.job && o.job.name === 'yield' && o.job.mover === I) { if (!o.job.ready) blocked = true; continue; }   // 已經往後退一步讓路了
         blocked = true;
         if (o.job || o.mode !== 'awake' || o.isFollow) continue;
@@ -171,8 +176,8 @@
       this.gap = gap; this.t0 = now;
       const ig = new Set([I, O]);
       // 走到一半有別隻走進來擋路：停下、取消。游標不算擋路（不然滑鼠停在旁邊，互動一開始就被取消）
-      const chk = (who) => (nx, d) => !who.blocked(nx, d, new Set([I, O, ...(laneFor ? [laneFor] : [])]), null, { cursor: false });
-      this.mI = Math.abs(ix - I.x) > 3 ? I.mover(ix, { ignore: ig, tol: 1.5, check: chk(I), gait: (rem) => (S.CRAWL && rem < 64 * I.k ? 'walk' : 'hop') }) : null;
+      const chk = (who) => (nx, d) => !who.blocked(nx, d, new Set([I, O, ...(laneFor ? [laneFor] : []), ...passBy]), null, { cursor: false });
+      this.mI = Math.abs(ix - I.x) > 3 ? I.mover(ix, { ignore: ig, tol: 1.5, check: chk(I), lane: passBy.length ? passBy : null, gait: (rem) => (S.CRAWL && rem < 64 * I.k ? 'walk' : 'hop') }) : null;
       this.mO = Math.abs(ox - O.x) > 3 ? O.mover(ox, { ignore: ig, tol: 1.5, gait: 'hop', lane: laneFor ? [laneFor] : null, check: laneFor ? null : chk(O) }) : null;
       this.waitTurn = this.mO ? null : O.smoothTo(-side * 60, {}, 280);
       return true;
@@ -199,6 +204,7 @@
         if ((this.mI && this.mI.blocked) || (this.mO && this.mO.blocked)) { this.cancel(I, 'busy'); return; }
         if (a || b) return;
         O.depth = 0; O.zBoost = 0; O.place();
+        if (this.soc.gift) { I.depth = 0; I.zBoost = 0; I.place(); }          // 送禮物從別隻前面繞過來：到了回到地面線
         const side = O.x >= I.x ? 1 : -1;
         this.tI = I.smoothTo(side * SOC.TH0, {}, 300); this.tO = O.smoothTo(-side * SOC.TH0, {}, 300);
         this.phase = 'turn';
@@ -373,7 +379,7 @@
     const A = S.actors.get(p.a), B = S.actors.get(p.b), api = S.api;
     if (!A || !B || A === B || A.inPouch || B.inPouch) { api.socialAbort(p.pairId, p.a, 'user'); return null; }
     if (Math.abs(A.y - B.y) > 40) { api.socialAbort(p.pairId, p.a, 'user'); return null; }       // 不在同一地面
-    const soc = { pairId: p.pairId, a: p.a, b: p.b, type: S.str(p.type, 30), initiator: p.initiator === p.b ? p.b : p.a, anchor: p.anchor || null };
+    const soc = { pairId: p.pairId, a: p.a, b: p.b, type: S.str(p.type, 30), initiator: p.initiator === p.b ? p.b : p.a, anchor: p.anchor || null, gift: !!p.gift };
     const I = soc.initiator === p.a ? A : B, O = I === A ? B : A;
     if (S.reduceMotion) { api.socialDone(soc.pairId, true, soc.type); return null; }
     const d = new Duet(soc, I, O);

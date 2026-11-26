@@ -589,3 +589,24 @@ test('放下得比較快：喜歡的對象有了別的伴侶 → 1 小時後愛�
   w2.now.add(5 * P); w2.R.dailyDecay();
   assert.equal(r2.love, l0);
 });
+
+test('禮物：玫瑰愛情 +15、友情 +5；只是朋友的有機會擦出火花；點心友情 +10、愛情 +5；送給有別的伴侶的不加愛情', () => {
+  const w = world([(n) => mk(n, 'a', 'male'), (n) => mk(n, 'b', 'female'), (n) => mk(n, 'c', 'female'), (n) => mk(n, 'd', 'male')], { rv: 0.5 });
+  setLove(w, 'a', 'b', 30); setAff(w, 'a', 'b', 40); w.data.relations[pairKey('a', 'b')].love = 30;
+  w.R.onGift('a', 'b', 'rose');
+  assert.equal(w.R.relation('a', 'b').love, 45); assert.equal(w.R.relation('a', 'b').affinity, 45);
+  w.R.onGift('a', 'b', 'snack');
+  assert.equal(w.R.relation('a', 'b').love, 50); assert.equal(w.R.relation('a', 'b').affinity, 55);
+  // 只是朋友：25% 擦出火花
+  setLove(w, 'a', 'c', 0, false); w.setRandom(0.1);
+  w.R.onGift('a', 'c', 'rose');
+  assert.equal(w.R.relation('a', 'c').attracted, true); assert.equal(w.R.relation('a', 'c').love, 15);
+  // 送到滿 100 就成為一對
+  w.data.relations[pairKey('a', 'b')].love = 95;
+  const g = w.R.onGift('a', 'b', 'rose');
+  assert.ok(g.couple && g.events.some((e) => e.type === 'couple'));
+  // d 送玫瑰給已經和 a 在一起的 b：不加愛情
+  setLove(w, 'd', 'b', 40);
+  w.R.onGift('d', 'b', 'rose');
+  assert.equal(w.R.relation('d', 'b').love, 40);
+});

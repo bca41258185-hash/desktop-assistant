@@ -922,6 +922,26 @@
   }
 
   // ---- 底部 ------------------------------------------------------------------
+  // 道具欄（和「陪我玩」同一排）：玫瑰、點心；數字是剩幾個（會慢慢補）。給這一隻 → 牠拿去送給別隻
+  const GIFT_UI = [['rose', '🌹', '玫瑰', '送給喜歡的人'], ['snack', '🍪', '點心', '分給好朋友']];
+  function giftCount(k) {
+    const it = (S.items || {})[k]; if (!it) return 0;
+    if (it.next && Date.now() >= it.next) return Math.min(it.max, it.n + 1 + Math.floor((Date.now() - it.next) / (it.every || 1)));
+    return it.n;
+  }
+  function giftsHTML(target, tName) {
+    if (!target || isJoey(target) || workers().length < 2) return '';
+    return `<span class="gift-sep" aria-hidden="true"></span>` + GIFT_UI.map(([k, icon, name, what]) => {
+      const n = giftCount(k);
+      return `<button type="button" class="play gift" data-act="gift" data-i="${k}" data-fk="gift:${k}"${n ? '' : ' disabled'} aria-label="給${esc(tName)}${name}，讓牠${what}（剩 ${n} 個）" title="${name}：讓${esc(tName)}${what}（剩 ${n} 個${n ? '' : '，等一下會補'}）"><span aria-hidden="true">${icon}</span><span class="gift-n" aria-hidden="true">${n}</span></button>`;
+    }).join('');
+  }
+  async function giveGift(item) {
+    const q = qById(ui.sel) && !isJoey(qById(ui.sel)) ? qById(ui.sel) : workers()[0];
+    if (!q) return;
+    const r = await api.giveGift({ qid: q.id, item }).catch(() => ({ ok: false }));
+    showToast(r && r.ok ? `${q.name}拿著${r.item}去找${r.to}了` : (r && r.message) || '沒有送出去');
+  }
   function renderFooter() {
     const q = qById(ui.sel);
     const line = $('ownerLine');
@@ -941,7 +961,7 @@
     const tName = target ? target.name : '庫卡';
     $('playRow').hidden = !!ui.globalOpen || !!ui.adding || !target;
     $('playRow').innerHTML = `<span class="play-l">陪<b>${esc(tName)}</b>玩</span>${PLAYS.map((p) =>
-      `<button type="button" class="play" data-act="play" data-a="${p.id}" data-fk="play:${p.id}" aria-label="叫${esc(tName)}${p.name === '吃葉子' ? '吃葉子' : '打' + p.name}" title="${p.name}"><span aria-hidden="true">${p.icon}</span></button>`).join('')}`;
+      `<button type="button" class="play" data-act="play" data-a="${p.id}" data-fk="play:${p.id}" aria-label="叫${esc(tName)}${p.name === '吃葉子' ? '吃葉子' : '打' + p.name}" title="${p.name}"><span aria-hidden="true">${p.icon}</span></button>`).join('')}${giftsHTML(target, tName)}`;
     const hasStocks = !ui.adding && !ui.globalOpen && itemsOf('stock', ui.sel).length > 0 && !(q && isJoey(q));
     $('disclaimer').hidden = !hasStocks;
     $('footer').hidden = !!ui.globalOpen || !!ui.adding;
@@ -1196,6 +1216,7 @@
       case 'gearCancel': ui.gearMode = null; render(); break;
       case 'infoToggle': ui.infoOpen = !ui.infoOpen; render(); break;
       case 'pcMore': ui.pcMore = !ui.pcMore; render(); break;
+      case 'gift': giveGift(b.dataset.i); break;
       case 'pcOpen': (ui.pcOpen || (ui.pcOpen = new Set())).add(b.dataset.pc); render(); break;
       case 'pcClose': if (ui.pcOpen) ui.pcOpen.delete(b.dataset.pc); ui.replying = null; render(); break;
       case 'pcReply': ui.replying = b.dataset.pc; ui.pcDraft = ''; render(); { const t = $('pcText'); if (t) t.focus(); } break;

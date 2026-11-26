@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('api', {
   deleteQuokka: call('quokka:delete'),
   readPostcard: call('postcard:read'),
   replyPostcard: call('postcard:reply'),
+  giveGift: call('gift:give'),
   deleteWarning: call('quokka:delete-warning'),
   stockReport: (p) => ipcRenderer.invoke('stock:report', p),
   play: call('quokka:play'),

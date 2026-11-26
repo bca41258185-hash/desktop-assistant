@@ -573,6 +573,29 @@
       }
       return events;
     }
+    // 使用者給的禮物送到了（a 送 b）：
+    //   玫瑰：友情 +5；還沒決定有沒有感覺的 → 決定（機會比平常大）；只是朋友的 → 25% 擦出火花；有感覺、對方沒有別的伴侶 → 愛情 +15
+    //   點心：友情 +10；有感覺、對方沒有別的伴侶 → 愛情 +5
+    //   不受每半小時上限限制；之後照常檢查好朋友、成為一對
+    function onGift(aId, bId, item) {
+      const a = byId(aId), b = byId(bId), events = [];
+      if (!a || !b || aId === bId) return { events };
+      const r = rel(aId, bId), wasFriend = r.friend;
+      const free = !takenBy(aId, bId) && !takenBy(bId, aId);
+      if (item === 'rose') {
+        r.affinity = Math.min(C.affinityMax, r.affinity + 5);
+        if (r.attracted == null) { attraction(a, b, r); if (r.attracted === false && !isKin(aId, bId) && random() < .25) r.attracted = true; }
+        else if (r.attracted === false && !isKin(aId, bId) && isMature(a) && isMature(b) && random() < .25) r.attracted = true;
+        if (r.attracted && free) r.love = Math.min(C.affinityMax, (r.love || 0) + 15);
+      } else {
+        r.affinity = Math.min(C.affinityMax, r.affinity + 10);
+        if (r.attracted && free) r.love = Math.min(C.affinityMax, (r.love || 0) + 5);
+      }
+      refreshFriend(r, a, b);
+      if (r.friend && !wasFriend) events.push({ type: 'friend', a: aId, b: bId });
+      if (!r.couple && canPair(a, b).ok) { r.couple = true; r.since = nowISO(); events.push({ type: 'couple', a: aId, b: bId }); }
+      return { events, affinity: r.affinity, love: r.love || 0, attracted: !!r.attracted, couple: r.couple };
+    }
     function deleteWarning(qid) { const q = byId(qid); return q && q.pregnancy ? 'pregnant' : null; }
     function onDelete(qid) {
       const q = byId(qid), events = [];
@@ -632,7 +655,7 @@
 
     return {
       onTogether, onInterrupted, onPass, dailyDecay, canPair, tickClock, ageMonths, onDelete, deleteWarning,
-      canRegenerate, onRegenerate, onReturn, refreshAges, isKin, partnerOf, crushOf, flirtOf, isCouple, isFriend, guardianOf, canOwnTasks,
+      canRegenerate, onRegenerate, onReturn, onGift, refreshAges, isKin, partnerOf, crushOf, flirtOf, isCouple, isFriend, guardianOf, canOwnTasks,
       tempName, resolveNameClash, relation: (a, b) => rel(a, b, false), pairKey, constants: C
     };
   }

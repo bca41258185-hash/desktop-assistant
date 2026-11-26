@@ -287,6 +287,15 @@
     }
 
     // 庫卡被刪除：先中止牠的互動（好感度不動，關係由 romance.onDelete 移除）
+    // 使用者給的禮物（玫瑰、點心）：a 拿去送 b。兩隻都要閒著、在同一個地面（距離不限）
+    function gift(aId, bId, type) {
+      const a = byId(aId), b = byId(bId);
+      if (!a || !b || aId === bId) return { ok: false, reason: 'missing' };
+      if (!available(a) || !available(b)) return { ok: false, reason: 'busy' };
+      const pa = posOf(aId), pb = posOf(bId);
+      if (pa && pb && (displayId(pa.display) !== displayId(pb.display) || Math.abs(pa.y - pb.y) > C.groundDiff)) return { ok: false, reason: 'far' };
+      return { ok: true, job: start(a, b, type, { gift: true }) };
+    }
     function removeQuokka(qid) {
       const pairId = busy.get(qid);
       if (!pairId) return null;
@@ -309,7 +318,7 @@
     }
 
     return {
-      tick, done, abort, onLayer, removeQuokka, passBy,
+      tick, done, abort, onLayer, removeQuokka, passBy, gift,
       isBusy: (qid) => busy.has(qid),
       pairOf: (qid) => (busy.has(qid) ? { ...active.get(busy.get(qid)) } : null),
       activePairs: () => Array.from(active.values()).map((j) => ({ ...j })),

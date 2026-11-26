@@ -13,6 +13,7 @@
       tasks: [], reminders: [], stocks: [], folders: [],
       relations: {},                       // 'q1|q2' → { affinity, couple, since }（第 16 節）
       postcards: [],                       // 放生後寄回來的明信片（lib/postcard.js）
+      items: null,                         // 道具欄：{ rose: {n, at}, snack: {n, at} }（lib/app-v2.js 的 ITEMS；null＝全滿）
       settings: { stockStepPct: 1, reminderVoice: false, awayMinutes: 5, walk: 'home', romance: true, babies: true, panelOwner: 'all',
         saver: false }                     // 省電：打開（或用電池）時動畫每秒 30 格；預設 60 格（規格 12 效能）
     };

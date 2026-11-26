@@ -103,7 +103,7 @@ function start() {
     isBlocked: () => sleeping || !stageVisible,      // 睡著（離開超過 20 分鐘、鎖定）或藏起來時不排
     isAway: () => away && !sleeping,                 // 剛離開（前 20 分鐘）：互動加倍
     onStart: (job) => toStage('social:start', job),
-    onAbort: (job) => toStage('social:abort', { pairId: job.pairId, by: job.by, reason: job.reason })
+    onAbort: (job) => { toStage('social:abort', { pairId: job.pairId, by: job.by, reason: job.reason }); refundGift(job); }
   });
   let socialTimer = null;
   function scheduleSocial(ms) { clearTimeout(socialTimer); socialTimer = setTimeout(() => { let next = 240000; try { next = social.tick() || next; } catch (e) { console.error('社交排程失敗:', e.message); } changed(); scheduleSocial(next); }, ms); }
@@ -134,7 +134,7 @@ function start() {
     const t = Date.now(), dt = away || !stageVisible ? 0 : Math.min(t - lastTick, 120000);
     lastTick = t;
     // 保險：互動超過 2 分鐘還沒回報（舞台出錯或重新載入），主行程自己收掉，不讓兩隻永遠卡在「忙碌」
-    try { for (const j of social.activePairs()) if (t - j.startedAt > 120000) { social.abort(j.pairId, null, 'timeout'); toStage('social:abort', { pairId: j.pairId, reason: 'timeout' }); } } catch (e) {}
+    try { for (const j of social.activePairs()) if (t - j.startedAt > 120000) { refundGift(social.abort(j.pairId, null, 'timeout')); toStage('social:abort', { pairId: j.pairId, reason: 'timeout' }); } } catch (e) {}
     // 沒有懷孕、育兒、成長中的庫卡時，每 10 分鐘更新一次年齡就夠了
     const active = data.quokkas.some((q) => q.pregnancy || q.joey || q.growth || (q.stage && q.stage !== 'adult'));
     if (!active && (idleTicks = (idleTicks + 1) % 20) !== 0) return;
@@ -171,7 +171,7 @@ function start() {
   const quotes = {};                 // symbol → 最新報價
   function snapshot() {
     return { quokkas: data.quokkas, tasks: data.tasks, reminders: data.reminders, stocks: data.stocks, folders: data.folders,
-      relations: data.relations, postcards: (data.postcards || []).filter((c) => c.sent).slice(-20), crushes: Object.fromEntries(data.quokkas.map((q) => [q.id, crushId(q.id)])), flirts: Object.fromEntries(data.quokkas.map((q) => [q.id, flirtId(q.id)])), settings: data.settings, quotes, ringing: data.reminders.filter((r) => r.ringing).map((r) => r.id),
+      relations: data.relations, items: itemsView(), postcards: (data.postcards || []).filter((c) => c.sent).slice(-20), crushes: Object.fromEntries(data.quokkas.map((q) => [q.id, crushId(q.id)])), flirts: Object.fromEntries(data.quokkas.map((q) => [q.id, flirtId(q.id)])), settings: data.settings, quotes, ringing: data.reminders.filter((r) => r.ringing).map((r) => r.id),
       folderChanges: folderWatch.recentAll() };
   }
   function changed({ quokkas = false } = {}) {
@@ -741,8 +741,67 @@ function start() {
     if (affTimer) return;
     affTimer = setTimeout(() => { affTimer = null; store.save(); posSaver.markSaved(); }, 10000);
   }
-  ipcMain.on('social:done', (e, { pairId, ok, type } = {}) => { try { const r = social.done(pairId, { ok: !!ok, type }); saveAffinitySoon(); onRomanceEvents(r && r.events); syncCrush(); } catch (err) {} });
-  ipcMain.on('social:abort', (e, { pairId, by, reason } = {}) => { try { social.abort(pairId, by, reason); } catch (err) {} });
+  ipcMain.on('social:done', (e, { pairId, ok, type } = {}) => { try {
+    // 互動完成的戀愛事件（變成好朋友、成為一對、懷孕）在 r.result.events（原本讀錯成 r.events，通知一直沒出來）
+    const r = social.done(pairId, { ok: !!ok, type }); saveAffinitySoon(); onRomanceEvents(r && r.result && r.result.events);
+    // 禮物送到了：玫瑰、點心的效果（romance.onGift）
+    if (r && r.ok && r.gift && GIFTS[r.type]) { const g = romance.onGift(r.a, r.b, r.type); onRomanceEvents(g.events); changed(); }
+    syncCrush();
+  } catch (err) {} });
+  // ---- 道具欄：玫瑰（最多 3，每 30 分鐘 +1）、點心（最多 5，每 10 分鐘 +1）。給某一隻 → 牠拿去送給別隻 ----
+  const GIFTS = { rose: { name: '玫瑰', icon: '🌹', max: 3, every: 30 * 60000 }, snack: { name: '點心', icon: '🍪', max: 5, every: 10 * 60000 } };
+  function items() {
+    const now = Date.now();
+    if (!data.items || typeof data.items !== 'object') data.items = {};
+    for (const [k, g] of Object.entries(GIFTS)) {
+      const it = data.items[k] && Number.isFinite(data.items[k].n) ? data.items[k] : (data.items[k] = { n: g.max, at: now });
+      if (it.n >= g.max) { it.at = now; continue; }
+      const add = Math.floor((now - (it.at || now)) / g.every);
+      if (add > 0) { it.n = Math.min(g.max, it.n + add); it.at = it.n >= g.max ? now : (it.at || now) + add * g.every; }
+    }
+    return data.items;
+  }
+  const itemsView = () => { const it = items(); return Object.fromEntries(Object.entries(GIFTS).map(([k, g]) => [k, { n: it[k].n, max: g.max, every: g.every, next: it[k].n >= g.max ? null : it[k].at + g.every }])); };
+  // 送給誰：玫瑰＝伴侶 → 曖昧 → 喜歡的（對方沒有別的伴侶）→ 最熟的；點心＝最熟的 → 伴侶、喜歡的
+  function giftTarget(qid, item) {
+    const ok = (id) => { const q = id && qById(id); return q && id !== qid && romance.canOwnTasks(q) ? id : null; };
+    const rels = Object.entries(data.relations).map(([k, r]) => { const [a, b] = k.split('|'); return a === qid || b === qid ? { other: a === qid ? b : a, ...r } : null; }).filter((r) => r && ok(r.other));
+    const best = rels.slice().sort((x, y) => (y.affinity || 0) - (x.affinity || 0))[0];
+    const taken = (id) => { const p = romance.partnerOf(id); return p && p !== qid; };
+    if (item === 'rose') {
+      const lover = ok(romance.partnerOf(qid)) || ok(romance.flirtOf(qid)) || (ok(romance.crushOf(qid)) && !taken(romance.crushOf(qid)) ? romance.crushOf(qid) : null);
+      if (lover) return lover;
+      const single = rels.filter((r) => !taken(r.other)).sort((x, y) => (y.love || 0) - (x.love || 0) || (y.affinity || 0) - (x.affinity || 0))[0];
+      return single ? single.other : (data.quokkas.find((q) => ok(q.id) && !taken(q.id)) || {}).id || null;
+    }
+    return (best && best.other) || ok(romance.partnerOf(qid)) || ok(romance.crushOf(qid)) || (data.quokkas.find((q) => ok(q.id)) || {}).id || null;
+  }
+  const lastGiftTo = {};                                      // 每隻 10 分鐘內只收一份禮物
+  function giveGift(qid, item) {
+    const g = GIFTS[item], q = qById(qid);
+    if (!g || !q) return { ok: false, message: '找不到這個道具' };
+    if (!romance.canOwnTasks(q)) return { ok: false, message: '小袋鼠還太小，不能幫忙送禮物' };
+    const it = items()[item];
+    if (it.n <= 0) return { ok: false, message: `${g.name}用完了，等一下會補` };
+    const to = giftTarget(qid, item);
+    if (!to) return { ok: false, message: `${q.name}還沒有可以送的對象` };
+    if (lastGiftTo[to] && Date.now() - lastGiftTo[to] < 10 * 60000) return { ok: false, message: `${qById(to).name}剛收過禮物，等一下再送吧` };
+    const r = social.gift(qid, to, item);
+    if (!r.ok) return { ok: false, message: r.reason === 'busy' ? `${q.name}或${qById(to).name}正在忙，等一下再試` : `${qById(to).name}離得太遠了` };
+    it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now();
+    lastGiftTo[to] = Date.now();
+    changed();
+    return { ok: true, to: qById(to).name, item: g.name };
+  }
+  ipcMain.handle('gift:give', (e, { qid, item } = {}) => giveGift(qid, item));
+  // 送禮物的途中被打斷（拖曳、響鈴、太久）：道具退回去
+  function refundGift(j) {
+    if (!j || !j.gift || !GIFTS[j.type]) return;
+    const it = items()[j.type]; it.n = Math.min(GIFTS[j.type].max, it.n + 1); delete lastGiftTo[j.b]; changed();
+  }
+  ipcMain.on('social:abort', (e, { pairId, by, reason } = {}) => { try {
+    refundGift(social.abort(pairId, by, reason));
+  } catch (err) {} });
   ipcMain.on('q:pass', (e, { a, b } = {}) => { if (qById(a) && qById(b)) { try { social.passBy(a, b); saveAffinitySoon(); syncCrush(); } catch (err) {} } });
   ipcMain.on('q:dblclick', (e, { qid } = {}) => showPanel(qById(qid) ? qid : null));
   ipcMain.on('q:context', (e, { qid } = {}) => {
@@ -760,6 +819,7 @@ function start() {
       { label: '今天股市怎麼了？', click: () => tellMarket(qid).catch(() => {}) },
       { label: '陪我玩', submenu: [play('badminton', '羽球'), play('volleyball', '排球'), play('basketball', '籃球'), play('eat', '吃葉子'), play('hop', '跳一跳'), play('nap', '打盹')] },
       { label: '打開面板', click: () => showPanel(qid) },
+      { label: '送禮物', enabled: romance.canOwnTasks(q), submenu: Object.entries(GIFTS).map(([k, g]) => ({ label: `${g.icon} ${g.name}（剩 ${items()[k].n}）`, enabled: items()[k].n > 0, click: () => { const r = giveGift(qid, k); event(qid, 'note', { text: r.ok ? `我把${g.name}送給${r.to}！` : r.message }); } })) },
       { type: 'separator' },
       { label: `放生${q.name}…`, enabled: romance.canOwnTasks(q) ? data.quokkas.filter((x) => romance.canOwnTasks(x)).length > 1 : true, click: () => confirmRelease(qid) },
       // 有提醒在響時不能藏；選單打開後才開始響的，點下去時再檢查一次

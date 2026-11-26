@@ -76,7 +76,7 @@
       if (o.off) o.off = [-o.off[0], o.off[1]];
       if (o.at) o.at = [160 - o.at[0], o.at[1]];
       if (o.t === 'racket') o.ang = -(o.ang || 0);
-      else if (o.t === 'leaf' || o.t === 'shuttle' || (o.t === 'fx' && o.kind === 'speed')) o.rot = 180 - (o.rot || 0);
+      else if (o.t === 'leaf' || o.t === 'rose' || o.t === 'shuttle' || (o.t === 'fx' && o.kind === 'speed')) o.rot = 180 - (o.rot || 0);
       else if (o.rot != null) o.rot = -o.rot;
       return o;
     });
@@ -149,7 +149,7 @@
   let worldDefs = '';
   function tpl(kind) {
     if (tplCache[kind]) return tplCache[kind];
-    const isFx = !['shuttle', 'vball', 'bball', 'hoop', 'leaf'].includes(kind);
+    const isFx = !['shuttle', 'vball', 'bball', 'hoop', 'leaf', 'rose', 'snack'].includes(kind);
     const prop = isFx ? { t: 'fx', kind, at: [0, 0] } : { t: kind, at: [0, 0] };
     ART.configure(null);
     const base = POSE.render(0, 'W', { raw: true }), withP = POSE.render(0, 'W', { raw: true, props: [prop] });
@@ -358,6 +358,44 @@
         if (s > .02) a.pose.props = [{ t: 'leaf', hand: 'both', off: [6, -5], rot: leafR(t), s }];
         return { a, b: B(t), near: 'a', world: [...floatUp('sparkle', t, .6, F.ha.f * .5, F.ha.h + 10, .7, .9, 16),
           ...floatUp('heart', t, 5.2 + d, ctx.d - mb.f + 6, mb.h + 44, .8, 1.4, 24), ...floatUp('note', t, 3.7 + d, ctx.d - mb.f + 16, mb.h + 34, .8, 1.3, 20)] };
+      });
+    }
+  };
+
+  // ---- 使用者給的禮物（面板道具欄、右鍵「送禮物」）----------------------------------------------
+  // 點心：和分享葉子一樣（遞過去 → b 咬一口、嚼 → a 自己也吃），道具換成餅乾
+  TYPES.snack = {
+    gap: TYPES.leaf.gap,
+    build(ctx) {
+      const run = TYPES.leaf.build(ctx);
+      return { dur: run.dur, at: (t) => {
+        const f = run.at(t);
+        if (f && f.a && f.a.pose && f.a.pose.props) f.a.pose.props = f.a.pose.props.map((p) => (p.t === 'leaf' ? { t: 'snack', hand: 'both', off: [4, -4], rot: 0, s: Math.min(1.3, p.s * .8) } : p));
+        return f;
+      } };
+    }
+  };
+  // 玫瑰：a 拿出玫瑰、害羞地遞過去 → b 睜大眼、臉紅 → b 接過來抱在胸前、冒愛心 → a 不好意思地笑
+  TYPES.rose = {
+    gap: TYPES.leaf.gap,
+    build(ctx) {
+      const F = leafFit(ctx), pa = ctx.a.per, d = ctx.b.per.delay;
+      const hold = (yy, z) => ({ L: { hand: [-5, yy, z] }, R: { hand: [5, yy + 2, z - 2] } });
+      const T = 3.0 + d;                                          // 交到 b 手上的時間
+      const A = track(introHop(pa, [K(0, TH0), K(.6, 40, { head: { pitch: 12, yaw: -10 }, arms: hold(124, 30), eyes: 'happy', blush: 1.2 }),
+        K(1.1, 62, { arms: hold(108, 34), eyes: 'happy', mouth: 'smile', blush: 1.4 }), K(1.8, 68, { ...F.A.pose, eyes: 'happy', mouth: 'smile', blush: 1.6, head: { roll: -6 } }),
+        K(T - .1, 68, { ...F.A.pose, eyes: 'happy', mouth: 'smile', blush: 1.6, head: { roll: 5 } }), K(T + .5, 62, { eyes: 'happy', mouth: 'smile', blush: 1.6, head: { pitch: 10, roll: 6 } }),
+        K(T + 2.2, 58, { eyes: 'happy', mouth: 'smile', blush: 1.5, head: { pitch: 6 } }), K(T + 3.4, TH0, { eyes: 'happy', mouth: 'smile', blush: 1.2 })]));
+      const hug = (roll) => ({ eyes: 'happy', mouth: 'smile', blush: 1.7, head: { roll }, arms: { L: { hand: [-10, 112, 30] }, R: { hand: [10, 112, 30] } } });
+      const B = track([K(0, TH0), K(1.5 + d, 62, { eyes: 'wide', head: { pitch: -4 } }), K(2.1 + d, 68, { eyes: 'wide', mouth: 'o', blush: 1.6, lean: 4 }),
+        K(T - .2, 68, { eyes: 'wide', mouth: 'o', blush: 1.7, lean: 6, arms: { L: { hand: [-6, 104, 40] }, R: { hand: [6, 104, 40] } } }),
+        K(T + .4, 64, hug(-6)), K(T + 1.2, 60, hug(8)), K(T + 2.0, 60, { ...hug(-4), y: ctx.b.per.lively ? -8 : 0 }), K(T + 2.8, 60, hug(4)), K(T + 3.4, TH0, hug(0))]);
+      return finish(ctx, T + 3.4, (t) => {
+        const a = A(t), b = B(t);
+        if (t > .5 && t < T) a.pose.props = [{ t: 'rose', hand: 'both', off: [4, -4], rot: 178, s: Math.min(1.45, (t - .5) * 6) }];
+        else if (t >= T) b.pose.props = [{ t: 'rose', hand: 'both', off: [0, -6], rot: 60, s: 1.35 }];   // 抱在胸前，花朝上
+        return { a, b, near: t < T ? 'a' : 'b', world: [...floatUp('sparkle', t, .6, F.ha.f * .5, F.ha.h + 10, .7, .9, 16),
+          ...floatUp('heart', t, T + .2, ctx.d * .65, F.ha.h + 50, 1, 1.6, 30), ...floatUp('heart', t, T + .9, ctx.d * .5, F.ha.h + 40, .8, 1.4, 26), ...floatUp('heart', t, T + 1.5, ctx.d * .2, F.ha.h + 46, .7, 1.4, 24)] };
       });
     }
   };

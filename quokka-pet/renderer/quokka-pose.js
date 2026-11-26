@@ -23,7 +23,7 @@
 //   footShift   [dz, up, toe] 後腳掌相對身體的位移（步態用，站姿腳掌才有效）：dz 往前（口鼻方向）、up 抬高、toe 腳尖下垂量。
 //               慢走時後腳離地往前擺、著地後留在原地讓身體先走，靠這個才不會滑步
 //   accessory   飾品：'straw' 或 {type,color} 或陣列；省略＝用目前套用的個體特徵（traits.accessory，舊資料＝頭帶）；'none'＝不戴
-//   props       [{t:'racket', hand:'R', ang, len}, {t:'shuttle'|'vball'|'bball'|'leaf', at:[X,Y], rot, s}, {t:'hoop', at, s, flip}, {t:'fx', kind, at, rot, s}]
+//   props       [{t:'racket', hand:'R', ang, len}, {t:'shuttle'|'vball'|'bball'|'leaf'|'rose'|'snack', at:[X,Y], rot, s}, {t:'hoop', at, s, flip}, {t:'fx', kind, at, rot, s}]
 //               道具可加 hand:'L'|'R'|'both'（黏在手上）、off:[dx,dy]、behind:true（畫在身體後面）、
 //               layer:'back'|'between'|'front'（between＝遠側手之後、近側手之前；hand:'both' 的球預設就是 between）
 //               拿在手上的球拍會畫在那隻手的下面（手掌握在握把上）
@@ -269,6 +269,27 @@
       <ellipse cx="-3" cy="0" rx="17" ry="4.6" fill="none" stroke="url(#rm${id})" stroke-width="3"/>
       </g>
       <path d="M-18 -2.2 Q-10 -5 0 -4.9" fill="none" stroke="#ffd9bd" stroke-width="1" stroke-linecap="round" opacity=".8" filter="url(#lb${id})"/></g>`;
+  // 禮物（使用者給的道具）：玫瑰＝原點在握著的花莖，花朵往 −x 方向；點心＝圓餅乾（巧克力豆），原點在中心
+  //   畫風同葉子：漸層、柔邊、模糊的亮面與陰影
+  const rose = (id, x, y, rot = 0, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
+      <defs><radialGradient id="rp${id}" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#f06a7e"/><stop offset=".55" stop-color="#d33449"/><stop offset="1" stop-color="#8f1d2c"/></radialGradient></defs>
+      <path d="M2 .5 C-8 0 -18 -1 -26 -2" fill="none" stroke="#4a3a2e" stroke-width="2" opacity=".16" stroke-linecap="round" filter="url(#lb${id})"/>
+      <path d="M2 0 C-8 -.4 -18 -1.2 -26 -2.4" fill="none" stroke="#4f7a3a" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M-11 -1 C-13 -7 -8 -10 -4 -9 C-5 -6 -7 -3 -11 -1 Z" fill="#6fa04e" stroke="#44663a" stroke-width=".6" stroke-opacity=".6" filter="url(#lz${id})"/>
+      <path d="M-24 -2 l -3 -3 M-23 -1.4 l -2 3.4" stroke="#4f7a3a" stroke-width="1.4" stroke-linecap="round"/>
+      <g transform="translate(-33 -3)">
+        <ellipse cx=".6" cy="1.4" rx="9" ry="8" fill="#4a3a2e" opacity=".18" filter="url(#lb${id})"/>
+        <path d="M0 -8 C6 -9 10 -3 8 2 C6 7 -2 9 -6 6 C-10 3 -9 -5 -4 -7 Z" fill="url(#rp${id})" filter="url(#lz${id})"/>
+        <path d="M-3 -3 C0 -6 5 -4 4 0 C3 3 -1 3 -2 1 C-3 -1 -1 -2 0 -1" fill="none" stroke="#7d1726" stroke-width="1.1" stroke-linecap="round" opacity=".75"/>
+        <path d="M-6 3 C-3 6 3 6 6 2" fill="none" stroke="#a5233a" stroke-width="1" stroke-linecap="round" opacity=".6"/>
+        <ellipse cx="-2" cy="-4" rx="3" ry="1.6" fill="#ffd0d8" opacity=".55" filter="url(#lb${id})"/>
+      </g></g>`;
+  const snack = (id, x, y, rot = 0, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
+      <defs><radialGradient id="ck${id}" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#f3d19a"/><stop offset=".6" stop-color="#d9a45e"/><stop offset="1" stop-color="#a9743c"/></radialGradient></defs>
+      <ellipse cx=".8" cy="1.6" rx="10" ry="9" fill="#4a3a2e" opacity=".18" filter="url(#lb${id})"/>
+      <circle cx="0" cy="0" r="9.5" fill="url(#ck${id})" stroke="#8a5a2c" stroke-width=".8" stroke-opacity=".5" filter="url(#lz${id})"/>
+      ${[[-4, -3, 1.6], [3, -4, 1.4], [4, 2.5, 1.7], [-2, 4, 1.3], [0, -.5, 1.2]].map(([cx, cy, r]) => `<ellipse cx="${cx}" cy="${cy}" rx="${r}" ry="${(r * .85).toFixed(2)}" fill="#5a3522"/>`).join('')}
+      <ellipse cx="-3" cy="-5" rx="4" ry="1.8" fill="#fff3d6" opacity=".45" filter="url(#lb${id})"/></g>`;
   // 葉子：短尾矮袋鼠在羅特尼斯島最偏好的食物 Guichenotia ledifolia（錦葵科）
   // 特徵：葉片細長（約 1.5–6 cm × 2–5 mm）、邊緣反捲、兩面密生白色星狀毛 → 銀灰綠；花為下垂的粉紫色鐘形小花（7–11 月）
   // 畫法：一小段枝條，上面幾片細長銀灰葉（淺色中線表現反捲的邊），枝頭一朵下垂小花
@@ -565,6 +586,8 @@
       else if (p.t === 'vball') svg = vball(id, x, y, p.rot, p.s);
       else if (p.t === 'bball') svg = bball(id, x, y, p.rot, p.s);
       else if (p.t === 'leaf') svg = p.kind === 'big' ? bigLeaf(id, x, y, p.rot, p.s) : leaf(id, x, y, p.rot, p.s);
+      else if (p.t === 'rose') svg = rose(id, x, y, p.rot, p.s);
+      else if (p.t === 'snack') svg = snack(id, x, y, p.rot, p.s);
       else if (p.t === 'hoop') svg = hoop(id, x, y, p.s, !!p.flip);
       else if (p.t === 'fx') svg = fx(id, p.kind, x, y, p.rot, p.s);
       if (svg && p.o != null && p.o < 1) svg = `<g opacity="${Math.max(0, p.o).toFixed(2)}">${svg}</g>`;     // 道具淡出（收起來的最後一下）
