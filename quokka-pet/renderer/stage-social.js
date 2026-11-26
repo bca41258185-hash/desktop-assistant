@@ -142,7 +142,8 @@
         const x0 = Math.min(res.pos.a.x, res.pos.b.x) - 230, x1 = Math.max(res.pos.a.x, res.pos.b.x) + 230, y0 = Math.max(0, I.y - 440), y1 = I.y + 24;
         const st = this.el.style;
         st.left = x0 + 'px'; st.top = y0 + 'px'; st.width = (x1 - x0) + 'px'; st.height = (y1 - y0) + 'px'; st.zIndex = Math.round(Math.max(I.y, O.y)) + 1;
-        this.el.innerHTML = `<svg viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${res.svg}</svg>`;
+        const html = `<svg viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${S.slim(res.svg)}</svg>`;
+        if (html !== this.lastHtml) { this.lastHtml = html; this.el.innerHTML = html; }
         this.pos = res.pos;
         S.prof('duet.dom', performance.now() - c1);
         for (const [key, a] of [['a', I], ['b', O]]) {

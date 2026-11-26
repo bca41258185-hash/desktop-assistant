@@ -169,6 +169,28 @@
   // 順序：影子 → 場景後層 → 遠的 back → 近的 back → 遠的 body → 近的 body → 遠的 front → 近的 front → 場景前層
   // （尾巴、後側的手都在 back，所以不會橫切對方的肚子；伸向對方的手在 front，會蓋在對方身上）
   function real(ctx, key, c) { return (key === 'a' ? ctx.side < 0 : ctx.side > 0) ? mirrorPose(c) : c; }
+  // 分開的版本（舞台每格只改位移、圖形有變才重建時用）：每隻回傳外層 transform、位移（dx、dy）與各層內容；
+  // 疊放順序和 compose() 一樣。compose() 的輸出＝把這些照順序接起來
+  function composeParts(ctx, fr, opts = {}) {
+    const gy = opts.ground != null ? opts.ground : 0, parts = {}, pos = {};
+    for (const key of ['a', 'b']) {
+      const o = ctx[key], c = real(ctx, key, fr[key]);
+      const x = o.x0 + ctx.side * (fr[key].dx || 0);
+      const pose = { ...c.pose, split: true };
+      if (o.hs !== 1 && pose.headScale == null) pose.headScale = o.hs;
+      ART.configure(o.tr);
+      const r = POSE.render(c.th, (opts.id || 'D') + key + (o.uid || ''), pose);
+      ART.configure(null);
+      const L = r.layers, deco = o.deco ? o.deco(c.th, { ...pose, split: undefined }) : '';
+      parts[key] = { T: `translate(${f1(x)} ${f1(gy + (o.oy || 0))}) scale(${o.k.toFixed(4)}) translate(-80 -183)`, band: (o.tr && o.tr.band) || '#e5533d', dx: L.dx || 0, dy: L.dy || 0,
+        defs: L.defs, shadow: L.shadow, back: L.back, backAbs: L.backAbs, body: L.body, bodyAbs: deco, front: L.front, frontAbs: L.frontAbs };
+      pos[key] = { x, th: c.th, hands: r.hands };
+    }
+    const near = fr.near === 'a' ? 'a' : 'b', far = near === 'a' ? 'b' : 'a', ox = ctx.a.x0, wk = ctx.kk, world = fr.world || [];
+    return { parts, near, far, pos, world: world.length > 0,
+      wBack: world.filter((w) => w.back).map((w) => worldItem(w, ox, gy, wk, ctx.side)).join(''),
+      wFront: world.filter((w) => !w.back).map((w) => worldItem(w, ox, gy, wk, ctx.side)).join('') };
+  }
   function compose(ctx, fr, opts = {}) {
     const gy = opts.ground != null ? opts.ground : 0, out = {}, pos = {};
     for (const key of ['a', 'b']) {
@@ -923,7 +945,7 @@
     }
   };
 
-  const api = { TYPES, flight, watch, context, compose, real, mirrorPose, persona, pt, noseOf, handsOf, crownOf, mouthOf, yFor, K, track, pw, bump, floatUp, finish, styled, polite, tpl, worldItem, TH0, HOP, FOOT, NOSE, BELLY, worldDefs: () => { tpl('heart'); return worldDefs; } };
+  const api = { TYPES, flight, watch, context, compose, composeParts, real, mirrorPose, persona, pt, noseOf, handsOf, crownOf, mouthOf, yFor, K, track, pw, bump, floatUp, finish, styled, polite, tpl, worldItem, TH0, HOP, FOOT, NOSE, BELLY, worldDefs: () => { tpl('heart'); return worldDefs; } };
   if (!isNode) window.QuokkaSocial = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

@@ -21,25 +21,47 @@
   S.MAX_MOVING = 3;                                   // 同時最多 3 隻在動（只限 L4–L7）
   S.REPORT_GAP = 1200;                                // 報告佇列每則間隔
   S.QUEUE_MAX = 5;
-  // ---- 幀率：預設每秒 60 格；只有主行程送 stage:perf {fps:30}（使用者手動開省電）才用 30 格。不自動降幀率 ----------
+  // ---- 幀率：預設每秒 60 格 ----------------------------------------------------------------------------
+  //   主行程送 stage:perf {fps:30}（使用電池或使用者開省電）→ 固定 30 格；送 {fps:60} → 回到 60 格並恢復自動保險。
+  //   自動保險（只在目標 60 格時）：連續 2 秒平均每格超過目標時間 1.5 倍（真的跟不上）才降到 30；
+  //   在 30 格時每格的工作量穩定低於 60 格預算的 45% 連續 5 秒以上才升回 60；
+  //   升回去 20 秒內又降下來，下一次要穩定的時間加倍（最多 60 秒），不會來回抖。
   //   S.fps        目前的幀率（60 或 30）
   //   S.frameGap   共用迴圈兩格之間至少隔多少毫秒（比一格的時間少一點容差，60 格時每次 rAF 都跑）
   //   S.LIVE_MS    即時繪製（live SVG）的間隔，跟著幀率走
   //   S.qMul       快取畫格（走路、跳、撿球）每段的格數倍率：60 格時用兩倍的格數（動作更細），位移照樣以時間計算
   // 所有位移、步態相位、球的物理都以「經過的時間」計算，所以改幀率不會變快或變慢。
-  const perf = S.perf = { target: 60, fps: 60, frames: 0, work: 0, stages: {} };
+  const perf = S.perf = { target: 60, fps: 60, frames: 0, work: 0, stages: {}, win: [], cost: [], since: 0, okSince: 0, need: 5000, lastUp: -1e9, history: [] };
   function applyFps(fps) {
     S.fps = perf.fps = fps;
     S.frameGap = 1000 / fps - 3;
     S.LIVE_MS = 1000 / fps - 2;
     S.qMul = fps >= 45 ? 2 : 1;
+    perf.win = []; perf.cost = []; perf.okSince = 0; perf.since = performance.now();
   }
   applyFps(60);
   S.setTargetFps = function (fps) {
     fps = Number(fps) === 30 ? 30 : 60;
     if (fps === perf.target) return;
-    perf.target = fps; applyFps(fps);
+    perf.target = fps; perf.need = 5000; applyFps(fps);
   };
+  function perfSample(now, gap, cost) {
+    if (gap > 250) { perf.win = []; perf.cost = []; perf.okSince = 0; return; }   // 迴圈剛醒來（之前停著）：不算
+    if (perf.target !== 60) return;
+    perf.win.push([now, gap]); perf.cost.push(cost);
+    while (perf.win.length && now - perf.win[0][0] > 2000) { perf.win.shift(); perf.cost.shift(); }
+    if (now - perf.since < 2000 || perf.win.length < 15) return;
+    const avg = perf.win.reduce((n, w) => n + w[1], 0) / perf.win.length;
+    if (perf.fps === 60 && avg > 1.5 * 1000 / 60) {
+      if (now - perf.lastUp < 20000) perf.need = Math.min(60000, perf.need * 2);
+      perf.history.push({ t: Math.round(now), to: 30, avgGap: +avg.toFixed(1) });
+      applyFps(30);
+    } else if (perf.fps === 30) {
+      const c = perf.cost.reduce((n, v) => n + v, 0) / perf.cost.length;
+      if (c < .45 * 1000 / 60 && avg < 1.2 * 1000 / 30) { if (!perf.okSince) perf.okSince = now; } else perf.okSince = 0;
+      if (perf.okSince && now - perf.okSince >= perf.need) { perf.history.push({ t: Math.round(now), to: 60, cost: +c.toFixed(2) }); perf.lastUp = now; applyFps(60); }
+    }
+  }
   // 分段計時（量效能用，平常只是累加幾個數字）：S.prof('svg', ms)
   S.prof = (k, ms) => { const o = perf.stages[k] || (perf.stages[k] = { n: 0, ms: 0 }); o.n++; o.ms += ms; };
 
@@ -99,6 +121,46 @@
     return { hands: r.hands, layers: L, inner: L.defs + L.shadow + L.back + L.body + deco + L.front };
   };
   S.svgFor = (a, th, id, pose, vb) => `<svg viewBox="${vb}" class="view-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="overflow:visible">${S.renderActor(a, th, id, pose).inner}</svg>`;
+  // ---- 即時繪製（live SVG、雙人互動）用的瘦身：每格重建的 DOM 越少，解析＋樣式計算越快 ----------------
+  //   · 不會變的漸層／濾鏡（同一個 id、內容一直一樣）搬到文件裡共用的 <defs> 一次，之後每格不再重建
+  //     （同一個 id 出現過不同內容＝會變的，例如跟著姿勢走的漸層、身體輪廓的裁切 → 一律留在每格裡）
+  //   · 身體上的毛（固定亂數、幾百條短線）放進共用的 <defs>，每格只用一個 <use> 引用
+  //   畫出來的樣子完全一樣（同樣的元素、同樣的 id，只是放的位置不同）
+  let sharedDefs = null;
+  const hoisted = new Map(), seenDef = new Map(), dynId = new Set(), furIds = new Map();
+  function shared() {
+    if (sharedDefs && sharedDefs.isConnected) return sharedDefs;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('width', '0'); svg.setAttribute('height', '0');
+    svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none';
+    sharedDefs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    svg.appendChild(sharedDefs); document.body.appendChild(svg);                  // 放在最後：同一個 id 若每格裡也有，以每格裡的為準
+    return sharedDefs;
+  }
+  const addShared = (str) => { const t = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); t.innerHTML = str; const el = t.firstElementChild; if (el) shared().appendChild(el); return el; };
+  const DEF_RE = /<(linearGradient|radialGradient|filter|clipPath|mask|pattern)\b[^>]*?id="([^"]+)"[^>]*?(?:\/>|>[\s\S]*?<\/\1>)/g;
+  S.slim = function (svg) {
+    // 共用的毛
+    svg = svg.replace(/<g data-fur="1">([\s\S]*?)<\/g>/g, (m, inner) => {
+      let id = furIds.get(inner);
+      if (!id) { if (furIds.size > 40) return m; id = 'qfur' + furIds.size; furIds.set(inner, id); addShared(`<g id="${id}">${inner}</g>`); }
+      return `<use href="#${id}"/>`;
+    });
+    // 共用的漸層、濾鏡
+    return svg.replace(DEF_RE, (m, tag, id) => {
+      if (dynId.has(id)) return m;
+      const h = hoisted.get(id);
+      if (h) { if (h.str === m) return ''; dynId.add(id); h.el.remove(); hoisted.delete(id); return m; }
+      const prev = seenDef.get(id);
+      if (prev == null) { if (seenDef.size > 4000) seenDef.clear(); seenDef.set(id, m); return m; }
+      if (prev !== m) { dynId.add(id); seenDef.delete(id); return m; }
+      seenDef.delete(id);
+      const el = addShared(m); if (!el) return m;
+      hoisted.set(id, { str: m, el });
+      return '';
+    }).replace(/<defs>\s*<\/defs>/g, '');
+  };
+  S.slimInfo = () => ({ hoisted: hoisted.size, dyn: dynId.size, fur: furIds.size });
   // 先把某一格畫好放進快取（眨眼、耳朵抖這種只出現 0.1 秒的畫格，要用的時候才不會來不及）
   S.warm = (a, key, th, pose, wide) => { S.frameURL(a, key, th, pose, wide); };
   // 圖片（獨立 SVG 文件）用嚴格 XML 解析：同一個標籤有兩個 style 屬性會整張讀不出來（某些飾品會這樣）→ 合併成一個
@@ -161,7 +223,7 @@
   function loop(now) {
     raf = 0;
     if (now - lastFrame < S.frameGap) { raf = requestAnimationFrame(loop); return; }   // 每秒最多 S.fps 格（預設 60，吃力時自動降級）
-    const c0 = performance.now();
+    const gap = lastFrame ? now - lastFrame : 1e9, c0 = performance.now();
     lastFrame = now; perf.frames++;
     let busy = false;
     const dt = Math.min(0.05, (now - (lastBall || now)) / 1000); lastBall = now;
@@ -171,7 +233,8 @@
       try { if (a.tick(now)) busy = true; }
       catch (e) { console.warn('活動出錯，強制結束：' + (a.job && a.job.name), e); S.failJob(a); busy = true; }
     }
-    perf.work += performance.now() - c0;
+    const cost = performance.now() - c0;
+    perf.work += cost; perfSample(now, gap, cost);
     if (busy) { raf = requestAnimationFrame(loop); S.reportRectsThrottled(); }
     else { lastBall = 0; lastFrame = 0; wakeLater(); S.reportRects(); }
   }

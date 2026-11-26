@@ -407,7 +407,7 @@
         ${bF < 0.3 ? `<path d="${spineD}" fill="none" stroke="#68533e" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" opacity=".1" filter="url(#b6${id})"/>` : ''}
         <path d="${spineD}" fill="none" stroke="#76604a" stroke-width="30" stroke-linecap="round" stroke-linejoin="round" opacity="${(0.3 * Math.abs(s)).toFixed(2)}" filter="url(#b6${id})"/>
         <path d="${bodyD}" fill="none" stroke="#fff6e6" stroke-width="3" opacity=".3" filter="url(#b1${id})"/>
-        ${big ? I.fur(1250, -30, 190, 11) : I.fur(700, 30, 130, 11)}
+        <g data-fur="1">${big ? I.fur(1250, -30, 190, 11) : I.fur(700, 30, 130, 11)}</g>
       </g>`;
 
     // 耳朵（在頭後面）：遠側耳朵不會窄成尖刺（寬度有下限、稍微放低）；earFlop 讓每隻耳朵繞耳根多轉一點
@@ -580,19 +580,34 @@
 
     // 漸層沿身體走向（頭頂 → 腳底），前傾、四腳著地時顏色跟著身體，不會變成水平分層
     const topP = PH([0, 15, 0]), g0 = Math.hypot(topP.X - 80, topP.Y - FEET_Y) < 60 ? { X: 80, Y: 14 } : topP;
+    // 身體上的大模糊（b6，σ=6）：原本的濾鏡範圍是固定的 440×480 單位，每用一次就要對整片做模糊（軟體繪製時最貴的一步）。
+    // 用到 b6 的都在身體輪廓的裁切裡面，所以範圍縮到「身體外框＋翹毛＋3σ 以上」就畫得一模一樣，面積少了九成
+    let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+    for (const e of EL) { const r = Math.max(e.rx, e.ry); bx0 = Math.min(bx0, e.cx - r); bx1 = Math.max(bx1, e.cx + r); by0 = Math.min(by0, e.cy - r); by1 = Math.max(by1, e.cy + r); }
+    const M6 = 30, b6 = isFinite(bx0) ? `<filter id="b6${id}" filterUnits="userSpaceOnUse" x="${Math.floor(bx0 - M6)}" y="${Math.floor(by0 - M6)}" width="${Math.ceil(bx1 - bx0 + 2 * M6)}" height="${Math.ceil(by1 - by0 + 2 * M6)}"><feGaussianBlur stdDeviation="6"/></filter>` : null;
     const defs = I.DEFS(id).replace(/<linearGradient id="bg[^>]*>/, `<linearGradient id="bg${id}" gradientUnits="userSpaceOnUse" x1="${f1(80 + (g0.X - 80) * .8)}" y1="${f1(Math.min(g0.Y, 60))}" x2="80" y2="176">`)
+      .replace(/<filter id="b6[^"]*" filterUnits="userSpaceOnUse" x="-120" y="-120" width="440" height="480"><feGaussianBlur stdDeviation="6"\/><\/filter>/, (m) => b6 || m)
       .replace('</defs>', `${PROP_DEFS(id)}${AC ? AC.defs(id) : ''}<clipPath id="cb${id}"><path d="${bodyD}"/></clipPath></defs>`);
     const shadow = `<ellipse cx="${f1(80 + dx)}" cy="183" rx="${f1(30 - Math.min(16, -dy * .4))}" ry="4" fill="#000" opacity="${f1(Math.max(.04, .12 + dy * .002))}"/>`;
     // 位移用外層 <g transform>：裡面的座標（與毛邊雜訊的相對位置）不變，移動時毛邊不會「沸騰」
     const G = (inner) => (inner ? ((dx || dy) ? `<g transform="translate(${f1(dx)} ${f1(dy)})">${inner}</g>` : inner) : '');
-    const layers = {
-      defs, shadow,
-      back: abs.back.join('') + G(out.back.join('') + armsBack + chr.back.join('') + accL.back.join('')),
-      body: G(out.feet.join('') + bodyLayer + out.front.join('') + (accL.earsOver ? '' : ears) + headSvg + accL.front.join('') + (accL.earsOver ? ears : '') + accL.overEars.join('') + face.join('') + accL.top.join('')),
-      front: G(armsFront + chr.front.join('')) + abs.front.join('')
+    const rel = {
+      back: out.back.join('') + armsBack + chr.back.join('') + accL.back.join(''),
+      body: out.feet.join('') + bodyLayer + out.front.join('') + (accL.earsOver ? '' : ears) + headSvg + accL.front.join('') + (accL.earsOver ? ears : '') + accL.overEars.join('') + face.join('') + accL.top.join(''),
+      front: armsFront + chr.front.join('')
     };
+    // pose.split：位移（x、y）不包進去，由呼叫端用外層 transform 加（雙人互動每格只改位移、不重建圖形時用）；
+    // 這時 back／front 的「場景座標道具」另外放在 backAbs／frontAbs（它們不跟著位移）
+    const layers = pose.split
+      ? { defs, shadow, back: rel.back, body: rel.body, front: rel.front, backAbs: abs.back.join(''), frontAbs: abs.front.join('') }
+      : { defs, shadow, back: abs.back.join('') + G(rel.back), body: G(rel.body), front: G(rel.front) + abs.front.join('') };
     const paint = pose.raw ? (v) => v : I.paint;
-    for (const k of Object.keys(layers)) layers[k] = paint(layers[k]);
+    // 換毛色：五層一次換（recolor 每呼叫一次有固定成本），再切回各層
+    if (pose.raw) { /* 原色 */ } else {
+      const ks = Object.keys(layers).filter((k) => typeof layers[k] === 'string'), SEP = '<!--§L§-->', joined = paint(ks.map((k) => layers[k]).join(SEP)).split(SEP);
+      if (joined.length === ks.length) ks.forEach((k, i) => { layers[k] = joined[i]; }); else for (const k of ks) layers[k] = paint(layers[k]);
+    }
+    if (pose.split) layers.dx = dx, layers.dy = dy;
     for (const k of ['L', 'R']) if (hands[k]) { hands[k].X += dx; hands[k].Y += dy; hands[k].palm = [hands[k].palm[0] + dx, hands[k].palm[1] + dy]; }
     return { svg: layers.defs + layers.shadow + layers.back + layers.body + layers.front, hands, layers };
   }
