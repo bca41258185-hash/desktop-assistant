@@ -144,7 +144,7 @@
   const DEF_RE = /<(linearGradient|radialGradient|filter|clipPath|mask|pattern)\b[^>]*?id="([^"]+)"[^>]*?(?:\/>|>[\s\S]*?<\/\1>)/g;
   S.slim = function (svg) {
     // 模糊的實心橢圓 → 柔邊漸層（看起來一樣，省掉大部分模糊濾鏡；漸層放共用的 <defs>）
-    if (window.QuokkaSoftBlur) svg = window.QuokkaSoftBlur.apply(svg, { sink: addShared });
+    if (window.QuokkaSoftBlur) svg = window.QuokkaSoftBlur.merge(window.QuokkaSoftBlur.apply(svg, { sink: addShared }));   // ＋相鄰兩個毛邊濾鏡合成一次
     // 共用的毛
     svg = svg.replace(/<g data-fur="1">([\s\S]*?)<\/g>/g, (m, inner) => {
       let id = furIds.get(inner);

@@ -92,7 +92,16 @@
     const i = out.indexOf('>', out.indexOf('<svg') >= 0 ? out.indexOf('<svg') : 0);
     return out.indexOf('<svg') >= 0 ? out.slice(0, i + 1) + '<defs>' + defs + '</defs>' + out.slice(i + 1) : '<defs>' + defs + '</defs>' + out;
   }
-  const api = { apply, learn, _cover: cover, info: () => ({ filters: blurOf.size, grads: grads.size }) };
+  // 相鄰、套同一個毛邊濾鏡（fz）的兩個圖形 → 包進同一個 <g filter> 一次做完（位移對整組和分開做結果一樣；逐像素最大差 10/255）
+  //   其他濾鏡（模糊、飾品）合併後邊緣差比較多，不合併
+  const RUN_RE = /(<(?:path|ellipse|circle)\b[^>]*?) filter="url\(#(fz[^)]*)\)"([^>]*\/>)\s*(<(?:path|ellipse|circle)\b[^>]*?) filter="url\(#\2\)"([^>]*\/>)/g;
+  function merge(svg) {
+    if (svg.indexOf('filter=') < 0) return svg;
+    let prev;
+    do { prev = svg; svg = svg.replace(RUN_RE, '<g filter="url(#$2)">$1$3$4$5</g>'); } while (svg !== prev);
+    return svg;
+  }
+  const api = { apply, merge, learn, _cover: cover, info: () => ({ filters: blurOf.size, grads: grads.size }) };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.QuokkaSoftBlur = api;
 })(typeof window !== 'undefined' ? window : globalThis);

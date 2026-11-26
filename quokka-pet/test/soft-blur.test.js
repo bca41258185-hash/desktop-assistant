@@ -32,3 +32,10 @@ test('交給 sink：同一個漸層只給一次', () => {
   assert.strictEqual(got.length, 1);
   assert.ok(!/radialGradient/.test(SB.apply(src, { sink: () => {} })));
 });
+
+test('相鄰兩個毛邊濾鏡合成一組；其他濾鏡、不相鄰的不動', () => {
+  const a = '<path d="M0 0" fill="none" stroke="#000" opacity=".2" filter="url(#fzL1)"/><path d="M1 1" fill="url(#bgL1)" filter="url(#fzL1)"/>';
+  assert.strictEqual(SB.merge(a), '<g filter="url(#fzL1)"><path d="M0 0" fill="none" stroke="#000" opacity=".2"/><path d="M1 1" fill="url(#bgL1)"/></g>');
+  const b = '<path d="M0 0" filter="url(#b1L1)"/><path d="M1 1" filter="url(#b1L1)"/><path d="M0 0" filter="url(#fzL1)"/><ellipse rx="1" ry="1"/><path d="M1 1" filter="url(#fzL1)"/>';
+  assert.strictEqual(SB.merge(b), b);
+});
