@@ -2,7 +2,8 @@
 // 純函式、不碰檔案或視窗，主行程與面板共用（面板用來即時顯示「→ 今天 15:30 提醒」）。
 //
 // parseInput(文字, 現在時間) 回傳：
-//   { type: 'stock', symbol, market: 'tw' | 'us', ex?: 'tse' | 'otc' }
+//   { type: 'stock', symbol, market: 'tw' | 'us', ex?: 'tse' | 'otc',
+//     nameHint?: '使用者打的名稱' }   // 有的話，主行程查到代號後要核對名稱，對不上就不加入
 //   { type: 'reminder', text, rule: { type: 'once', date: 'YYYY-MM-DD', time: 'HH:MM' }
 //                                 | { type: 'daily', time } | { type: 'weekly', weekdays: [0-6], time },
 //     movedToTomorrow?: true,      // 今天那個時刻已過，改成明天
@@ -59,6 +60,7 @@
     'back best book call care cash chat city cold come cook cool copy cost deal desk done down draw each easy edit else even ever exam face fact fail fast file fill find fine fire five flat fold food form four free from full game gift give glad goes gold gone good grab gray grey grow hair half hall hand hard have head hear heat help here high hold home hope hour idea into item join jump just keep kind know land last late lead left less life like line link list live load loan lock long look lost love lunch made mail main make many meet mind miss mode more most move much must name near need next nice none note once only open over page paid pair park part pass past pick plan play plus post pull push read real rent rest ride ring road room rule safe sale same save seat seem sell send ship shop show shut side sign site size slow some soon sort stay step stop such sure take talk task team tell test text than that them then they this time tidy tile todo told took tool trip true turn type unit upon used user very view wait wake walk wall want warm wash wear week well went were what when wide wife will wind wish with wood word work yard year your zero zone ' +
     'about above after again agree alarm allow alone along apply audit basic begin below board break bring build call clean clear check class close color count cover daily dance draft dream drink drive early email empty enjoy enter equal error event every extra field final first floor focus fresh front given glass going grade great green group guess guide happy hello house ideas image index issue items large later learn leave level light limit lunch maybe model money month never night notes offer often order other owner paint paper party phone photo piece place plans point price print proof quick quiet quite ready reply right round scale scope sheet short since sleep small solve space spend staff stair start still stone store study stuff style table taken tasks thank their there these thing think third those three title today total touch train trust under until upper using usual visit watch water where which while white whole women world would write wrong years young').split(' '));
   // 常見台股名稱 → 代號（沒有名稱查詢服務時的小對照表；只收不容易和一般待辦混淆的名稱）
+  // 2026-11-26 已用 StockService.lookup() 逐檔向證交所核對過代號與名稱
   const TW_NAMES = {
     台積電: '2330', 鴻海: '2317', 聯發科: '2454', 台達電: '2308', 廣達: '2382', 聯電: '2303', 日月光投控: '3711', 日月光: '3711', 大立光: '3008',
     富邦金: '2881', 國泰金: '2882', 中信金: '2891', 兆豐金: '2886', 玉山金: '2884', 元大金: '2885', 第一金: '2892', 合庫金: '5880', 華南金: '2880', 永豐金: '2890',
@@ -70,14 +72,20 @@
     儒鴻: '1476', 遠東新: '1402', 彰銀: '2801', 世界先進: '5347', 穩懋: '3105', 環球晶: '6488', 中美晶: '5483', 信驊: '5274', 力旺: '3529', 元太: '8069', 力積電: '6770',
     元大台灣50: '0050', 台灣50: '0050', 元大高股息: '0056', 國泰永續高股息: '00878', 富邦台50: '006208'
   };
+  // 代號後面那幾個字如果有時間或動作的字眼，就不是股票名稱（「2330 明天再看」「2000 買材料」）
+  const NOT_NAME = /[今明後昨]天|點|分鐘|小時|週|周|星期|禮拜|[上下中]午|早上|晚上|買|賣|繳|交|送|打|回|看|寫|做|改|查|訂|約|開會|整理|檢查|確認|提醒|記得|完成|準備/;
   function parseStock(s) {
     let m;
     if (/^\d{4,6}[A-Za-z]?$/.test(s)) return { type: 'stock', symbol: s.toUpperCase(), market: 'tw' };
     if ((m = s.match(/^(\d{4,6}[A-Za-z]?)\.(TWO|TW)$/i))) return { type: 'stock', symbol: m[1].toUpperCase(), market: 'tw', ex: m[2].toUpperCase() === 'TWO' ? 'otc' : 'tse' };
-    if (Object.prototype.hasOwnProperty.call(TW_NAMES, s)) return { type: 'stock', symbol: TW_NAMES[s], market: 'tw' };
-    // 「2330 台積電」「台積電 2330」：代號＋對照表裡的名稱
-    if ((m = s.match(/^(\d{4,6}[A-Za-z]?)\s*(\S+)$/)) && Object.prototype.hasOwnProperty.call(TW_NAMES, m[2])) return { type: 'stock', symbol: m[1].toUpperCase(), market: 'tw' };
-    if ((m = s.match(/^(\S+?)\s*(\d{4,6}[A-Za-z]?)$/)) && Object.prototype.hasOwnProperty.call(TW_NAMES, m[1])) return { type: 'stock', symbol: m[2].toUpperCase(), market: 'tw' };
+    // nameHint＝使用者打的名稱：主行程查到代號後會核對名稱，對不上就不加入（改問要不要當待辦）
+    const known = (n) => Object.prototype.hasOwnProperty.call(TW_NAMES, n);
+    if (known(s)) return { type: 'stock', symbol: TW_NAMES[s], market: 'tw', nameHint: s };
+    // 「2330 台積電」：代號＋空白＋2–6 個中文字的名稱（代號為準、名稱拿去核對）；有時間或動作的字眼就不算
+    if ((m = s.match(/^(\d{4,6}[A-Za-z]?) ([\u4e00-\u9fff]{2,6}(?:-KY|\d{1,2})?)$/)) && (known(m[2]) || !NOT_NAME.test(m[2]))) return { type: 'stock', symbol: m[1].toUpperCase(), market: 'tw', nameHint: m[2], ...(known(m[2]) ? {} : { loose: true }) };   // loose＝只是長得像（「3000 訂金」），查不到就直接當待辦
+    if ((m = s.match(/^(\d{4,6}[A-Za-z]?)(\S+)$/)) && known(m[2])) return { type: 'stock', symbol: m[1].toUpperCase(), market: 'tw', nameHint: m[2] };
+    // 「台積電 2330」：名稱在前面的，只認對照表裡的名稱
+    if ((m = s.match(/^(\S+?)\s*(\d{4,6}[A-Za-z]?)$/)) && known(m[1])) return { type: 'stock', symbol: m[2].toUpperCase(), market: 'tw', nameHint: m[1] };
     // 美股：1–5 個英文字母（可帶 .B），全大寫或全小寫；排除清單優先
     if (/^[A-Z]{1,5}(\.[A-Z])?$/.test(s)) return NOT_TICKER.has(s) ? null : { type: 'stock', symbol: s, market: 'us' };
     if (/^[a-z]{2,5}(\.[a-z])?$/.test(s)) {
@@ -201,12 +209,9 @@
       else if (cue === 'evening') { if (H < 12) H += 12; }
       else if (cue === 'noon') { if (H <= 3) H += 12; }
       else if (cue === 'morning') { /* 照字面（早上） */ }
-      else if (day.kind === 'daily' || day.kind === 'weekly') {
-        // 重複提醒的 1–6 點：當成下午（沒有人想每天凌晨 3 點被叫），並提示
+      else if (explicitDay) {
+        // 有寫日期（明天、週五、12/5、每天、每週X）：1–6 點一律當成下午並提示；7–12 點照字面
         if (H <= 6) { note = `當成下午 ${H} 點；凌晨請寫「凌晨${H}點」`; H += 12; }
-      } else if (explicitDay) {
-        // 有寫日期（明天、週五、12/5）就照字面；1–5 點容易誤會，提示一下
-        if (H <= 5) note = `當成凌晨 ${H} 點；下午請寫「下午${H}點」`;
       } else if (H <= 6) {
         // 1–6 點：上班時間幾乎都是指下午。例外：半夜還醒著、而且那個凌晨時刻還沒到
         const owl = now.getHours() < 6 && hm(H, M) > nowHM;

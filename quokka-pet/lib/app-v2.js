@@ -335,10 +335,26 @@ function start() {
     }
     if (r.type === 'none') return { ok: false, message: '請先輸入內容' };
     if (countOf(r.type, owner) >= (LIM[r.type] || 50)) return { ok: false, message: '這隻盯的東西太多了，先完成或交給別隻吧' };
+    // 「3000 訂金」這種只是長得像代號＋名稱的：查不到或名稱對不上就直接當待辦，不多問一步
+    let stockFound = null;
     if (r.type === 'stock') {
       if (data.stocks.some((s) => s.owner === owner && s.symbol === r.symbol)) return { ok: false, message: '這檔已經在盯了' };
-      const found = await stocks.lookup(r.symbol, r.market);
-      if (!found.ok) return { ok: false, type: 'stock', message: (found.reason || '找不到這檔股票') + '。要當成待辦嗎？', askTask: true };
+      const found = await stocks.lookup(r.symbol, r.market, r.ex);
+      let problem = found.ok ? null : (found.reason || '找不到這檔股票') + '。要當成待辦嗎？';
+      // 使用者有打名稱（「2330 台積電」「台積電」）：查到的名稱要對得上（互相包含就算），對不上就不加入
+      if (!problem && r.nameHint && found.name && found.name !== found.symbol) {
+        const clean = (x) => String(x).replace(/[\s*＊]/g, '').replace(/臺/g, '台').toUpperCase();
+        const a = clean(found.name), b = clean(r.nameHint);
+        if (a && b && !a.includes(b) && !b.includes(a)) problem = `查到的是「${found.name}」，和你打的「${r.nameHint}」不一樣。要當成待辦嗎？`;
+      }
+      if (problem && r.loose) {
+        if (countOf('task', owner) >= LIM.task) return { ok: false, message: '這隻盯的東西太多了，先完成或交給別隻吧' };
+        r = { type: 'task', text };
+      } else if (problem) return { ok: false, type: 'stock', message: problem, askTask: true };
+      else stockFound = found;
+    }
+    if (r.type === 'stock') {
+      const found = stockFound;
       const item = { id: newId('s'), owner, symbol: found.symbol, market: found.market, name: found.name, ex: found.ex, createdAt: nowISO() };
       data.stocks.push(item); syncWatchlist(); changed();
       event(owner, 'note', { text: `好，我幫你盯 ${found.name}！` });
