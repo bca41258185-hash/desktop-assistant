@@ -97,8 +97,10 @@ body.reduce .leaf-fall { display: none; }
 body.hidden .leaf-fall { display: none; }
 
 /* 放生：禿鷹（翅膀上下兩格交替拍動） */
-.vulture { position: fixed; left: 0; top: 0; width: 200px; height: 140px; pointer-events: none; z-index: 2147483000; }
+.vulture { position: fixed; left: 0; top: 0; width: 240px; height: 200px; pointer-events: none; z-index: 2147483000; }
 .vulture .wing-up { animation: flap-a .34s steps(1) infinite; }
 .vulture .wing-down { animation: flap-b .34s steps(1) infinite; }
 @keyframes flap-a { 0% { opacity: 1; } 50% { opacity: 0; } }
 @keyframes flap-b { 0% { opacity: 0; } 50% { opacity: 1; } }
+.vulture .drool { animation: drool 1.4s ease-in infinite; transform-origin: 19px 67px; }
+@keyframes drool { 0% { transform: scaleY(.4); opacity: .9; } 70% { transform: scaleY(1.25); opacity: .9; } 85% { transform: scaleY(1.25) translateY(6px); opacity: 0; } 100% { transform: scaleY(.4); opacity: 0; } }

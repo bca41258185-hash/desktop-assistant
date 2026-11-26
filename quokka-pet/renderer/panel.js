@@ -641,10 +641,10 @@
     } else {
       danger = `<div class="btns">
         <button type="button" class="btn" data-act="regenAsk" data-fk="g:regen"${why ? ' disabled aria-describedby="regenWhy"' : ''}><span class="sym" aria-hidden="true">↻</span> 重新生成</button>
-        <button type="button" class="btn" data-act="releaseAsk" data-fk="g:release"${lastOne ? ' disabled aria-describedby="delWhy"' : ''}>🦅 放生</button>
-        <button type="button" class="btn danger-ghost" data-act="delAsk" data-fk="g:del"${lastOne ? ' disabled aria-describedby="delWhy"' : ''}>刪除牠</button></div>
+        <button type="button" class="btn" data-act="releaseAsk" data-fk="g:release"${lastOne ? ' disabled aria-describedby="delWhy"' : ''}>放生</button>
+</div>
         ${why ? `<p class="note" id="regenWhy">${esc(why)}</p>` : ''}
-        ${lastOne ? '<p class="note" id="delWhy">至少要留 1 隻庫卡，最後一隻不能放生或刪除</p>' : ''}`;
+        ${lastOne ? '<p class="note" id="delWhy">至少要留 1 隻庫卡，最後一隻不能放生</p>' : ''}`;
     }
     const profile = TR.describe(t).concat(TR.describePersonality(t));
     return `<div class="card gear" role="group" aria-label="${esc(q.name)}的設定">

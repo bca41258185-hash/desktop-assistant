@@ -565,7 +565,8 @@ function start() {
     return { ok: true };
   });
   // 刪除／放生：資料上的處理一樣（負責的事轉給別隻或一起刪、家族紀錄）；放生時舞台先播禿鷹把牠帶走，再從名單拿掉
-  ipcMain.handle('quokka:delete', (e, { qid, transferTo, release } = {}) => {
+  ipcMain.handle('quokka:delete', (e, { qid, transferTo, release } = {}) => removeQuokka(qid, transferTo, !!release));
+  function removeQuokka(qid, transferTo, release) {
     const q = qById(qid); if (!q) return { ok: false };
     const owners = data.quokkas.filter((x) => romance.canOwnTasks(x));
     if (owners.length <= 1 && romance.canOwnTasks(q)) return { ok: false, message: release ? '最後一隻不能放生' : '最後一隻不能刪除' };
@@ -592,7 +593,21 @@ function start() {
     if (to) for (const r of data.reminders) if (r.owner === to && r.ringing) toStage('q:alert', { qid: to, reminderId: r.id, text: r.text });
     syncWatchlist(); clock.schedule(); changed({ quokkas: true });
     return { ok: true };
-  });
+  }
+  // 右鍵「放生」：先確認；負責的事交給第一隻放得下的，都放不下就問要不要一起刪除
+  function confirmRelease(qid) {
+    const q = qById(qid); if (!q) return;
+    const owners = data.quokkas.filter((x) => x.id !== qid && romance.canOwnTasks(x));
+    if (!owners.length) { dialog.showMessageBox({ type: 'info', title: '放生', message: '至少要留 1 隻庫卡，最後一隻不能放生。', buttons: ['好'] }); return; }
+    const n = Object.keys(KINDS).reduce((s, k) => s + countOf(k, qid), 0);
+    const fits = owners.find((o) => !transferProblem(data, qid, o.id, { LIM, kinds: KINDS, keyOf: TRANSFER_KEY, counts: (kind, x) => !(kind === 'task' && x.done) && !(kind === 'reminder' && spent(x)) }));
+    const to = fits || null;
+    const what = !n ? '' : to ? `牠負責的 ${n} 件事會交給${to.name}。` : `其他庫卡都放不下牠負責的 ${n} 件事，這些事會一起刪除。`;
+    const r = dialog.showMessageBoxSync({ type: 'question', title: '放生', message: `要放生${q.name}嗎？`,
+      detail: `會有一隻禿鷹飛過來，把牠帶回大自然。${what}放生以後牠就不會回來了。`, buttons: ['放生', '取消'], defaultId: 1, cancelId: 1, noLink: true });
+    if (r !== 0) return;
+    removeQuokka(qid, to ? to.id : 'delete', true);
+  }
   ipcMain.handle('quokka:delete-warning', (e, { qid } = {}) => ({ warning: romance.deleteWarning(qid) }));
   ipcMain.handle('quokka:play', (e, { qid, action } = {}) => {
     const q = qById(qid) || data.quokkas[0];
@@ -693,6 +708,7 @@ function start() {
       { label: '陪我玩', submenu: [play('badminton', '羽球'), play('volleyball', '排球'), play('basketball', '籃球'), play('eat', '吃葉子'), play('hop', '跳一跳'), play('nap', '打盹')] },
       { label: '打開面板', click: () => showPanel(qid) },
       { type: 'separator' },
+      { label: `放生${q.name}…`, enabled: romance.canOwnTasks(q) ? data.quokkas.filter((x) => romance.canOwnTasks(x)).length > 1 : true, click: () => confirmRelease(qid) },
       // 有提醒在響時不能藏；選單打開後才開始響的，點下去時再檢查一次
       { label: '暫時藏起來 30 分鐘', enabled: !data.reminders.some((r) => r.ringing), click: () => {
         if (data.reminders.some((r) => r.ringing)) { event(qid, 'note', { text: '有提醒在響，先按「知道了」再藏起來喔' }); return; }
