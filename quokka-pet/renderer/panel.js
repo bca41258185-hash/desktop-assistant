@@ -530,8 +530,36 @@
     const q = qById(ui.sel);
     if (q && isJoey(q)) { slot.innerHTML = joeyCardHTML(q); return; }
     if (q && ui.gear) { slot.innerHTML = gearCardHTML(q); return; }
-    if (q) { slot.innerHTML = infoCardHTML(q); return; }
-    slot.innerHTML = '';
+    if (q) { slot.innerHTML = postcardsHTML((S.postcards || []).filter((c) => c.to === q.id).slice(-1)) + infoCardHTML(q); markRead(); return; }
+    slot.innerHTML = ui.sel === 'all' ? postcardsCardHTML() : '';
+    markRead();
+  }
+  // ---- 明信片：放生的庫卡約 10 分鐘後寄回來（lib/postcard.js）----
+  function postcardHTML(c) {
+    const from = { id: 'pc-' + c.from.id, name: c.from.name, traits: c.from.traits };
+    const to = qById(c.to), when = c.sentAt ? new Date(c.sentAt) : null;
+    const t = when ? `${when.getMonth() + 1}/${when.getDate()} ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}` : '';
+    return `<article class="postcard${c.read ? '' : ' unread'}" data-pc="${esc(c.id)}" aria-label="${esc(c.from.name)}寄來的明信片">
+      <div class="pc-stamp">${from.traits ? avatar(from, 'md') : ''}<span class="pc-mark" aria-hidden="true">📮</span></div>
+      <div class="pc-body"><div class="pc-meta">${esc(c.from.name)} → ${esc(to ? to.name : '大家')}<span class="pc-time">${esc(t)}</span>${c.read ? '' : '<span class="pc-new">新</span>'}</div>
+      <p class="pc-text">${esc(c.text || '').split(String.fromCharCode(10)).join('<br>')}</p></div></article>`;
+  }
+  const postcardsHTML = (list) => list.map(postcardHTML).join('');
+  function postcardsCardHTML() {
+    const all = (S.postcards || []).slice().reverse();
+    if (!all.length) return '';
+    const shown = ui.pcMore ? all : all.slice(0, 2);
+    return `<div class="card postcards" role="group" aria-label="明信片"><div class="card-h"><h2>📮 明信片</h2>
+      ${all.length > 2 ? `<button type="button" class="link-btn" data-act="pcMore" data-fk="pc:more" aria-expanded="${!!ui.pcMore}">${ui.pcMore ? '收起' : `更多（${all.length - 2}）`}</button>` : ''}</div>
+      ${postcardsHTML(shown)}</div>`;
+  }
+  // 畫出來的明信片＝讀過了（每張只送一次）
+  const readSent = new Set();
+  function markRead() {
+    for (const el of document.querySelectorAll('.postcard.unread')) {
+      const id = el.dataset.pc; if (!id || readSent.has(id)) continue;
+      readSent.add(id); api.readPostcard && api.readPostcard({ id }).catch(() => {});
+    }
   }
   // ---- 個性雷達圖：五個面向 0–100 ----
   const RADAR = [['activity', '活潑'], ['sociability', '親人'], ['boldness', '膽量'], ['curiosity', '好奇'], ['affection', '黏人']];
@@ -1124,6 +1152,7 @@
         break;
       case 'gearCancel': ui.gearMode = null; render(); break;
       case 'infoToggle': ui.infoOpen = !ui.infoOpen; render(); break;
+      case 'pcMore': ui.pcMore = !ui.pcMore; render(); break;
       case 'rename': doRename(); break;
       case 'color': doAccessory($('gAcc').value, b.dataset.c); break;
       case 'regenAsk': ui.gearMode = 'regen'; render(); break;

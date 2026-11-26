@@ -13,6 +13,7 @@ const { createStockService } = require('./stock-service');
 const { createStepTracker } = require('./stock-step');
 const { createStageManager } = require('./stage-main');
 const { createCircleDetector } = require('./gesture');
+const postcard = require('./postcard');
 const { createFolderWatch } = require('./folder-watch');
 const { createPosSaver } = require('./pos-saver');
 const { createPerfSender } = require('./perf');
@@ -169,7 +170,7 @@ function start() {
   const quotes = {};                 // symbol → 最新報價
   function snapshot() {
     return { quokkas: data.quokkas, tasks: data.tasks, reminders: data.reminders, stocks: data.stocks, folders: data.folders,
-      relations: data.relations, crushes: Object.fromEntries(data.quokkas.map((q) => [q.id, crushId(q.id)])), settings: data.settings, quotes, ringing: data.reminders.filter((r) => r.ringing).map((r) => r.id),
+      relations: data.relations, postcards: (data.postcards || []).filter((c) => c.sent).slice(-20), crushes: Object.fromEntries(data.quokkas.map((q) => [q.id, crushId(q.id)])), settings: data.settings, quotes, ringing: data.reminders.filter((r) => r.ringing).map((r) => r.id),
       folderChanges: folderWatch.recentAll() };
   }
   function changed({ quokkas = false } = {}) {
@@ -347,6 +348,22 @@ function start() {
     if (back) for (const k of Object.keys(digest)) delete digest[k];
   }
   setInterval(checkPresence, 5000);
+  // 明信片：到時間就寄給愛人（不在了就給朋友、預設負責人）；程式關著時到期的，下次開啟時寄到
+  function deliverPostcards() {
+    const due = (data.postcards || []).filter((c) => !c.sent && Date.now() >= c.dueAt);
+    if (!due.length) return;
+    for (const c of due) {
+      c.text = postcard.compose(c);
+      c.to = postcard.recipient(c, (id) => !!qById(id), data.settings.defaultOwner);
+      c.sent = true; c.sentAt = new Date().toISOString(); c.read = false;
+      event(c.to, 'note', { text: `📮 收到${c.from.name}寄來的明信片！` });
+      notify(qById(c.to), `📮 ${c.from.name}從大自然寄了一張明信片給${(qById(c.to) || {}).name || '你'}`, c.to);
+    }
+    changed();
+  }
+  setInterval(deliverPostcards, 15000);
+  setTimeout(deliverPostcards, 8000);
+  ipcMain.handle('postcard:read', (e, { id } = {}) => { const c = (data.postcards || []).find((x) => x.id === id); if (c && !c.read) { c.read = true; changed(); } return { ok: true }; });
   // 滑鼠快速繞圈（1.5 秒內繞 2 圈）→ 從繞圈的位置下一陣落葉雨；冷卻 20 秒。睡著、藏起來時不理
   const circles = createCircleDetector();
   let lastRainAt = 0;
@@ -582,7 +599,12 @@ function start() {
       if (to) data[k].forEach((x) => { if (x.owner === qid) x.owner = to; });
       else { data[k].filter((x) => x.owner === qid && k === 'folders').forEach((f) => unwatchFolder(f.id)); data[k] = data[k].filter((x) => x.owner !== qid); }
     }
-    if (release) toStage('stage:release', { qid });               // 舞台會標記這隻，名單更新時等禿鷹飛走才移除
+    if (release) {
+      toStage('stage:release', { qid });               // 舞台會標記這隻，名單更新時等禿鷹飛走才移除
+      // 約 10 分鐘後寄明信片回來：先記下牠的愛人和朋友（關係等一下就會被清掉）
+      const rels = Object.entries(data.relations).map(([k, r]) => { const [a, b] = k.split('|'); return a === qid || b === qid ? { other: a === qid ? b : a, ...r } : null; }).filter(Boolean);
+      data.postcards = (data.postcards || []).concat([postcard.plan({ from: q, relations: rels, nameOf: (id) => (id !== qid && qById(id) ? qById(id).name : null) })]).slice(-50);
+    }
     social.removeQuokka(qid);
     delete layers[qid]; delete positions[qid]; delete digest[qid];      // 舞台回報的圖層、位置、離開期間的待報告事項
     const famEvents = romance.onDelete(qid);                   // 墓碑紀錄、伴侶恢復單身、小袋鼠交給爸爸

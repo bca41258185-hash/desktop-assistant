@@ -12,6 +12,7 @@
       quokkas: [],
       tasks: [], reminders: [], stocks: [], folders: [],
       relations: {},                       // 'q1|q2' → { affinity, couple, since }（第 16 節）
+      postcards: [],                       // 放生後寄回來的明信片（lib/postcard.js）
       settings: { stockStepPct: 1, reminderVoice: false, awayMinutes: 5, walk: 'home', romance: true, babies: true, panelOwner: 'all',
         saver: false }                     // 省電：打開（或用電池）時動畫每秒 30 格；預設 60 格（規格 12 效能）
     };
@@ -24,7 +25,7 @@
       const d = defaults();
       const out = { ...d, ...raw, settings: { ...d.settings, ...(raw.settings && typeof raw.settings === 'object' ? raw.settings : {}) } };
       // 欄位型別不對（手動改壞、同步軟體衝突）：該欄用空的，其他照讀，不讓程式起不來
-      for (const k of ['quokkas', 'tasks', 'reminders', 'stocks', 'folders']) out[k] = Array.isArray(out[k]) ? out[k].filter((x) => x && typeof x === 'object') : [];
+      for (const k of ['quokkas', 'tasks', 'reminders', 'stocks', 'folders', 'postcards']) out[k] = Array.isArray(out[k]) ? out[k].filter((x) => x && typeof x === 'object') : [];
       if (!out.relations || typeof out.relations !== 'object' || Array.isArray(out.relations)) out.relations = {};
       return out;
     }
