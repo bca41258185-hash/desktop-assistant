@@ -302,9 +302,19 @@
     const f = (n) => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1))));
     return '#' + [f(0), f(8), f(4)].map((v) => v.toString(16).padStart(2, '0')).join('');
   }
+  // 同一隻的毛色換算表每格都一樣 → 記起來（毛色數值改了，例如變老變灰，簽名不同就重算）
+  const cmMemo = new WeakMap();
   function colorMap(t) {
+    if (!t || !t.fur) return {};
+    const F0 = t.fur, sig = [F0.dh, F0.dl, F0.sat, F0.grey, F0.rufous, F0.bellyLight].join(',');
+    const hit = cmMemo.get(F0);
+    if (hit && hit.sig === sig) return hit.map;
+    const map = colorMapOf(t);
+    cmMemo.set(F0, { sig, map });
+    return map;
+  }
+  function colorMapOf(t) {
     const map = {};
-    if (!t || !t.fur) return map;
     const F = t.fur, grey = F.grey || 0;
     const tf = (c, kind) => {
       let [h, s, l] = hex2hsl(c);

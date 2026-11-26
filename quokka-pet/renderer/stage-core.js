@@ -127,6 +127,7 @@
   //   · 不會變的漸層／濾鏡（同一個 id、內容一直一樣）搬到文件裡共用的 <defs> 一次，之後每格不再重建
   //     （同一個 id 出現過不同內容＝會變的，例如跟著姿勢走的漸層、身體輪廓的裁切 → 一律留在每格裡）
   //   · 身體上的毛（固定亂數、幾百條短線）放進共用的 <defs>，每格只用一個 <use> 引用
+  //   · 模糊的實心橢圓換成柔邊漸層（soft-blur.js）：逐像素比對最大差 14/255、平均 0.3，看不出來；濾鏡少約四成
   //   畫出來的樣子完全一樣（同樣的元素、同樣的 id，只是放的位置不同）
   let sharedDefs = null;
   const hoisted = new Map(), seenDef = new Map(), dynId = new Set(), furIds = new Map();
@@ -142,6 +143,8 @@
   const addShared = (str) => { const t = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); t.innerHTML = str; const el = t.firstElementChild; if (el) shared().appendChild(el); return el; };
   const DEF_RE = /<(linearGradient|radialGradient|filter|clipPath|mask|pattern)\b[^>]*?id="([^"]+)"[^>]*?(?:\/>|>[\s\S]*?<\/\1>)/g;
   S.slim = function (svg) {
+    // 模糊的實心橢圓 → 柔邊漸層（看起來一樣，省掉大部分模糊濾鏡；漸層放共用的 <defs>）
+    if (window.QuokkaSoftBlur) svg = window.QuokkaSoftBlur.apply(svg, { sink: addShared });
     // 共用的毛
     svg = svg.replace(/<g data-fur="1">([\s\S]*?)<\/g>/g, (m, inner) => {
       let id = furIds.get(inner);
