@@ -32,7 +32,8 @@ function setup(qs, opts = {}) {
     getQuokkas: () => data.quokkas, getRelations: () => data.relations,
     getLayer: (id) => layer[id], getPos: (id) => pos[id], now, random, romance,
     onStart: (j) => started.push(j), onAbort: (j) => aborted.push(j),
-    isBlocked: opts.isBlocked, isAway: opts.isAway, freeSlots: opts.freeSlots, constants: opts.constants
+    isBlocked: opts.isBlocked, isAway: opts.isAway, freeSlots: opts.freeSlots,
+    constants: opts.realCap ? opts.constants : { maxPerMinute: Infinity, ...(opts.constants || {}) }   // 時鐘不動的測試：關掉每分鐘上限（頻率測試另外開）
   });
   return { data, pos, layer, S, romance, started, aborted, advance: (ms) => { t += ms; } };
 }
@@ -149,7 +150,7 @@ test('性別不影響社交主動性：只換性別，配對與種類完全一�
   const build = (flip) => {
     seedN = 9000;
     const qs = ['a', 'b', 'c', 'd', 'e'].map((id, i) => mk(id, (i % 2 === 0) !== flip ? 'male' : 'female', { initiative: 0.2 + i * 0.15, sociability: 0.3 + i * 0.1, boldness: 0.5 }));
-    const w = setup(qs, { seed: 77, constants: { maxPerMinute: Infinity } });   // 時鐘不動：關掉每分鐘上限
+    const w = setup(qs, { seed: 77 });
     w.pos.e.x = 300;
     return runRounds(w, 200).map((j) => `${j.a}>${j.b}:${j.type}`);
   };
@@ -209,7 +210,7 @@ test('同伴在身邊：比距離遠時更常發起互動', () => {
 });
 
 test('保底：很害羞（不主動）也會在 40 秒內開始一次互動；下一次檢查準時回來', () => {
-  const w = setup([mk('a', 'male', { initiative: 0, sociability: 0, boldness: 0.1 }), mk('b', 'female', { initiative: 0, sociability: 0, boldness: 0.1 })]);
+  const w = setup([mk('a', 'male', { initiative: 0, sociability: 0, boldness: 0.1 }), mk('b', 'female', { initiative: 0, sociability: 0, boldness: 0.1 })], { realCap: true });
   w.pos.b.x = w.pos.a.x + 600;
   assert.equal(runRounds(w, 5).length, 0);                // 時間還沒到：不發起
   w.advance(30000);
@@ -276,7 +277,7 @@ test('刪除：先中止互動；散步經過 +1 每天一次', () => {
 
 // 模擬：照主行程的排程方式跑 30 分鐘（每次 tick 回傳下一次延遲；互動 6–20 秒後完成），量每個 60 秒區間開始幾次
 function simulate(qs, minutes, seed, opts = {}) {
-  const w = setup(qs, { seed, ...opts });
+  const w = setup(qs, { seed, realCap: true, ...opts });
   const rnd = seeded(seed + 99);
   const ends = [];                                         // [時間, pairId]
   let t = 0, nextTick = 15000;
@@ -317,7 +318,7 @@ test('頻率：10 隻都很愛社交也不超過每 60 秒 10 次', () => {
 
 test('使用者剛離開：保底提早到 20 秒、互動比較多，但仍然每 60 秒最多 10 次', () => {
   const shy = () => [mk('a', 'male', { initiative: 0, sociability: 0, boldness: 0.1 }), mk('b', 'female', { initiative: 0, sociability: 0, boldness: 0.1 })];
-  const w = setup(shy(), { isAway: () => true });
+  const w = setup(shy(), { isAway: () => true, realCap: true });
   w.pos.b.x = w.pos.a.x + 600;
   w.advance(20000); w.S.tick();
   assert.equal(w.started.length, 1);                       // 離開時 20 秒就保底

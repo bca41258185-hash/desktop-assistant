@@ -50,7 +50,7 @@ function start() {
   }
   data.quokkas.forEach((q) => {
     if (!q.traits) q.traits = TR.generate();
-    TR.ensurePersonality(q.traits); TR.ensureAccessory(q.traits);
+    TR.ensurePersonality(q.traits); TR.ensureAccessory(q.traits); if (TR.ensureGender) TR.ensureGender(q.traits);
     if (!q.home && q.pos) { q.home = q.pos; delete q.pos; }
   });
   data.settings.defaultOwner = data.settings.defaultOwner && qById(data.settings.defaultOwner) ? data.settings.defaultOwner : data.quokkas[0].id;
