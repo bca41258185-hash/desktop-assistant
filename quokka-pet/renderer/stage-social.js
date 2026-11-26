@@ -157,7 +157,7 @@
       this.gap = gap; this.t0 = now;
       const ig = new Set([I, O]);
       const chk = (who) => (nx, d) => !who.blocked(nx, d, new Set([I, O, ...(laneFor ? [laneFor] : [])]));   // 走到一半有別隻走進來擋路：停下、取消
-      this.mI = Math.abs(ix - I.x) > 3 ? I.mover(ix, { ignore: ig, tol: 1.5, check: chk(I), gait: (rem) => (rem < 64 * I.k ? 'walk' : 'hop') }) : null;
+      this.mI = Math.abs(ix - I.x) > 3 ? I.mover(ix, { ignore: ig, tol: 1.5, check: chk(I), gait: (rem) => (S.CRAWL && rem < 64 * I.k ? 'walk' : 'hop') }) : null;
       this.mO = Math.abs(ox - O.x) > 3 ? O.mover(ox, { ignore: ig, tol: 1.5, gait: 'hop', lane: laneFor ? [laneFor] : null }) : null;
       this.waitTurn = this.mO ? null : O.smoothTo(-side * 60, {}, 280);
       return true;

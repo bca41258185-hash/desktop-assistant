@@ -570,9 +570,9 @@
         return true;
       } };
     }
-    // 挑步態：很近或慵懶的四肢著地慢慢走，其他用小跳
+    // 挑步態：很近或慵懶的四肢著地慢慢走，其他用小跳（四肢著地已封存：S.CRAWL 為 false 時一律小跳）
     pickGait(dist) {
-      if (!ANIM.GAIT) return 'hop';
+      if (!ANIM.GAIT || !S.CRAWL) return 'hop';
       const strides = dist / (GINFO('hop').stride * this.k);
       if (strides < 2.2) return 'walk';
       return Math.random() < (this.act < .3 ? .7 : this.act > .65 ? .15 : .35) ? 'walk' : 'hop';

@@ -253,7 +253,7 @@ S.love = {
     A.mark('joeyOut');
     await A.wait(4);
     // 媽媽散步，小袋鼠跟著
-    await A.js(`(function(){const S=window.__stage.S,a=S.actors.get('ad0');a.requestActivity(7,a.walkJob(a.x-150,{gait:'walk',noPause:true}));S.kick();})()`);
+    await A.js(`(function(){const S=window.__stage.S,a=S.actors.get('ad0');a.requestActivity(7,a.walkJob(a.x-150,{noPause:true}));S.kick();})()`);
     A.onFrame = async () => { const p = await A.actors(); const m = p.find((q) => q.id === 'ad0'); if (m) cx += (m.x - 40 - cx) * 0.05; };
     A.mark('follow');
     await A.wait(6);

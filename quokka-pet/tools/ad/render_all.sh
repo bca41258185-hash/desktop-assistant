@@ -4,6 +4,7 @@
 #   --preview：960×540、60fps（一樣逐格）→ out/preview.mp4
 # 專案路徑：環境變數 QUOKKA_DIR（預設是本資料夾往上兩層，也就是 quokka-pet/）
 set -e
+export PYTHONUTF8=1 PYTHONIOENCODING=utf-8   # Windows：路徑有中文時 Python 要用 UTF-8 輸出，否則會寫到亂碼資料夾
 D=$(cd "$(dirname "$0")" && pwd)
 SCALE=1; NAME=kuka_ad_v2; JOBS=${JOBS:-2}; ONLY=""; CAPS=0; SKIP=0
 while [ $# -gt 0 ]; do case "$1" in
@@ -15,7 +16,7 @@ while [ $# -gt 0 ]; do case "$1" in
   *) echo "不認得的參數 $1"; exit 2 ;;
 esac; shift; done
 export QUOKKA_DIR=$(cd "${QUOKKA_DIR:-$D/../..}" && pwd)
-PY=$(command -v python3 || command -v python)
+PY=$(for p in python3 python; do "$p" -c "import numpy" >/dev/null 2>&1 && { command -v "$p"; break; }; done)
 OUTD="$D/out"; SH="$OUTD/shots-$NAME"; mkdir -p "$SH" "$OUTD/logs"
 for c in node ffmpeg ffprobe; do command -v $c >/dev/null || { echo "缺少 $c"; exit 1; }; done
 $PY -c "import numpy" || { echo "缺少 Python numpy（pip install numpy）"; exit 1; }
