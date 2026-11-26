@@ -24,7 +24,7 @@
   }
   function remove(qid) {
     const a = actorOf(qid);
-    if (!a) return;
+    if (!a || a.releasing) return;                    // 放生中：等禿鷹把牠帶出畫面才移除（stage-release.js）
     a.destroy(); S.actors.delete(qid);
     S.reportRects();
   }

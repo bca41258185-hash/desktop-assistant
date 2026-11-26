@@ -564,10 +564,11 @@ function start() {
     changed({ quokkas: true });
     return { ok: true };
   });
-  ipcMain.handle('quokka:delete', (e, { qid, transferTo } = {}) => {
+  // 刪除／放生：資料上的處理一樣（負責的事轉給別隻或一起刪、家族紀錄）；放生時舞台先播禿鷹把牠帶走，再從名單拿掉
+  ipcMain.handle('quokka:delete', (e, { qid, transferTo, release } = {}) => {
     const q = qById(qid); if (!q) return { ok: false };
     const owners = data.quokkas.filter((x) => romance.canOwnTasks(x));
-    if (owners.length <= 1 && romance.canOwnTasks(q)) return { ok: false, message: '最後一隻不能刪除' };
+    if (owners.length <= 1 && romance.canOwnTasks(q)) return { ok: false, message: release ? '最後一隻不能放生' : '最後一隻不能刪除' };
     const to = transferTo === 'delete' ? null : qById(transferTo) && transferTo !== qid && romance.canOwnTasks(qById(transferTo)) ? transferTo : (owners.find((x) => x.id !== qid) || {}).id;
     // 轉給新主人前先檢查上限（每隻 50 件待辦…）：超過就不刪，請使用者選別隻或「一起刪除」
     if (to) {
@@ -580,6 +581,7 @@ function start() {
       if (to) data[k].forEach((x) => { if (x.owner === qid) x.owner = to; });
       else { data[k].filter((x) => x.owner === qid && k === 'folders').forEach((f) => unwatchFolder(f.id)); data[k] = data[k].filter((x) => x.owner !== qid); }
     }
+    if (release) toStage('stage:release', { qid });               // 舞台會標記這隻，名單更新時等禿鷹飛走才移除
     social.removeQuokka(qid);
     delete layers[qid]; delete positions[qid]; delete digest[qid];      // 舞台回報的圖層、位置、離開期間的待報告事項
     const famEvents = romance.onDelete(qid);                   // 墓碑紀錄、伴侶恢復單身、小袋鼠交給爸爸
