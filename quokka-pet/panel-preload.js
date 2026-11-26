@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('api', {
   onState: on('store:changed'),
   onStockTick: on('stock:tick'),
   onSelect: on('panel:select'),
+  onFolderChanges: on('folder:changes'),   // { id, files, dirs, at, recent: [{ at, kind, path }] }
 
   // 待辦、提醒、股票、資料夾
   addItem: call('item:add'),

@@ -358,9 +358,7 @@ function createStockService({
     st.timer = setTimer(() => { st.timer = null; poll(market); }, delay);
   }
 
-  // 更新某個訂閱者（例如某隻庫卡）要盯的清單；所有訂閱者的清單會合併去重
-  function setWatchlist(list, owner = 'default') {
-    const before = new Set(watch.keys());
+  function normalizeList(list) {
     const items = [];
     for (const raw of Array.isArray(list) ? list : []) {
       const it = normalizeItem(raw);
@@ -368,7 +366,23 @@ function createStockService({
       if (it.ex) exCache.set(it.symbol, it.ex);
       items.push(it);
     }
+    return items;
+  }
+  // 更新某個訂閱者（例如某隻庫卡）要盯的清單；所有訂閱者的清單會合併去重
+  function setWatchlist(list, owner = 'default') {
+    const before = new Set(watch.keys());
+    const items = normalizeList(list);
     if (items.length) owners.set(owner, items); else owners.delete(owner);
+    return rebuild(before);
+  }
+  // 一次換掉所有訂閱者的清單：{ owner: [...] }；不在裡面的訂閱者（例如已經刪掉的庫卡）一併移除
+  function setAllWatchlists(byOwner) {
+    const before = new Set(watch.keys());
+    owners.clear();
+    for (const [owner, list] of Object.entries(byOwner || {})) { const items = normalizeList(list); if (items.length) owners.set(owner, items); }
+    return rebuild(before);
+  }
+  function rebuild(before) {
     watch.clear();
     for (const arr of owners.values()) {
       for (const it of arr) {
@@ -433,7 +447,8 @@ function createStockService({
   }
 
   return {
-    setWatchlist, lookup, start, stop, subscribe, getQuote,
+    setWatchlist, setAllWatchlists, lookup, start, stop, subscribe, getQuote,
+    get owners() { return [...owners.keys()]; },
     pollNow: (market) => poll(market),
     get watchlist() { return [...watch.values()].map((w) => ({ ...w })); },
     _state: mk,

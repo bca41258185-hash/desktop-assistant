@@ -309,3 +309,27 @@ test('清單清空就停止計時器；新增股票會馬上抓一次', async ()
   assert.equal(clock.timers.size, 0);
   svc.stop();
 });
+
+test('setAllWatchlists：刪掉的庫卡（不在清單裡的訂閱者）一併移除，不再抓它的股票', async () => {
+  const clock = fakeClock(Date.parse('2026-11-23T02:00:00Z'));
+  const urls = [];
+  const fetch = async (url) => { urls.push(decodeURIComponent(url)); const ch = decodeURIComponent(url).match(/ex_ch=([^&]+)/)[1].split('|'); return resp({ msgArray: ch.map((c) => twMsg({ c: c.slice(4, -3), d: '20261123' })) }); };
+  const svc = createStockService({ fetch, ...clock });
+  svc.setAllWatchlists({ qa: [{ symbol: '2317', market: 'tw', ex: 'tse' }], qb: [{ symbol: '2330', market: 'tw', ex: 'tse' }] });
+  assert.deepEqual(svc.owners.sort(), ['qa', 'qb']);
+  svc.start(); await flush();
+  assert.match(urls[0], /2330/);
+  // qb 被刪掉：重設時不在清單裡
+  svc.setAllWatchlists({ qa: [{ symbol: '2317', market: 'tw', ex: 'tse' }] });
+  assert.deepEqual(svc.owners, ['qa']);
+  assert.deepEqual(svc.watchlist.map((w) => w.symbol), ['2317']);
+  assert.equal(svc.getQuote('2330', 'tw'), null);              // 報價也清掉
+  urls.length = 0;
+  await clock.advance(5000);
+  assert.ok(urls.length >= 1);
+  assert.ok(urls.every((u) => !/2330/.test(u)), urls.join('\n'));
+  // 空的清單：所有訂閱都清掉，計時器停掉
+  svc.setAllWatchlists({});
+  assert.deepEqual(svc.owners, []); assert.equal(svc.watchlist.length, 0);
+  svc.stop();
+});

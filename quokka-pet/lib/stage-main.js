@@ -3,7 +3,10 @@
 // 判斷方式（三個平台通用）：舞台回報每隻庫卡的範圍 → 主行程依游標位置切換穿透。
 //   游標在任一隻 150 px 內：每 50 ms 查一次；400 px 內（看向游標）每 120 ms；否則每 400 ms；使用者離開電腦時暫停。
 (function () {
-  function createStageManager({ BrowserWindow, screen, ipcMain, path, dir }) {
+  // 連續第 n 次當掉後，等多久再重新載入
+  const REVIVE_STEPS = [0, 10000, 30000, 60000, 120000], REVIVE_MAX = 300000, STABLE_MS = 60000;
+  const reviveDelay = (n) => (n < REVIVE_STEPS.length ? REVIVE_STEPS[n] : REVIVE_MAX);
+  function createStageManager({ BrowserWindow, screen, ipcMain, path, dir, onGone = null, setTimer = setTimeout, now = () => Date.now() }) {
     const stages = new Map();          // displayId → { win, rects: [{id,x,y,w,h}], ignoring }
     let cursorTimer = null, paused = false;
 
@@ -19,12 +22,29 @@
       win.setIgnoreMouseEvents(true, { forward: true });
       win.loadFile(path.join(dir, 'renderer', 'stage.html'));
       win.once('ready-to-show', () => win.showInactive());
-      // 舞台頁面當掉或沒回應：重新載入（stage:ready 會補送名單與正在響的提醒），最多每 10 秒一次
-      let lastReload = 0;
-      const revive = () => { const t = Date.now(); if (win.isDestroyed() || t - lastReload < 10000) return; lastReload = t; try { win.webContents.reload(); } catch (e) {} };
-      win.webContents.on('render-process-gone', revive);
-      win.on('unresponsive', revive);
-      const st = { win, display, rects: [], ignoring: true };
+      const st = { win, display, rects: [], ignoring: true, crashes: 0, reviveTimer: null, lastReload: 0 };
+      // 舞台頁面當掉或沒回應（規格 1.4）：
+      //   1. 立刻清掉可點範圍、回到滑鼠穿透（不能讓透明舞台擋住桌面）
+      //   2. 重新載入（stage:ready 會補送名單、設定、響鈴中的提醒、離開狀態）；
+      //      連續當掉就延後再試：0 秒、10 秒、30 秒、1 分、2 分、之後每 5 分鐘（上限），不會永遠放棄
+      const revive = (why) => {
+        if (win.isDestroyed()) return;
+        st.rects = []; st.dragging = false; setIgnore(st, true);
+        if (onGone) try { onGone(why); } catch (e) { /* 呼叫端出錯不影響重載 */ }
+        if (st.reviveTimer) return;                                  // 已經排好了
+        const t = now();
+        if (t - st.lastReload > STABLE_MS) st.crashes = 0;           // 上次重載後穩定跑了一陣子：重新計算
+        const delay = reviveDelay(st.crashes);
+        st.crashes++;
+        st.reviveTimer = setTimer(() => {
+          st.reviveTimer = null;
+          if (win.isDestroyed()) return;
+          st.lastReload = now();
+          try { win.webContents.reload(); } catch (e) { /* 下次當掉再試 */ }
+        }, delay);
+      };
+      win.webContents.on('render-process-gone', () => revive('gone'));
+      win.on('unresponsive', () => revive('unresponsive'));
       stages.set(display.id, st);
       return st;
     }
@@ -89,5 +109,5 @@
     for (const ev of ['display-metrics-changed', 'display-added', 'display-removed']) screen.on(ev, refit);
     return { start, send, pause, stages, primary };
   }
-  module.exports = { createStageManager };
+  module.exports = { createStageManager, reviveDelay, REVIVE_MAX, STABLE_MS };
 })();

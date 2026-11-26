@@ -48,7 +48,9 @@
     recent: [],              // 最近選過的庫卡 id（新的在前），決定名單直接顯示哪 6 隻
     moreOpen: false,         // 「更多…」是否展開
     moreQuery: '',           // 「更多…」的搜尋字
-    menu: null               // 右鍵選單 { kind, id }
+    menu: null,              // 右鍵選單 { kind, id }
+    folderOpen: new Set(),   // 展開「最近的變動」的資料夾 id
+    confirmStock: null       // 按了「加入股票」的那段文字（常見英文字要確認）
   };
   let initialized = false;
 
@@ -145,6 +147,17 @@
     };
   }
   const total = (c) => c.task + c.reminder + c.stock + c.folder;
+  // 每隻的上限（和主行程 lib/store.js LIMITS 一樣）；響過的一次性提醒、已完成的待辦不佔名額
+  const LIM = { task: 50, reminder: 30, stock: 20, folder: 50 };
+  const spentRem = (r) => r.enabled === false && r.rule && r.rule.type === 'once' && !!r.lastFiredAt && !isRinging(r);
+  function slots(owner) {
+    return { task: S.tasks.filter((t) => t.owner === owner && !t.done).length, reminder: S.reminders.filter((r) => r.owner === owner && !spentRem(r)).length,
+      stock: S.stocks.filter((x) => x.owner === owner).length, folder: S.folders.filter((x) => x.owner === owner).length };
+  }
+  function wouldOverflow(from, to) {
+    const a = slots(from), b = slots(to);
+    return Object.keys(LIM).some((k) => a[k] && a[k] + b[k] > LIM[k]);
+  }
   const isRinging = (r) => !!r.ringing || (S.ringing || []).includes(r.id);
 
   // 提醒下一次響的時間（毫秒）；用來排序與判斷錯過
@@ -389,8 +402,9 @@
   }
   function updateHint() {
     const text = $('addInput').value;
-    const hintEl = $('addHint'), sw = $('switchType');
+    const hintEl = $('addHint'), sw = $('switchType'), alt = $('altAction');
     const h = ui.msg && ui.msg.kind === 'err' ? null : hintFor(text);
+    alt.hidden = true;
     if (h) {
       hintEl.className = 'add-hint';
       hintEl.textContent = h.line;
@@ -407,6 +421,10 @@
         sw.hidden = false; sw.textContent = '當成待辦'; sw.dataset.next = 'task-submit';
         sw.setAttribute('aria-label', '改成待辦並送出');
       } else sw.hidden = true;
+      if (ui.msg.action2 === 'asStock') {                      // 常見英文字查到是股票：問要不要真的盯
+        alt.hidden = false; alt.textContent = '加入股票';
+        alt.setAttribute('aria-label', '確定要盯這檔股票，加入');
+      }
       return;
     }
     hintEl.className = 'add-hint';
@@ -414,8 +432,8 @@
     sw.hidden = true;
   }
   let msgTimer = null;
-  function showMsg(text, kind, action) {
-    ui.msg = { text, kind, action };
+  function showMsg(text, kind, action, action2) {
+    ui.msg = { text, kind, action, action2 };
     clearTimeout(msgTimer);
     if (kind !== 'err') msgTimer = setTimeout(() => { ui.msg = null; updateHint(); }, 4000);
     updateHint();
@@ -433,6 +451,8 @@
     input.disabled = true;
     const payload = { text, owner };
     if (ui.forceType) payload.forceType = ui.forceType;
+    if (ui.confirmStock && ui.confirmStock === text) payload.confirm = true;   // 按了「加入股票」
+    ui.confirmStock = null;
     let res;
     try { res = await api.addItem(payload); } catch (e) { res = { ok: false, message: '沒有送出去，請再試一次' }; }
     ui.busy = false;
@@ -443,8 +463,9 @@
       showMsg(`✓ 已交給${qName(owner)}${kind ? `（${kind}）` : ''}${res.message ? `：${res.message}` : ''}`, 'ok');
     } else {
       const m = (res && res.message) || '沒有加進去，請再試一次';
-      const canTask = h && h.parsed === 'stock' && ui.forceType !== 'task' && /待辦/.test(m);
-      showMsg(m, 'err', canTask ? 'asTask' : null);
+      // 主行程問「要當成待辦嗎？」（找不到資料夾、查不到股票、名稱對不上、連不上…）就一定給「當成待辦」按鈕
+      const canTask = !!(res && res.askTask) && ui.forceType !== 'task';
+      showMsg(m, 'err', canTask ? 'asTask' : null, res && res.askStock ? 'asStock' : null);
     }
   }
 
@@ -524,13 +545,17 @@
     const lastOne = others.length === 0;
     let danger = '';
     if (ui.gearMode === 'delete') {
+      // 放不下的（轉過去會超過每隻的上限）先標出來、不能選；主行程會再檢查一次
+      const full = new Set(others.filter((o) => wouldOverflow(q.id, o.id)).map((o) => o.id));
+      const firstOk = others.find((o) => !full.has(o.id));
       danger = `<div class="confirm" role="group" aria-label="刪除${esc(q.name)}">
         ${q.pregnancy ? `<p class="warn">${esc(q.name)}懷孕中，刪除後寶寶不會出生。</p>` : ''}
         ${n ? `<p><b>${esc(q.name)}</b>負責的 ${n} 件事要交給誰？</p>
           <div class="radio-list" role="radiogroup" aria-label="交給誰">
-          ${others.map((o, i) => `<label class="radio"><input type="radio" name="xfer" value="${esc(o.id)}"${i === 0 ? ' checked' : ''}> ${avatar(o, 'sm')} ${esc(o.name)}</label>`).join('')}
-          <label class="radio"><input type="radio" name="xfer" value="delete"> 一起刪除</label></div>`
+          ${others.map((o) => `<label class="radio${full.has(o.id) ? ' is-full' : ''}"><input type="radio" name="xfer" value="${esc(o.id)}"${o === firstOk ? ' checked' : ''}${full.has(o.id) ? ' disabled' : ''}> ${avatar(o, 'sm')} ${esc(o.name)}${full.has(o.id) ? '（放不下了）' : ''}</label>`).join('')}
+          <label class="radio"><input type="radio" name="xfer" value="delete"${firstOk ? '' : ' checked'}> 一起刪除</label></div>`
         : `<p>確定要刪除<b>${esc(q.name)}</b>嗎？</p>`}
+        ${ui.gearMsg ? `<p class="err" role="alert">${esc(ui.gearMsg)}</p>` : ''}
         <p class="note">刪除庫卡不能復原。</p>
         <div class="btns"><button type="button" class="btn danger" data-act="delGo" data-fk="g:delGo">確定刪除</button>
         <button type="button" class="btn" data-act="gearCancel" data-fk="g:cancel">取消</button></div></div>`;
@@ -551,7 +576,7 @@
       <label class="field-l" for="gName">名字</label>
       <div class="inline"><input type="text" id="gName" class="text-in" maxlength="${NAME_MAX}" value="${esc(q.name)}" data-fk="g:name" aria-describedby="gErr" autocomplete="off">
         <button type="button" class="btn" data-act="rename" data-fk="g:rename">改名</button></div>
-      <p class="err" id="gErr" role="alert">${esc(ui.gearMsg || '')}</p>
+      <p class="err" id="gErr" role="alert">${esc(ui.gearMode === 'delete' ? '' : ui.gearMsg || '')}</p>
       <label class="field-l" for="gAcc">飾品</label>
       <div class="inline"><select id="gAcc" data-fk="g:acc">${TR.ACCESSORIES.map((a) => `<option value="${a.id}"${a.id === def.id ? ' selected' : ''}>${esc(TR.accessoryName({ type: a.id }))}</option>`).join('')}</select></div>
       <div class="swatches" role="radiogroup" aria-label="飾品顏色">${def.colors.map((c, i) =>
@@ -592,7 +617,8 @@
       ${ownerAv(t)}${body}${delBtn('task', t, t.text)}</li>`;
   }
   function reminderRow(r) {
-    const ringing = isRinging(r), missed = !ringing && isMissed(r), bad = !ruleOk(r.rule), on = r.enabled !== false && !bad;
+    // 響鈴中的一次性提醒：主行程已經把 enabled 設成 false（響過了），但還在響，開關要顯示「開著」
+    const ringing = isRinging(r), missed = !ringing && isMissed(r), bad = !ruleOk(r.rule), on = (ringing || r.enabled !== false) && !bad;
     const tags = bad ? ['<span class="tag tag-miss" title="時間或日期有誤，這個提醒不會響">資料有誤</span>'] : [`<span class="tag">${esc(ruleTag(r.rule))}</span>`];
     if (missed) tags.push(`<span class="tag tag-miss" title="${esc('報告錯過的時間：' + hm(r.missedAt))}">錯過</span>`);
     if (!ringing && r.snoozeUntil && new Date(r.snoozeUntil).getTime() > Date.now()) tags.push(`<span class="tag tag-soft">貪睡到 ${esc(hm(r.snoozeUntil))}</span>`);
@@ -619,13 +645,17 @@
     const arrow = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '－';
     const pctText = pct == null || !isFinite(pct) ? '—' : `${arrow} ${Math.abs(pct).toFixed(2)}%`;
     const dirName = dir === 'up' ? '漲' : dir === 'down' ? '跌' : '平盤';
-    const status = q.stale ? `<span class="s-stale">暫停更新${q.time ? `・最後 ${esc(hm(q.time))}` : ''}</span>` : `<span class="s-pct">${esc(pctText)}</span>`;
+    const noQuote = q.price == null || !isFinite(q.price);             // 第一次就抓不到（或還在抓）：不能說成「平盤」
+    const status = q.stale ? `<span class="s-stale">暫停更新${q.time ? `・最後 ${esc(hm(q.time))}` : ''}</span>`
+      : noQuote ? '<span class="s-wait">還沒拿到報價</span>' : `<span class="s-pct">${esc(pctText)}</span>`;
+    const sr = noQuote ? `${name}，${q.stale ? '暫停更新，' : ''}還沒拿到報價`
+      : `${name} ${fmtPrice(q.price)}，${q.stale ? '暫停更新' : `${dirName} ${pct != null && isFinite(pct) ? Math.abs(pct).toFixed(2) + '%' : ''}`}`;
     return {
-      cls: `stock ${q.stale ? 'is-stale' : dir}`,
+      cls: `stock ${q.stale ? 'is-stale' : noQuote ? 'is-wait' : dir}`,
       html: `<div class="s-top">${ownerAv(s)}<span class="s-name" title="${esc(name)}">${esc(name)}</span>${delBtn('stock', s, name)}</div>
         <div class="s-sym">${esc(s.symbol)}${s.market === 'us' ? '・美股' : ''}</div>
-        <div class="s-price">${esc(fmtPrice(q.price))}</div>${status}
-        <span class="sr-only">${esc(name)} ${esc(fmtPrice(q.price))}，${q.stale ? '暫停更新' : `${dirName} ${pct != null && isFinite(pct) ? Math.abs(pct).toFixed(2) + '%' : ''}`}</span>`
+        <div class="s-price"${noQuote ? ' aria-hidden="true"' : ''}>${esc(fmtPrice(q.price))}</div>${status}
+        <span class="sr-only">${esc(sr)}</span>`
     };
   }
   function stockCard(s) {
@@ -655,13 +685,32 @@
     ui.report = res || { ok: false };
     renderLists();
   }
+  // 資料夾：狀態＋最近的變動清單（規格 4.3）。變動只存在主行程記憶體，程式重開後從頭記
+  const FC_KIND = { add: '新增', change: '修改', unlink: '刪除', addDir: '新資料夾', unlinkDir: '刪資料夾' };
+  function changeSummary(list) {
+    const at = list[0].at, batch = list.filter((x) => x.at === at);
+    const files = batch.filter((x) => !/Dir$/.test(x.kind)).length, dirs = batch.length - files;
+    return `${hm(at)} ${[files && `${files} 個檔案`, dirs && `${dirs} 個資料夾`].filter(Boolean).join('、')}變了`;
+  }
   function folderRow(f) {
-    const st = f.status === 'missing' ? ['找不到', 'bad'] : f.status === 'error' ? ['有問題', 'bad'] : ['正常', 'good'];
+    const changes = (S.folderChanges || {})[f.id] || [];
     const base = String(f.path).split(/[\\/]/).filter(Boolean).pop() || f.path;
+    let pill, below = '', sum = '';
+    if (f.status === 'missing') {
+      pill = ['找不到', 'bad'];
+      below = '<p class="f-missing">找不到這個資料夾（改名、刪掉或隨身碟拔掉了？）。每 5 分鐘會再找一次，找回來就繼續看著。</p>';
+    } else if (f.status === 'error') pill = ['讀不到', 'bad'];
+    else if (changes.length) { pill = ['有變動', 'good']; sum = changeSummary(changes); }
+    else pill = ['看著中', 'calm'];
+    if (changes.length && f.status !== 'missing') {
+      const open = ui.folderOpen.has(f.id);
+      below = `<details class="f-changes" data-fid="${esc(f.id)}"${open ? ' open' : ''}><summary data-fk="folder:${esc(f.id)}:chg">最近的變動（${changes.length}）</summary>
+        <ul>${changes.map((c) => `<li title="${esc(c.path)}"><span class="fc-k">${esc(FC_KIND[c.kind] || c.kind)}</span> ${esc(hm(c.at))}　<bdi>${esc(c.path)}</bdi></li>`).join('')}</ul></details>`;
+    }
     return `<li class="row folder" ${rowAttrs('folder', f)}>${ownerAv(f)}
       <span class="f-ico" aria-hidden="true">📁</span>
-      <span class="f-text"><span class="f-name">${esc(base)}</span><span class="f-path" title="${esc(f.path)}"><bdi>${esc(f.path)}</bdi></span></span>
-      <span class="pill ${st[1]}">${st[0]}</span>${delBtn('folder', f, f.path)}</li>`;
+      <span class="f-text"><span class="f-name">${esc(base)}</span><span class="f-path" title="${esc(f.path)}"><bdi>${esc(f.path)}</bdi></span>${sum ? `<span class="f-sum">${esc(sum)}</span>` : ''}</span>
+      <span class="pill ${pill[1]}">${esc(pill[0])}</span>${delBtn('folder', f, f.path)}${below}</li>`;
   }
   function section(kind, title, count, inner, extra) {
     return `<section class="sec sec-${kind}" aria-label="${title}">
@@ -895,6 +944,8 @@
     const pick = document.querySelector('input[name="xfer"]:checked');
     const transferTo = pick ? pick.value : 'delete';
     const res = await api.deleteQuokka({ qid: q.id, transferTo }).catch(() => ({ ok: false }));
+    // 新主人放不下（超過上限）：留在確認畫面，讓使用者選別隻或「一起刪除」
+    if (res && res.full) { ui.gearMsg = res.message; render(); const r = document.querySelector('input[name="xfer"]:checked'); if (r) r.focus(); return; }
     if (!res || !res.ok) { ui.gearMsg = (res && res.message) || '沒有刪除成功'; ui.gearMode = null; render(); return; }
     const name = q.name;
     ui.gear = false; ui.gearMode = null;
@@ -965,8 +1016,11 @@
       case 'del': removeItem(kind, id); break;
       case 'remOn': {
         const r = findItem('reminder', id); if (!r) break;
-        r.enabled = r.enabled === false; render();
-        api.updateItem({ kind: 'reminder', id, patch: { enabled: r.enabled } });
+        const next = b.getAttribute('aria-checked') !== 'true';      // 照畫面上看到的切換（響鈴中顯示「開著」，按了就關掉並停止響鈴）
+        r.enabled = next;
+        if (!next && isRinging(r)) { r.ringing = false; S.ringing = (S.ringing || []).filter((x) => x !== r.id); }
+        render();
+        api.updateItem({ kind: 'reminder', id, patch: { enabled: next } });
         break;
       }
       case 'ack': api.ackAlert({ reminderId: id }); break;
@@ -989,7 +1043,7 @@
       case 'color': doAccessory($('gAcc').value, b.dataset.c); break;
       case 'regenAsk': ui.gearMode = 'regen'; render(); break;
       case 'regenGo': doRegen(); break;
-      case 'delAsk': ui.gearMode = 'delete'; render(); break;
+      case 'delAsk': ui.gearMode = 'delete'; ui.gearMsg = null; render(); break;
       case 'delGo': doDelete(); break;
       case 'nameBaby': doNameBaby(); break;
       case 'play': {
@@ -1020,6 +1074,9 @@
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('li[data-sym]')) { e.preventDefault(); openReport(e.target); }
   });
   $('globalGear').addEventListener('click', () => { ui.globalOpen = !ui.globalOpen; ui.adding = null; render(); });
+  $('altAction').addEventListener('click', () => {
+    ui.confirmStock = $('addInput').value.trim(); ui.forceType = null; ui.msg = null; submit();
+  });
   $('switchType').addEventListener('click', () => {
     const next = $('switchType').dataset.next;
     if (next === 'task-submit') { ui.forceType = 'task'; ui.msg = null; submit(); return; }
@@ -1055,6 +1112,7 @@
   });
   document.addEventListener('toggle', (e) => {
     if (e.target.classList && e.target.classList.contains('done-box')) ui.doneOpen = e.target.open;
+    if (e.target.classList && e.target.classList.contains('f-changes')) { const id = e.target.dataset.fid; if (e.target.open) ui.folderOpen.add(id); else ui.folderOpen.delete(id); }
   }, true);
   document.addEventListener('keydown', (e) => {
     const t = e.target;
@@ -1127,10 +1185,15 @@
     document.body.classList.add('dragging');
     row.classList.add('is-drag');
   });
-  document.addEventListener('dragend', (e) => {
+  // 拖曳結束：放下後清單會重畫、被拖的那一列可能已經不在（換了負責人），dragend 就傳不到，
+  // 所以放下時、以及之後滑鼠一動（沒有按著）時都要清掉
+  function endDrag() {
     document.body.classList.remove('dragging');
     document.querySelectorAll('.is-drag, .drop-over').forEach((x) => x.classList.remove('is-drag', 'drop-over'));
-  });
+  }
+  document.addEventListener('dragend', endDrag);
+  document.addEventListener('drop', endDrag);
+  document.addEventListener('mousemove', (e) => { if (!e.buttons && document.body.classList.contains('dragging')) endDrag(); });
   // 名單與「更多…」清單都可以當放下的目標
   [$('roster'), $('rosterMore')].filter(Boolean).forEach((roster) => {
   roster.addEventListener('dragover', (e) => {
@@ -1150,7 +1213,7 @@
     e.preventDefault();
     let d = null;
     try { d = JSON.parse(e.dataTransfer.getData('application/x-quokka-item')); } catch (err) { return; }
-    c.classList.remove('drop-over');
+    endDrag();
     if (d) reassign(d.kind, d.id, c.dataset.drop);
   });
   });
@@ -1169,7 +1232,7 @@
   function applyState(snap) {
     if (!snap) return;
     S = {
-      quokkas: [], tasks: [], reminders: [], stocks: [], folders: [], relations: {}, quotes: {}, ringing: [],
+      quokkas: [], tasks: [], reminders: [], stocks: [], folders: [], relations: {}, quotes: {}, ringing: [], folderChanges: {},
       ...snap, settings: { ...(snap.settings || {}) }
     };
     S.quokkas.forEach((q) => { if (q.traits) { TR.ensureAccessory(q.traits); TR.ensurePersonality(q.traits); } });
@@ -1196,6 +1259,11 @@
     patchStock(t.symbol);
   });
   if (api.onSelect) api.onSelect((p) => { if (p && p.qid) select(p.qid); });
+  if (api.onFolderChanges) api.onFolderChanges((p) => {
+    if (!p || !p.id) return;
+    S.folderChanges = { ...(S.folderChanges || {}), [p.id]: Array.isArray(p.recent) ? p.recent : [] };
+    if (!ui.editing && !ui.menu) keepFocus(renderLists);
+  });
 
   // 錯過、貪睡的標籤跟著時間變：每 30 秒重畫一次提醒
   setInterval(() => { if (!ui.editing && !ui.menu) keepFocus(renderLists); }, 30000);

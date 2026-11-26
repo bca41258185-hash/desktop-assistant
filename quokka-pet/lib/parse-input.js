@@ -59,6 +59,7 @@
   const LOWER_WORDS = new Set(('a i am an as at be by do go he if in is it me my no of on or so to up us we ' +
     'all and any are ask bad big buy can cut day did end fix for fun get got had has her him his how its key let low man may new not now off old one our out own pay put run saw say see set she sit six ten the too top try two use was way who why win yes yet you ' +
     'back best book call care cash chat city cold come cook cool copy cost deal desk done down draw each easy edit else even ever exam face fact fail fast file fill find fine fire five flat fold food form four free from full game gift give glad goes gold gone good grab gray grey grow hair half hall hand hard have head hear heat help here high hold home hope hour idea into item join jump just keep kind know land last late lead left less life like line link list live load loan lock long look lost love lunch made mail main make many meet mind miss mode more most move much must name near need next nice none note once only open over page paid pair park part pass past pick plan play plus post pull push read real rent rest ride ring road room rule safe sale same save seat seem sell send ship shop show shut side sign site size slow some soon sort stay step stop such sure take talk task team tell test text than that them then they this time tidy tile todo told took tool trip true turn type unit upon used user very view wait wake walk wall want warm wash wear week well went were what when wide wife will wind wish with wood word work yard year your zero zone ' +
+    'zoom gym bank shop meal mom dad kid kids baby wifi coffee tea bus car taxi bike ' +
     'about above after again agree alarm allow alone along apply audit basic begin below board break bring build call clean clear check class close color count cover daily dance draft dream drink drive early email empty enjoy enter equal error event every extra field final first floor focus fresh front given glass going grade great green group guess guide happy hello house ideas image index issue items large later learn leave level light limit lunch maybe model money month never night notes offer often order other owner paint paper party phone photo piece place plans point price print proof quick quiet quite ready reply right round scale scope sheet short since sleep small solve space spend staff stair start still stone store study stuff style table taken tasks thank their there these thing think third those three title today total touch train trust under until upper using usual visit watch water where which while white whole women world would write wrong years young').split(' '));
   // 常見台股名稱 → 代號（沒有名稱查詢服務時的小對照表；只收不容易和一般待辦混淆的名稱）
   // 2026-11-26 已用 StockService.lookup() 逐檔向證交所核對過代號與名稱
@@ -88,7 +89,8 @@
     // 「台積電 2330」：名稱在前面的，只認對照表裡的名稱
     if ((m = s.match(/^(\S+?)\s*(\d{4,6}[A-Za-z]?)$/)) && known(m[1])) return { type: 'stock', symbol: m[2].toUpperCase(), market: 'tw', nameHint: m[1] };
     // 美股：1–5 個英文字母（可帶 .B），全大寫或全小寫；排除清單優先
-    if (/^[A-Z]{1,5}(\.[A-Z])?$/.test(s)) return NOT_TICKER.has(s) ? null : { type: 'stock', symbol: s, market: 'us' };
+    // 大寫但剛好是常見英文字（IT、GO、ON、NOW、ME）：仍可以是代號，但帶 word，主行程查到後先問一次再加入
+    if (/^[A-Z]{1,5}(\.[A-Z])?$/.test(s)) return NOT_TICKER.has(s) ? null : { type: 'stock', symbol: s, market: 'us', ...(LOWER_WORDS.has(s.toLowerCase()) ? { word: true } : {}) };
     if (/^[a-z]{2,5}(\.[a-z])?$/.test(s)) {
       const up = s.toUpperCase();
       return NOT_TICKER.has(up) || LOWER_WORDS.has(s) ? null : { type: 'stock', symbol: up, market: 'us' };
@@ -103,11 +105,15 @@
   const PERIOD = '(?:上午|早上|早晨|清晨|一早|中午|下午(?!茶)|午後|傍晚|晚上|晚間|凌晨|半夜|午夜|深夜)';
   const NOT_AFTER_BEFORE = '(?![往去進面天後場置提言者任])';       // 「3點前往工地」的「前」不是截止
   const DOM_NOT = '(?!樓|線|館|出口|機|房|倉|門|棟|店|桌|車|球|字|碼|廳|梯|柱|樑|窗|坑|井|地|公)';   // 「5號出口」「3號倉」不是日期
+  // 還不支援的重複方式（每兩週、每隔一週、雙週、每月、每年、每季、每隔幾天…）：一律當待辦並說「尚未支援」，不默默排成一次
+  const UNSUP = `每\\s*隔?\\s*(?:\\d+|[${CN}]{1,3}|半)\\s*(?:個)?\\s*(?:${WK}|月|年|季|天|日|工作天)(?:[一二三四五六日天](?!\\s*點)|[1-7](?![\\d點:]))?` +
+    `|每\\s*隔\\s*(?:個)?\\s*(?:${WK}|月|年|季|天|日)(?:[一二三四五六日天](?!\\s*點)|[1-7](?![\\d點:]))?|(?:每\\s*)?雙\\s*(?:${WK}|月)(?:[一二三四五六日天](?!\\s*點))?` +
+    `|每(?:個)?(?:月|年|季)(?:\\s*(?:\\d{1,2}|[${CN}]{1,3})\\s*[號日]|底|初|中)?|每個?${WK}(?![一二三四五六日天1-7末]|\\s*[一二三四五六日天1-7]\\s*(?:${LSEP}|到|至|~|-))`;
   const DATE_ALTS = [
+    ['unsup', UNSUP],
     ['wkdays', `每(?:個)?(?:工作天|工作日|上班日)|平日|工作日|上班日|每?${WK}一\\s*(?:到|至|~|-)\\s*${WK}?五`],
     ['wkend', `每(?:個)?${WK}末`],
     ['weekly', `每(?:個)?${WK}(?<wl>${WD1}(?:\\s*${LSEP}\\s*${WK}?${WD1}|${WD1})*)`],
-    ['monthly', `每(?:個)?月\\s*(?<mday>\\d{1,2}|[${CN}]{1,3})\\s*[號日]`],
     ['hourly', `每(?:隔)?\\s*(?:\\d+|[${CN}]{1,2}|半)?\\s*(?:個)?(?:半)?(?:小時|鐘頭|分鐘)`],
     ['daily', '每天早上|每天晚上|每天|每日|天天|每晚|每早'],
     ['rel', '大後天|後天|明天|明日|今天|今日|明早|明晚|今早|今晚|隔天'],
@@ -135,6 +141,7 @@
   // 回傳 { bad: '原因' } 表示看得出是日期但不能用（不存在、已過、尚未支援）
   function resolveDate(m, now) {
     const g = m.groups, tok = m[0], today = day0(now);
+    if (g.A_unsup) return { bad: new RegExp(`^每個?${WK}$`).test(tok) ? `「${tok}」沒說星期幾` : `「${tok.replace(/\s+/g, '')}」這種重複方式尚未支援`, hard: true };
     const past = (date, label) => {
       const days = Math.round((today - date) / 86400000);
       if (days <= 0) return null;
@@ -146,7 +153,7 @@
       const days = [...new Set([...g.wl].filter((c) => /[一二三四五六日天1-7]/.test(c)).map(WDN))].sort();
       return days.length ? { kind: 'weekly', weekdays: days, label: tok } : null;
     }
-    if (g.A_hourly) return { bad: `「${tok}」這種重複方式尚未支援` };
+    if (g.A_hourly) return { bad: `「${tok}」這種重複方式尚未支援`, hard: true };
     if (g.A_daily) return { kind: 'daily', per: /早/.test(tok) ? '早上' : /晚/.test(tok) ? '晚上' : null, label: tok };
     if (g.A_rel) {
       const per = /早$/.test(tok) ? '早上' : /晚$/.test(tok) ? '晚上' : null;
@@ -158,7 +165,7 @@
       const want = WDN(g.w), dow = now.getDay(), toMon = ((8 - dow) % 7) || 7;       // 到下週一還有幾天（週一到週日算一週）
       if (!g.wp || g.wp === '這' || g.wp === '本') return { kind: 'once', weekday: want, label: tok };
       const r = { kind: 'once', offset: toMon + (want === 0 ? 6 : want - 1) + (g.wp === '下下' ? 7 : 0), label: tok };
-      if (g.wp === '隔') { r.notes = [`「${tok}」當成下${tok.slice(1)}`]; r.uncertain = true; }
+      if (g.wp === '隔') { r.notes = [`「${tok}」當成下${tok.slice(1)}（每隔一週重複尚未支援）`]; r.uncertain = true; }
       return r;
     }
     if (g.A_wend) {
@@ -198,10 +205,10 @@
       if (date.getFullYear() !== now.getFullYear() && !fixedYear) { r.notes = [`${label} 是 ${date.getFullYear()} 年`]; r.uncertain = true; }
       return r;
     }
-    if (g.A_monthly || g.A_dom) {
-      const d = cnNum(g.mday || g.dom);
+    if (g.A_dom) {
+      const d = cnNum(g.dom);
       if (!(d >= 1 && d <= 31)) return { bad: `「${tok}」這個日期不存在` };
-      const monthly = !!g.A_monthly, next = /^下下/.test(g.domp || '') ? 2 : /^下/.test(g.domp || '') ? 1 : 0, fixed = !!g.domp;
+      const next = /^下下/.test(g.domp || '') ? 2 : /^下/.test(g.domp || '') ? 1 : 0, fixed = !!g.domp;
       let date = null;
       for (let k = next; k < 4 && !date; k++) {
         const x = mkDate(now.getFullYear() + Math.floor((now.getMonth() + k) / 12), ((now.getMonth() + k) % 12) + 1, d);
@@ -210,9 +217,8 @@
       }
       if (!date) return { bad: `「${tok}」這個日期不存在` };
       if (date < today) return { bad: `${mdLabel(date)} 已經過了` };
-      const r = { kind: 'once', date, label: monthly ? `${mdLabel(date)}` : tok, rollMonth: !fixed, dom: d };
-      if (monthly) r.notes = [`每月重複尚未支援，先設 ${mdLabel(date)} 這一次`];
-      else if (!fixed && date.getMonth() !== now.getMonth()) r.notes = [`這個月 ${d} 號已過，設成 ${mdLabel(date)}`];
+      const r = { kind: 'once', date, label: tok, rollMonth: !fixed, dom: d };
+      if (!fixed && date.getMonth() !== now.getMonth()) r.notes = [`這個月 ${d} 號已過，設成 ${mdLabel(date)}`];
       return r;
     }
     // 月底／月初；「12月底」「下下個月初」也可以。寫了月份但今年已過 → 明年（附提示）
@@ -243,7 +249,7 @@
       let end = idx + m[0].length;
       const day = resolveDate(m, now);
       if (!day) { RE_DATE.lastIndex = idx + 1; continue; }
-      if (day.bad) { if (!bad) bad = day.bad; continue; }
+      if (day.bad) { if (day.hard) return { bad: day.bad, hard: true }; if (!bad) bad = day.bad; continue; }   // 不支援的重複方式：整句當待辦
       const notes = (day.notes || []).slice();
       let uncertain = !!day.uncertain, extra = '';
       // 日期區間 12/1-12/3：用開始日，區間寫進內容
@@ -478,6 +484,7 @@
     s = s.replace(/(?<![零〇一二兩三四五六七八九十週周期拜])([一二兩三四五六七八九])([二三四五六七八九])點(左右|前後|多)?/, (all, a, b) => { if (CN_D[b] !== CN_D[a] + 1) return all; suffix = `（${all}）`; return `${a}點`; });
 
     const dm = findDate(s, now);
+    if (dm && dm.hard) return { type: 'task', note: `${dm.bad}，先當成待辦`, uncertain: true };   // 不支援的重複方式：不排成一次性提醒
     let day = { kind: 'none' }, work = s, dateDl = false;
     if (dm && dm.day) {
       day = dm.day; suffix = dm.extra + suffix;
@@ -627,12 +634,18 @@
     return task;
   }
 
+  // 給使用者看的提示（輸入框下方、送出後的訊息共用）：改到明天的一定要說，其他推斷接在後面
+  function noteText(r) {
+    if (!r) return '';
+    const moved = r.movedToTomorrow && !/改明天|改成明天|設成明天/.test(r.note || '') ? '今天已過，改明天' : '';
+    return [moved, r.note].filter(Boolean).join('；');
+  }
   // 給輸入框下方顯示的說明
   function describe(r, now = new Date()) {
     if (!r || r.type === 'none') return '';
     if (r.type === 'task') return `→ 新增待辦${r.note ? `（${r.note}）` : ''}`;
-    if (r.type === 'stock') return r.market === 'tw' ? `→ 加入台股 ${r.symbol}` : `→ 加入美股 ${r.symbol}`;
-    const t = r.rule, tail = r.note ? `（${r.note}）` : r.movedToTomorrow ? '（今天已過，改明天）' : '';
+    if (r.type === 'stock') return r.market === 'tw' ? `→ 加入台股 ${r.symbol}` : `→ 加入美股 ${r.symbol}${r.word ? '（也是一般英文字，送出後會先問）' : ''}`;
+    const t = r.rule, nt = noteText(r), tail = nt ? `（${nt}）` : '';
     if (t.type === 'daily') return `→ 每天 ${t.time} 提醒${tail}`;
     if (t.type === 'weekly') return `→ 每週${t.weekdays.map((d) => WD_NAME[d]).join('、')} ${t.time} 提醒${tail}`;
     const today = ymd(now), tmr = ymd(addDays(now, 1)), d2 = ymd(addDays(now, 2));
@@ -645,7 +658,7 @@
     return `→ ${day} ${t.time} 提醒${tail}`;
   }
 
-  const api = { parseInput, describe, normalize };
+  const api = { parseInput, describe, normalize, noteText };
   if (typeof window !== 'undefined') window.QuokkaParse = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

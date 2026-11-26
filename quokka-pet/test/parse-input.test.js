@@ -315,8 +315,8 @@ const TABLE2 = [
   ['30號10點繳費', 'R', '2026-11-30 10:00', '繳費', null],
   ['5號10點繳費', 'R', '2026-12-05 10:00', '繳費', /這個月 5 號已過，設成 12\/5/],
   ['下個月1號繳稅', 'R', '2026-12-01 09:00', '繳稅', /沒寫時間/],
-  ['每個月5號繳房租', 'R', '2026-12-05 09:00', '繳房租', /每月重複尚未支援，先設 12\/5 這一次/],
-  ['每月1號 10點 繳卡費', 'R', '2026-12-01 10:00', '繳卡費', /每月重複尚未支援/],
+  ['每個月5號繳房租', 'TN', /「每個月5號」這種重複方式尚未支援，先當成待辦/],          // 每月重複尚未支援：和「每隔一小時」一樣當待辦
+  ['每月1號 10點 繳卡費', 'TN', /「每月1號」這種重複方式尚未支援/],
   ['5號出口集合', 'T'],
   ['週4下午2點 驗收', 'R', '2026-11-26 14:00', '驗收', null],
   ['月底10點結帳', 'R', '2026-11-30 10:00', '結帳', /月底＝11\/30/],
@@ -447,7 +447,8 @@ test('屬性式：日期 × 時間 × 內容 的組合，日期不對就一定�
     ['12/5（六）', '2026-12-05'], ['12/5(六)', '2026-12-05'], ['12/5（日）', 'flag'], ['12-05', '2026-12-05', true], ['12.5', '2026-12-05', true],
     ['12/1-12/3', '2026-12-01'], ['月底', '2026-11-30'], ['30號', '2026-11-30'], ['這個月30號', '2026-11-30'], ['下個月1號', '2026-12-01'], ['3天後', '2026-11-28'], ['三天後', '2026-11-28'],
     ['明年1/5', '2027-01-05'], ['12月底', '2026-12-31'], ['下個月底', '2026-12-31'], ['下下個月5號', '2027-01-05'], ['1/5', 'flag'], ['隔週三', 'flag'], ['月初', 'flag'], ['2/29', 'flag'],
-    ['11/20', 'flag'], ['2/30', 'flag'], ['13/45', 'flag'], ['2025-12-05', 'flag'], ['下週', 'flag'], ['下個月', 'flag'], ['月中', 'flag'], ['年底', 'flag']
+    ['11/20', 'flag'], ['2/30', 'flag'], ['13/45', 'flag'], ['2025-12-05', 'flag'], ['下週', 'flag'], ['下個月', 'flag'], ['月中', 'flag'], ['年底', 'flag'],
+    ['每兩週三', 'flag'], ['每2週五', 'flag'], ['每隔一週', 'flag'], ['雙週五', 'flag'], ['每月5號', 'flag'], ['每個月底', 'flag'], ['每年', 'flag'], ['每三天', 'flag']   // 不支援的重複方式
   ];
   // [寫法, 有寫日期時的預期時間]
   const TIMES = [
@@ -492,4 +493,55 @@ test('屬性式：日期 × 時間 × 內容 的組合，日期不對就一定�
   assert.ok(n >= 5000, `組合數 ${n}`);
   assert.ok(exact > n / 2);
   console.log(`    屬性式測試：${n} 個組合，${exact} 個日期時間完全符合，${flagged} 個有提示或退回待辦`);
+});
+
+// ---- 不支援的重複方式：一律當待辦並說「尚未支援」，不默默排成一次（和「每隔一小時」一致） --------
+test('不支援的重複方式（每兩週、隔週重複、每月、每年…）→ 待辦＋「尚未支援」', () => {
+  const cases = ['每兩週一 9點 會議', '每2週一 9點 會議', '每兩週 會議', '每隔一週 週一 9點 會議', '每隔週一 會議', '雙週一 9點 會議',
+    '每月5號 9點 繳費', '每個月5號 繳費', '每月 繳費', '每月底 結帳', '每年 12/5 9點 健檢', '每季 報告', '每兩天 澆花', '每三天 9點 澆花', '每隔兩天 9點 澆花', '每隔一小時 喝水'];
+  for (const s of cases) {
+    const r = p(s), line = D(r, NOW);
+    assert.equal(r.type, 'task', `${s} → ${line}`);
+    assert.equal(r.text, s, s);                                   // 內容原封不動（不會變成「每兩 會議」）
+    assert.match(r.note || '', /尚未支援，先當成待辦/, s);
+    assert.ok(r.uncertain, s);
+    assert.ok(line.includes('尚未支援'), s);
+  }
+  assert.match(p('每兩週一 9點 會議').note, /「每兩週一」這種重複方式尚未支援/);
+  assert.match(p('每週 開會').note, /「每週」沒說星期幾/);
+  // 「隔週三」仍當成下週三，但提示裡說每隔一週重複不支援
+  assert.match(p('隔週三10點開會').note, /當成下週三（每隔一週重複尚未支援）/);
+  // 支援的照舊
+  assert.deepEqual(p('每週一 9點 週報').rule, { type: 'weekly', weekdays: [1], time: '09:00' });
+  assert.deepEqual(p('每週末 10點 爬山').rule, { type: 'weekly', weekdays: [0, 6], time: '10:00' });
+  assert.deepEqual(p('每天 17:00 起來動一動').rule, { type: 'daily', time: '17:00' });
+  assert.equal(p('每週一到五 9點 晨會').rule.weekdays.join(), '1,2,3,4,5');
+  // 日期在前、內容裡才出現「每月」：照日期排，殘留提示
+  const r = p('明天3點 討論每月預算');
+  assert.equal(r.type, 'reminder'); assert.equal(r.text, '討論每月預算'); assert.ok(r.uncertain);
+});
+
+// ---- 改到明天一定要說（送出後的訊息也一樣），「今天」明說的已過就當待辦 ----------------------
+test('「下班前寄信」下班後輸入：改明天，提示裡一定有「改明天」；「今天下班前」→ 待辦（和「今天2點開會」一致）', () => {
+  const { noteText } = require('../lib/parse-input');
+  const late = new Date(2026, 10, 25, 18, 20);
+  const r = P('下班前寄信', late);
+  assert.equal(r.type, 'reminder'); assert.equal(r.rule.date, '2026-11-26'); assert.equal(r.movedToTomorrow, true);
+  assert.match(noteText(r), /^今天已過，改明天；下班前當成 17:30 前/);
+  assert.match(D(r, late), /明天 17:00 提醒（今天已過，改明天；/);
+  const t = P('今天下班前寄信', late);
+  assert.equal(t.type, 'task'); assert.match(t.note, /今天 17:30 已經過了，先當成待辦/);
+  // 下班前還沒到：今天，不提改明天
+  const early = new Date(2026, 10, 25, 10, 0), e = P('下班前寄信', early);
+  assert.equal(e.rule.date, '2026-11-25'); assert.ok(!/改明天/.test(noteText(e)));
+  // 沒有其他提示的改明天：noteText 也要有
+  assert.equal(noteText(p('9:00 晨會')), '今天已過，改明天');
+});
+
+// ---- 只打一個常見英文字：仍可以是代號，但要先問（word） ---------------------------------------
+test('單一常見英文字（IT、GO、ON、NOW、ME）帶 word，送出後先確認；真的代號不受影響', () => {
+  for (const s of ['IT', 'GO', 'ON', 'NOW', 'ME', 'A']) { const r = p(s); assert.equal(r.type, 'stock', s); assert.equal(r.word, true, s); assert.match(D(r, NOW), /送出後會先問/, s); }
+  for (const s of ['AAPL', 'NVDA', 'BRK.B', 'TSLA', 'F', 'MSFT', 'aapl', 'brk.b']) assert.equal(p(s).word, undefined, s);
+  assert.deepEqual(p('AAPL'), { type: 'stock', symbol: 'AAPL', market: 'us' });
+  for (const s of ['zoom', 'gym', 'it', 'go', 'on', 'now', 'me']) assert.equal(p(s).type, 'task', s);   // 小寫的常見字直接是待辦
 });

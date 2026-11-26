@@ -7,11 +7,14 @@ const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
 const { createStore, newId, LIMITS } = require('./store');
-const { parseInput } = require('./parse-input');
+const { parseInput, noteText } = require('./parse-input');
 const R = require('./reminders');
 const { createStockService } = require('./stock-service');
 const { createStepTracker } = require('./stock-step');
 const { createStageManager } = require('./stage-main');
+const { createFolderWatch } = require('./folder-watch');
+const { createPosSaver } = require('./pos-saver');
+const { transferProblem } = require('./owner-ops');
 const { createRomance } = require('./romance');
 const { createSocialDirector } = require('./social');
 const { createHistory, withToday, INDEX } = require('./stock-history');
@@ -37,6 +40,7 @@ function start() {
   } catch (e) { console.error('切換設定檔失敗:', e.message); }
   const store = createStore(file);
   const data = store.load();
+  const posSaver = createPosSaver({ save: () => store.save() });   // 位置沒變不寫、最快 10 秒寫一次
   const want = Math.max(1, Number(process.env.QUOKKA_DEMO) || 1);       // 開發測試：補到 n 隻
   while (data.quokkas.length < want) {
     const i = data.quokkas.length;
@@ -61,7 +65,8 @@ function start() {
   const nowISO = () => new Date().toISOString();
 
   // ---- 舞台與面板 ---------------------------------------------------------------
-  const stage = createStageManager({ BrowserWindow, screen, ipcMain, path, dir: ROOT });
+  // 舞台當掉：在重新載入完成（stage:ready）之前，事件先存著，不要送進已經不在的頁面
+  const stage = createStageManager({ BrowserWindow, screen, ipcMain, path, dir: ROOT, onGone: () => { stageReady = false; } });
   // 舞台頁面載入完成前的事件先存著（例如開機時「錯過的提醒」），ready 後補送
   let stageReady = false; const stageBacklog = [];
   const toStage = (ch, payload) => { if (!stageReady && (ch === 'q:event' || ch === 'presence')) { if (stageBacklog.length < 50) stageBacklog.push([ch, payload]); return; } stage.send(ch, payload); };
@@ -147,22 +152,25 @@ function start() {
   const quotes = {};                 // symbol → 最新報價
   function snapshot() {
     return { quokkas: data.quokkas, tasks: data.tasks, reminders: data.reminders, stocks: data.stocks, folders: data.folders,
-      relations: data.relations, settings: data.settings, quotes, ringing: data.reminders.filter((r) => r.ringing).map((r) => r.id) };
+      relations: data.relations, settings: data.settings, quotes, ringing: data.reminders.filter((r) => r.ringing).map((r) => r.id),
+      folderChanges: folderWatch.recentAll() };
   }
   function changed({ quokkas = false } = {}) {
-    store.save();
+    store.save(); posSaver.markSaved();               // 整份寫入時位置也在裡面
     toPanel('store:changed', snapshot());
     if (quokkas) toStage('stage:quokkas', data.quokkas.map(stageQ));
   }
   const DIGEST_TEXT = {
     'task-added': (p) => `收到新的事：「${p.text}」`, 'task-done': (p) => `「${p.text}」完成了`,
     stock: (p) => `${p.name} ${p.pct >= 0 ? '▲' : '▼'}${Math.abs(p.pct).toFixed(1)}%${p.limit === 'up' ? '（漲停）' : p.limit === 'down' ? '（跌停）' : ''}`,
-    folder: (p) => `「${p.name}」資料夾有 ${p.count} 個檔案變了`, missed: (p) => `錯過的提醒：${(p.items || []).join('、')}`, birth: (p) => `${p.name} 出生了！`
+    folder: (p) => `「${p.name}」資料夾有 ${p.count} 個檔案變了`, missed: (p) => `錯過的提醒：${(p.items || []).join('、')}`, birth: (p) => `${p.name} 出生了！`,
+    'folder-note': (p) => p.text
   };
+  const STAGE_KIND = { 'folder-note': 'note' };          // 只有主行程分得出來的種類：舞台一律當成一句話
   const event = (qid, kind, payload) => {
     if (!qById(qid)) return;
     if (away && DIGEST_TEXT[kind]) { digest[qid] = R.digestPush(digest[qid], kind, DIGEST_TEXT[kind](payload || {})); return; }
-    toStage('q:event', { qid, kind, payload, prio: 2 });
+    toStage('q:event', { qid, kind: STAGE_KIND[kind] || kind, payload, prio: 2 });
   };
 
   // ---- 提醒（ReminderClock） ------------------------------------------------------
@@ -268,36 +276,37 @@ function start() {
     catch (err) { return { ok: false, message: '暫時算不出來' }; }
   });
 
+  // 依目前的股票清單重設所有訂閱：已刪掉的庫卡、沒有人盯的股票一併移除（報價也清掉）
   function syncWatchlist() {
     const by = {};
-    for (const s of data.stocks) (by[s.owner] = by[s.owner] || []).push({ symbol: s.symbol, market: s.market, ex: s.ex });
-    for (const q of data.quokkas) stocks.setWatchlist(by[q.id] || [], q.id);
+    for (const s of data.stocks) if (qById(s.owner)) (by[s.owner] = by[s.owner] || []).push({ symbol: s.symbol, market: s.market, ex: s.ex });
+    stocks.setAllWatchlists(by);
+    for (const sym of Object.keys(quotes)) if (!data.stocks.some((s) => s.symbol === sym)) delete quotes[sym];
   }
 
-  // ---- 資料夾監看（FolderWatch，唯讀） ---------------------------------------------
-  const watchers = new Map();   // folder id → { w, timer, count }
-  function watchFolder(f) {
-    if (watchers.has(f.id)) return;
-    if (!fs.existsSync(f.path)) { f.status = 'missing'; return; }
-    f.status = 'ok';
-    const st = { count: 0, timer: null };
-    st.w = chokidar.watch(f.path, { ignoreInitial: true, depth: 4, ignored: (p) => path.relative(f.path, p).split(/[\/\\]/).some((seg) => seg.startsWith('.') && seg !== '.' && seg !== '..'), awaitWriteFinish: { stabilityThreshold: 800 } });   // ignored 只看監看根目錄底下的隱藏項目
-    const bump = () => {
-      st.count++;
-      if (st.timer) return;
-      st.timer = setTimeout(() => {           // 5 秒內的變動合併成一次
-        const cur = data.folders.find((x) => x.id === f.id);
-        if (cur) {
-          event(cur.owner, 'folder', { name: path.basename(cur.path), count: st.count });
-          toPanel('folder:changes', { id: cur.id, count: st.count, at: nowISO() });
-        }
-        st.count = 0; st.timer = null;
-      }, 5000);
-    };
-    st.w.on('all', bump).on('error', () => { f.status = 'error'; changed(); });
-    watchers.set(f.id, st);
+  // ---- 資料夾監看（FolderWatch，唯讀，lib/folder-watch.js） --------------------------
+  const folderName = (f) => path.basename(f.path) || f.path;
+  const folderWatch = createFolderWatch({
+    chokidar, fs, path, getFolders: () => data.folders,
+    onChanges: (f, c) => {
+      // 檔案和資料夾分開說：「3 個檔案變了」只算檔案；只有資料夾變動時另外說一句
+      if (c.files) event(f.owner, 'folder', { name: folderName(f), count: c.files, dirs: c.dirs });
+      else if (c.dirs) event(f.owner, 'folder-note', { text: `「${folderName(f)}」資料夾裡${dirText(c.items)}` });
+      toPanel('folder:changes', { id: f.id, files: c.files, dirs: c.dirs, at: c.at, recent: folderWatch.recent(f.id) });
+    },
+    onStatus: (f, status, prev) => {
+      if (status === 'missing' && prev !== 'missing') event(f.owner, 'folder-note', { text: `「${folderName(f)}」資料夾找不到了（可能被改名、刪掉或隨身碟拔掉），我每 5 分鐘再找一次` });
+      else if (status === 'ok' && prev === 'missing') event(f.owner, 'folder-note', { text: `「${folderName(f)}」資料夾找回來了，我繼續幫你看著` });
+      else if (status === 'error' && prev !== 'error') event(f.owner, 'folder-note', { text: `「${folderName(f)}」資料夾讀不到（權限或系統限制），先暫停監看` });
+      changed();
+    }
+  });
+  function dirText(items) {
+    const add = items.filter((x) => x.kind === 'addDir').length, del = items.filter((x) => x.kind === 'unlinkDir').length;
+    return [add && `新增了 ${add} 個資料夾`, del && `少了 ${del} 個資料夾`].filter(Boolean).join('、');
   }
-  function unwatchFolder(id) { const st = watchers.get(id); if (st) { st.w.close(); clearTimeout(st.timer); watchers.delete(id); } }
+  const watchFolder = (f) => folderWatch.watch(f);
+  const unwatchFolder = (id) => folderWatch.unwatch(id);
 
   // ---- 離開偵測（PresenceWatch） --------------------------------------------------
   let locked = false;
@@ -351,6 +360,8 @@ function start() {
       // 查詢最多等 12 秒，不讓輸入框一直鎖著
       const found = await Promise.race([stocks.lookup(r.symbol, r.market, r.ex), new Promise((res) => setTimeout(() => res({ ok: false, offline: true, reason: '查詢太久沒有回應，請稍後再試' }), 12000))]);
       let problem = found.ok ? null : (found.reason || '找不到這檔股票') + '。要當成待辦嗎？';
+      // 一個常見英文字（IT、ON、NOW…）：查得到也先問一次，按「加入股票」才真的盯（p.confirm）
+      if (!problem && r.word && !p.confirm) return { ok: false, type: 'stock', message: `「${r.symbol}」是美股「${found.name || found.symbol}」的代號。要盯這檔股票，還是當成待辦？`, askTask: true, askStock: true };
       // 使用者有打名稱（「2330 台積電」「台積電」）：查到的名稱要對得上（互相包含就算），對不上就不加入
       if (!problem && r.nameHint && found.name && found.name !== found.symbol) {
         const clean = (x) => String(x).replace(/[\s*＊]/g, '').replace(/臺/g, '台').toUpperCase();
@@ -378,12 +389,12 @@ function start() {
       const item = { id: newId('r'), owner, text: str(r.text), rule: r.rule, enabled: true, createdAt: nowISO() };
       data.reminders.push(item); clock.schedule(); changed();
       event(owner, 'task-added', { text: item.text });
-      return { ok: true, type: 'reminder', item, message: r.note || (r.movedToTomorrow ? '今天已過，改明天' : undefined) };
+      return { ok: true, type: 'reminder', item, message: noteText(r) || undefined };
     }
     const item = { id: newId('t'), owner, text: r.text, done: false, createdAt: nowISO(), order: data.tasks.length };
     data.tasks.push(item); changed();
     event(owner, 'task-added', { text: item.text });
-    return { ok: true, type: 'task', item };
+    return { ok: true, type: 'task', item, message: r.note || undefined };    // 看得出日期時間但排不了的，說明為什麼當待辦
   });
   function addFolder(p, owner) {
     p = path.resolve(p);
@@ -501,11 +512,17 @@ function start() {
     const owners = data.quokkas.filter((x) => romance.canOwnTasks(x));
     if (owners.length <= 1 && romance.canOwnTasks(q)) return { ok: false, message: '最後一隻不能刪除' };
     const to = transferTo === 'delete' ? null : qById(transferTo) && transferTo !== qid && romance.canOwnTasks(qById(transferTo)) ? transferTo : (owners.find((x) => x.id !== qid) || {}).id;
+    // 轉給新主人前先檢查上限（每隻 50 件待辦…）：超過就不刪，請使用者選別隻或「一起刪除」
+    if (to) {
+      const why = transferProblem(data, qid, to, { LIM, kinds: KINDS, counts: (kind, x) => !(kind === 'task' && x.done) && !(kind === 'reminder' && spent(x)) });
+      if (why) return { ok: false, full: true, message: `${qById(to).name}${why}，請選別隻，或選「一起刪除」` };
+    }
     for (const k of Object.values(KINDS)) {
       if (to) data[k].forEach((x) => { if (x.owner === qid) x.owner = to; });
       else { data[k].filter((x) => x.owner === qid && k === 'folders').forEach((f) => unwatchFolder(f.id)); data[k] = data[k].filter((x) => x.owner !== qid); }
     }
     social.removeQuokka(qid);
+    delete layers[qid]; delete positions[qid]; delete digest[qid];      // 舞台回報的圖層、位置、離開期間的待報告事項
     const famEvents = romance.onDelete(qid);                   // 墓碑紀錄、伴侶恢復單身、小袋鼠交給爸爸
     data.quokkas = data.quokkas.filter((x) => x.id !== qid);
     onRomanceEvents(famEvents);
@@ -565,12 +582,16 @@ function start() {
     e.sender.send('stage:settings', data.settings);
     for (const r of data.reminders) if (r.ringing) e.sender.send('q:alert', { qid: r.owner, reminderId: r.id, text: r.text });
     stageReady = true;
-    for (const [ch, payload] of stageBacklog.splice(0)) e.sender.send(ch, payload);
+    const backlog = stageBacklog.splice(0);
+    for (const [ch, payload] of backlog) e.sender.send(ch, payload);
+    // 重新載入（當掉、沒回應）後：補送目前的離開／鎖定狀態（開機時的已在上面的待送事項裡）
+    if (away && !backlog.some(([ch]) => ch === 'presence')) e.sender.send('presence', { away, locked, digest: null });
     if (hiddenUntil > Date.now()) e.sender.send('stage:hide', { until: hiddenUntil });
   });
+  // 位置沒變就不寫；有變的最快每 10 秒寫一次（結束程式前一定寫入）
   const savePos = (e, { id, qid, pos, x, y } = {}) => {
     const q = qById(qid || id), px = pos ? pos.x : x, py = pos ? pos.y : y;
-    if (q && isNum(px) && isNum(py)) { q.home = { x: Math.round(px), y: Math.round(py) }; store.save(); }
+    if (q && isNum(px) && isNum(py)) posSaver.update(q, px, py);
   };
   ipcMain.on('stage:save-pos', savePos);
   ipcMain.on('q:rest', savePos);
@@ -596,7 +617,11 @@ function start() {
       { label: '陪我玩', submenu: [play('badminton', '羽球'), play('volleyball', '排球'), play('basketball', '籃球'), play('eat', '吃葉子'), play('hop', '跳一跳'), play('nap', '打盹')] },
       { label: '打開面板', click: () => showPanel(qid) },
       { type: 'separator' },
-      { label: '暫時藏起來 30 分鐘', enabled: !data.reminders.some((r) => r.ringing), click: () => hideAll(30) },   // 有提醒在響時不能藏
+      // 有提醒在響時不能藏；選單打開後才開始響的，點下去時再檢查一次
+      { label: '暫時藏起來 30 分鐘', enabled: !data.reminders.some((r) => r.ringing), click: () => {
+        if (data.reminders.some((r) => r.ringing)) { event(qid, 'note', { text: '有提醒在響，先按「知道了」再藏起來喔' }); return; }
+        hideAll(30);
+      } },
       { label: '結束庫卡助理', click: () => { app.isQuitting = true; app.quit(); } }
     ]).popup();
   });
@@ -623,12 +648,12 @@ function start() {
   const boot = (name, fn) => { try { fn(); } catch (e) { console.error(`啟動 ${name} 失敗:`, e); } };
   boot('舞台', () => stage.start());              // 面板等使用者第一次打開才建立
   boot('提醒', () => clock.check());              // 先處理錯過的提醒，再排下一個
-  boot('資料夾', () => data.folders.forEach((f) => boot('資料夾 ' + f.path, () => watchFolder(f))));
+  boot('資料夾', () => { data.folders.forEach((f) => boot('資料夾 ' + f.path, () => watchFolder(f))); folderWatch.startLoop(); });
   boot('股價', () => { syncWatchlist(); stocks.start(); });
   try { romance.refreshAges(); romance.dailyDecay(); sweepReminders(); } catch (e) {}
   scheduleSocial(90000);               // 開機 1.5 分鐘後才開始安排互動
-  app.on('before-quit', () => { app.isQuitting = true; clearTimeout(socialTimer); stocks.stop(); clock.stop(); reminderNotes.flush(); store.saveNow(); });
-  return { store, stage, data, showPanel, unhide };
+  app.on('before-quit', () => { app.isQuitting = true; clearTimeout(socialTimer); stocks.stop(); clock.stop(); folderWatch.stop(); reminderNotes.flush(); posSaver.flush(); store.saveNow(); });
+  return { store, stage, data, showPanel, unhide, stocks, quotes, layers, positions, folderWatch, posSaver };
 }
 
 module.exports = { start };
