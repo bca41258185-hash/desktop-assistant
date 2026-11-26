@@ -436,7 +436,8 @@
   };
 
   // ---- 理毛（情侶）：b 面向前方、把頭歪過來；a 側身用前爪輕輕梳牠頭側的毛。手臂保持自然彎曲（不伸成直線） ----
-  const HEADSIDE = [21, 33, 8];                                 // 頭頂靠對方那一側（耳朵下面）
+  const HEADSIDE = [21, 33, 8];
+  const GROOM_HEAD = { pitch: 16, yaw: -70 };                  // 理毛那隻的頭（見 test/social-anim.test.js：鼻子離對方耳朵要有距離）                                 // 頭頂靠對方那一側（耳朵下面）
   function groomFit(ctx) {
     let A, ha, Bp, tg, hr = 22, sq = .94, y = 76;
     const sideOf = (c) => fwd(ctx.b, pt(c.th, c.pose, HEADSIDE, true, ctx.b.hs));
@@ -457,9 +458,11 @@
     build(ctx) {
       const F = groomFit(ctx), pb = ctx.b.per, y = F.y, bp = F.Bp.pose;
       const st = (z, yy, rz, ry) => ({ L: { hand: [-12, y + yy, 31 + z] }, R: { hand: [9, y + 14 + ry, 30 + rz] } });
-      const aKeys = [K(0, TH0), K(.9, 62, { eyes: 'happy', mouth: 'smile', head: { pitch: 4 } }), K(1.6, 64, { lean: 13, arms: st(-3, 6, -6, 8), eyes: 'happy', head: { pitch: -8, yaw: -36 } })];
-      for (let i = 0; i < 4; i++) { const t0 = 1.9 + i * .95; aKeys.push(K(t0, 64, { lean: 13, arms: st(0, 0, -5, 6), eyes: 'happy', mouth: 'smile', head: { pitch: -8, yaw: -36, roll: -3 } }), K(t0 + .5, 64, { lean: 13, arms: st(-4, 8, 0, 0), eyes: 'happy', mouth: i % 2 ? 'open' : 'smile', head: { pitch: -7, yaw: -34, roll: 3 } })); }
-      aKeys.push(K(6.0, 62, { lean: 5, eyes: 'happy', mouth: 'open', arms: { L: { hand: [-14, 104, 30] }, R: { hand: [10, 110, 28] } } }), K(6.7, 62, { eyes: 'happy', mouth: 'smile', blush: 1.3 }), K(7.5, TH0));
+      // 頭：低頭看著自己的前爪、臉轉向鏡頭一點，鼻子不貼到對方的耳朵（梳的是耳朵下面的毛，用爪子不用鼻子）
+      const HP = GROOM_HEAD.pitch, HY = GROOM_HEAD.yaw;
+      const aKeys = [K(0, TH0), K(.9, 62, { eyes: 'happy', mouth: 'smile', head: { pitch: 4, yaw: HY * .5 } }), K(1.6, 64, { lean: 13, arms: st(-3, 6, -6, 8), eyes: 'happy', head: { pitch: HP, yaw: HY } })];
+      for (let i = 0; i < 4; i++) { const t0 = 1.9 + i * .95; aKeys.push(K(t0, 64, { lean: 13, arms: st(0, 0, -5, 6), eyes: 'happy', mouth: 'smile', head: { pitch: HP, yaw: HY, roll: -3 } }), K(t0 + .5, 64, { lean: 13, arms: st(-4, 8, 0, 0), eyes: 'happy', mouth: i % 2 ? 'open' : 'smile', head: { pitch: HP + 1, yaw: HY + 2, roll: 3 } })); }
+      aKeys.push(K(6.0, 62, { lean: 5, eyes: 'happy', mouth: 'open', head: { yaw: HY * .8 }, arms: { L: { hand: [-14, 104, 30] }, R: { hand: [10, 110, 28] } } }), K(6.7, 62, { eyes: 'happy', mouth: 'smile', blush: 1.3 }), K(7.5, TH0));
       const A = track(aKeys);
       const bow = (dr, ef) => ({ ...bp, head: { ...bp.head, roll: bp.head.roll + dr }, eyes: 'closed', mouth: 'smile', blush: 1.6, earFlop: ef });
       const bKeys = [K(0, TH0), K(.7, 30, { eyes: 'happy', blush: 1.3, head: { yaw: 20 } }), K(1.5, 18, bow(0, { L: 0, R: 0 }))];

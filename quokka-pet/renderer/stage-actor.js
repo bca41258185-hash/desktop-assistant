@@ -171,7 +171,7 @@
     isSleeping() { return this.mode === 'asleep' && !this.alerts.length && (!this.job || this.job.layer > 1); }
     showLook(b) { this.lookBucket = b; this.showRest(); }
     // ---- 常駐的小生命感：眨眼、耳朵抖（只換快取畫格，用計時器排程，不跑動畫迴圈；呼吸是 CSS）----
-    canLife() { return !this.job && this.mode === 'awake' && !S.paused && !this.liveOn && !this.inPouch && S.mode === 'awake' && !this.duetOn; }
+    canLife() { return !this.job && this.mode === 'awake' && !this.liveOn && !this.inPouch && S.mode === 'awake' && !this.duetOn; }
     lifeFrame(tag, extra, ms, then) {
       const r = this.restSpec();
       this.setFrame(r.key + tag, r.th, { ...r.pose, ...extra });
@@ -277,7 +277,7 @@
         if (j.tick(now) === false) this.finish(j, j.endOpts || {});
         return !!(this.job && this.job.ticks);
       }
-      if (this.mode !== 'awake' || S.paused) return false;
+      if (this.mode !== 'awake') return false;
       if (this.isFollow) return S.family ? S.family.tick(this, now) : false;
       // 球停了在等主人（名額滿時排隊，L4 優先）
       if (this.ball && this.ball.stopped && !this.ball.picked) { this.startFetch(); return !!(this.job && this.job.ticks); }
@@ -830,7 +830,9 @@
         down = { x: e.clientX, y: e.clientY, moved: 0, samples: [{ x: e.clientX, y: e.clientY, t: performance.now() }] };
         const move = (ev) => {
           if (!down) return;
-          if (ev.buttons === 0) { up(); return; }                        // 按鍵其實已經放開（mouseup 在視窗外遺失）：當作放手
+          // 按鍵其實已經放開（mouseup 在視窗外遺失）：當作放手。
+          // 視窗切換穿透時 Chromium 會補一個 buttons=0 的合成 mousemove，所以要連續 3 次、跨 80 ms 以上才算
+          if (ev.buttons === 0) { if (!down.free) down.free = { n: 0, t: performance.now() }; if (++down.free.n >= 3 && performance.now() - down.free.t > 80) { up(); return; } } else down.free = null;
           const now = performance.now();
           down.moved = Math.max(down.moved, Math.hypot(ev.clientX - down.x, ev.clientY - down.y));
           down.samples.push({ x: ev.clientX, y: ev.clientY, t: now });
@@ -922,6 +924,7 @@
         },
         land(now) { job.ticks = true; job.after = { anim: ANIM.REACT.land, t0: now, line: null }; S.kick(); },
         end() {
+          a.x = S.clamp(a.x, 44, innerWidth - 44); a.y = S.clamp(a.y, Math.min(innerHeight - 4, a.h * .8), innerHeight - 4); a.place();   // 存檔前再夾一次（甩出、被打斷都一樣）
           a.home = a.x; a.th = -15;
           S.api.drop(a.id, Math.round(window.screenX + a.x), Math.round(window.screenY + a.y));
           S.api.savePos(a.id, { x: Math.round(a.x), y: Math.round(a.y) });
@@ -946,7 +949,12 @@
       cands.sort((p, q) => Math.abs(p - this.x) - Math.abs(q - this.x));
       const crosses = (x) => others.some((o) => (o.x - this.x) * (o.x - x) < 0);
       for (const x of cands) if (okAt(x) && !crosses(x)) return { x, cross: false, others };
-      for (const x of cands) if (okAt(x)) return { x, cross: true, others };
+      // 兩側都被擋住（例如剛長大的小袋鼠夾在爸媽中間）：往空間比較大的那一側，越過最外側那隻、站到 gap px 外
+      const room = (x, s) => Math.min(s < 0 ? x - 44 : innerWidth - 44 - x, ...others.filter((o) => (o.x - x) * s > 0).map((o) => Math.abs(o.x - x)));   // 那一側再往外還有多少空間
+      const best = (s) => cands.find((x) => okAt(x) && Math.sign(x - this.x) === s);
+      const L = best(-1), R = best(1);
+      const x = L == null ? R : R == null ? L : (room(L, -1) >= room(R, 1) ? L : R);
+      if (x != null) return { x, cross: true, others };
       return null;
     }
     // 和非伴侶的距離 < minGap px（放下時、剛長大時、或靜止重疊超過 2 秒）：自己跳到空位（規格 6.1）
@@ -1000,7 +1008,8 @@
       const prev = this.mode;
       this.mode = mode;
       if (mode === 'awake') this.startLife(); else this.stopLife();
-      if (mode === 'awake' && this.job && this.job.name === 'ring' && this.job.still) { this.job.still = false; this.job.dimAt = 0; this.job.ticks = !S.reduceMotion; this.job.t0 = performance.now(); S.kick(); }
+      // 響鈴停在靜止格（藏起來、或睡覺超過 45 秒）：回來（或從藏起來變成睡覺）就恢復動畫；睡覺的話重新算 45 秒
+      if (mode !== 'hidden' && this.job && this.job.name === 'ring' && this.job.still) { this.job.still = false; this.job.dimAt = 0; this.job.ticks = !S.reduceMotion; this.job.t0 = performance.now(); S.kick(); }
       if (mode === 'asleep' || mode === 'hidden') {
         // 只留 L0、L1；其他活動收掉（還沒報的留在佇列）
         if (this.job && this.job.layer >= 2) { const j = this.job; this.job = null; j.interrupt && j.interrupt(mode); this.hideLive(); this.setLayer(8); }

@@ -198,7 +198,7 @@
     // 其中一隻被更高層的活動打斷（a 的工作已經被換掉了）
     interrupted(a, reason) {
       if (this.over) return;
-      const why = reason === 'drag' ? 'drag' : reason === 'ring' ? 'alert' : /^react/.test(reason || '') ? 'work' : reason === 'remove' ? 'user' : (reason === 'asleep' || reason === 'hidden' || reason === 'pause') ? 'user' : 'user';
+      const why = reason === 'drag' ? 'drag' : reason === 'ring' ? 'alert' : /^react/.test(reason || '') ? 'work' : reason === 'remove' ? 'user' : 'user';
       const wasPlay = this.phase === 'play', other = a === this.I ? this.O : this.I, oj = a === this.I ? this.jobO : this.jobI;
       const thA = this.endTh(a === this.I ? 'a' : 'b'), thO = this.endTh(a === this.I ? 'b' : 'a');
       this.over = true; this.teardown();
@@ -319,7 +319,7 @@
   S.checkOverlapSoon = function (ms = 1100) { if (!ovT) ovT = setTimeout(checkOverlap, ms); };
   function checkOverlap() {
     ovT = 0;
-    if (S.paused || S.mode !== 'awake') return;
+    if (S.mode !== 'awake') return;
     const now = performance.now(), list = [...S.actors.values()].filter((a) => !a.inPouch && a.mode === 'awake' && !a.dragging);
     const seen = new Set();
     let again = false;
@@ -393,7 +393,7 @@
   F.refresh = function (a, redraw) {
     const st = decoState(a), old = a.decoKey || '';
     a.decoKey = st ? `|p${st.pj ? st.pj.id : ''}${st.carried ? 'c' + st.carried.id : ''}${st.out ? 'o' : 'i'}` : '';
-    if (st && st.pj && !a.peekT) F.peekLoop(a);
+    if (st && st.pj && !a.peekT && a.mode === 'awake' && S.mode === 'awake') F.peekLoop(a);
     if (redraw && old !== a.decoKey && !a.job && a.img) { a.showRest(); }
     return old !== a.decoKey;
   };
@@ -438,6 +438,7 @@
   };
   // 使用者離開（睡覺）：小袋鼠鑽進袋裡；回來再出來
   F.modeChanged = function (a) {
+    if (a.mode !== 'awake') { clearTimeout(a.peekT); a.peekT = 0; a.joeyHide = false; }      // 探頭的計時器停掉（醒來由 F.refresh 再啟動）
     F.refresh(a, true);
     if (a.isFollow) return;
     if (a.mode !== 'awake') for (const j of joeysOf(a)) F.intoPouch(j, a);

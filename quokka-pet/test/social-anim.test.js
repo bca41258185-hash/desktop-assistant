@@ -79,3 +79,17 @@ test('左右鏡射：站在右邊的那隻姿勢對稱（左右手對調）', ()
   assert.strictEqual(m.pose.head.yaw, -10); assert.strictEqual(m.pose.props[0].hand, 'R'); assert.strictEqual(m.pose.props[0].ang, -30);
   assert.deepStrictEqual(SOC.mirrorPose(m).pose.arms, c.pose.arms);
 });
+
+test('理毛：理毛那隻的鼻子不貼到對方的耳朵（鼻尖離耳朵邊緣至少 4 單位，各種體型、兩個方向）', () => {
+  for (const [sa, sb] of [[11, 22], [3, 4], [5, 6], [7, 8], [101, 202], [31, 41], [8, 4]]) for (const flip of [false, true]) {
+    const { ctx, sc } = play('groom', sa, sb, flip, 12345);
+    let min = Infinity, at = 0;
+    for (let t = 0; t <= sc.dur; t += 0.05) {
+      const fr = sc.at(t);
+      const W = (key, P) => { const o = ctx[key], c = SOC.real(ctx, key, fr[key]), x = o.x0 + ctx.side * (fr[key].dx || 0), p = SOC.pt(c.th, c.pose, P, true, o.hs); return [x + (p.X - 80) * o.k, (p.Y - 183) * o.k]; };
+      const n = W('a', SOC.NOSE);
+      for (const ear of [[-22, 19, -10], [22, 19, -10]]) { const e = W('b', ear), d = Math.hypot(n[0] - e[0], n[1] - e[1]) / ctx.b.k - 14; if (d < min) { min = d; at = t; } }   // 耳朵半徑約 10、鼻頭約 4
+    }
+    assert.ok(min >= 4, `groom ${sa}/${sb}${flip ? ' flip' : ''}：鼻子離耳朵邊緣 ${min.toFixed(1)} 單位（${at.toFixed(2)} 秒）`);
+  }
+});

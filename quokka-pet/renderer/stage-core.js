@@ -25,7 +25,6 @@
   S.actors = new Map();
   S.balls = new Set();
   S.cursor = { x: -9999, y: -9999 };
-  S.paused = false;
   S.mode = 'awake';                                   // 全域模式：awake / asleep / hidden
   S.systemReduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   S.reduceMotion = S.systemReduce;                    // ⚙「減少動態效果」：system（跟系統）／on／off
@@ -124,7 +123,6 @@
   let raf = 0, idleTimer = 0, lastFrame = 0, lastBall = 0;
   function loop(now) {
     raf = 0;
-    if (S.paused) return;
     if (now - lastFrame < (S.frameGap || 30)) { raf = requestAnimationFrame(loop); return; }   // 每秒最多約 30 格（互動太吃力時降到 20 格）
     lastFrame = now;
     let busy = false;
@@ -153,7 +151,7 @@
     try { if (j && j.duet) j.duet.fail(a); else if (j && j.interrupt) j.interrupt('error'); } catch (e) { /* 收尾也出錯就算了 */ }
     try { a.hideLive(); a.depth = 0; a.zBoost = 0; a.dy = 0; a.el.classList.remove('in-duet', 'ringing', 'dragging', 'bang-on'); a.duetOn = false; a.th = Math.round((a.th || 0) / 15) * 15 || -15; a.setLayer(8); a.showRest(); a.place(); } catch (e) { /* 盡量恢復 */ }
   };
-  S.kick = function () { if (!raf && !S.paused) { lastBall = 0; raf = requestAnimationFrame(loop); } };
+  S.kick = function () { if (!raf) { lastBall = 0; raf = requestAnimationFrame(loop); } };
   S.running = () => !!raf;
 
   // ---- 回報每隻（和提醒氣泡）的範圍給主行程（判斷滑鼠穿透） ---------------------------
