@@ -92,9 +92,9 @@
     const i = out.indexOf('>', out.indexOf('<svg') >= 0 ? out.indexOf('<svg') : 0);
     return out.indexOf('<svg') >= 0 ? out.slice(0, i + 1) + '<defs>' + defs + '</defs>' + out.slice(i + 1) : '<defs>' + defs + '</defs>' + out;
   }
-  // 相鄰、套同一個毛邊濾鏡（fz）的兩個圖形 → 包進同一個 <g filter> 一次做完（位移對整組和分開做結果一樣；逐像素最大差 10/255）
-  //   其他濾鏡（模糊、飾品）合併後邊緣差比較多，不合併
-  const RUN_RE = /(<(?:path|ellipse|circle)\b[^>]*?) filter="url\(#(fz[^)]*)\)"([^>]*\/>)\s*(<(?:path|ellipse|circle)\b[^>]*?) filter="url\(#\2\)"([^>]*\/>)/g;
+  // 相鄰、套同一個毛邊（fz）或模糊（b1/b3/b6/lb）濾鏡的兩個圖形 → 包進同一個 <g filter> 一次做完（逐像素最大差 10/255、平均 0.09）
+  //   飾品的濾鏡合併後邊緣差比較多（24/255），不合併
+  const RUN_RE = /(<(?:path|ellipse|circle)\b[^>]*?) filter="url\(#((?:fz|b1|b3|b6|lb)[^)]*)\)"([^>]*\/>)\s*(<(?:path|ellipse|circle)\b[^>]*?) filter="url\(#\2\)"([^>]*\/>)/g;
   function merge(svg) {
     if (svg.indexOf('filter=') < 0) return svg;
     let prev;
