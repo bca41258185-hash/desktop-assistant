@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('stageApi', {
   onSocialStart: on('social:start'),        // {pairId, a, b, type, initiator}
   onSocialAbort: on('social:abort'),        // {pairId, by, reason}
   onPerf: on('stage:perf'),                 // {fps: 60|30}（使用電池、省電模式時 30；沒收到＝60）
+  onLeafRain: on('stage:leafrain'),         // {by: 'cursor'}：使用者用滑鼠快速繞圈，下一陣落葉雨
   // 舞台 → 主行程
   ready: () => ipcRenderer.send('stage:ready'),
   reportRects: (rects, dragging) => ipcRenderer.send('stage:rects', { rects, dragging: !!dragging }),

@@ -12,6 +12,7 @@ const R = require('./reminders');
 const { createStockService } = require('./stock-service');
 const { createStepTracker } = require('./stock-step');
 const { createStageManager } = require('./stage-main');
+const { createCircleDetector } = require('./gesture');
 const { createFolderWatch } = require('./folder-watch');
 const { createPosSaver } = require('./pos-saver');
 const { createPerfSender } = require('./perf');
@@ -346,6 +347,14 @@ function start() {
     if (back) for (const k of Object.keys(digest)) delete digest[k];
   }
   setInterval(checkPresence, 5000);
+  // 滑鼠快速繞圈（1.5 秒內繞 2 圈）→ 下一陣落葉雨；15 秒內不重複。睡著、藏起來時不理
+  const circles = createCircleDetector();
+  let lastRainAt = 0;
+  setInterval(() => {
+    if (!stageVisible || sleeping || !stageReady) return;
+    const c = screen.getCursorScreenPoint(), t = Date.now();
+    if (circles.push(c.x, c.y, t) && t - lastRainAt > 15000) { lastRainAt = t; toStage('stage:leafrain', { by: 'cursor' }); }
+  }, 40);
   powerMonitor.on('lock-screen', () => { locked = true; checkPresence(); });
   powerMonitor.on('unlock-screen', () => { locked = false; checkPresence(); });
 

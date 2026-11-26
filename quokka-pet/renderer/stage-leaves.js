@@ -2,6 +2,7 @@
 //   · 只在醒著（不是睡著、不是藏起來）而且沒開「減少動態效果」時下
 //   · 葉子落地後，閒著的庫卡各自挑最近、沒人要的那片：跳過去 → 撿起來（地上的葉子消失）→ 播吃葉子的動畫
 //   · 每隻一陣雨最多吃 4 片；挑路上沒有別隻擋著的葉子；1 分鐘沒人撿的葉子淡出
+//   · 滑鼠快速繞圈（1.5 秒內繞 2 圈，主行程 lib/gesture.js 偵測）也會馬上下一陣
 //   · 測試、除錯：window.__stage.leafRain()
 (function () {
   const S = window.Stage, ANIM = S.ANIM;
@@ -114,5 +115,7 @@
   function schedule() { clearTimeout(timer); timer = setTimeout(() => { rain(); schedule(); }, RAIN_MS); }
   schedule();
   S.leafRain = rain;
+  // 使用者用滑鼠快速繞圈（主行程偵測）：馬上下一陣
+  if (S.api && S.api.onLeafRain) S.api.onLeafRain(() => { rain(); });
   S.groundLeaves = leaves;
 })();
