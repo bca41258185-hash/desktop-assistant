@@ -596,6 +596,8 @@
     blocked(nx, dir, ignore) {   // 前方 120 px 內有別隻（伴侶、自己的小袋鼠、媽媽除外）、或游標就在前面 → 停
       for (const o of S.actors.values()) {
         if (o === this || o.inPouch || Math.abs(o.y - this.y) > 80 || (ignore && ignore.has(o)) || (S.family && S.family.close(this, o))) continue;
+        // 別隻正在撿球：牠來回的那條路都算擋住（不要走進去跟牠撞在一起）
+        if (o.job && o.job.name === 'fetch' && nx > Math.min(o.x, o.job.ballX, o.job.homeX) - 100 && nx < Math.max(o.x, o.job.ballX, o.job.homeX) + 100) return true;
         const ox = o.job && o.job.name === 'walk' ? o.x + o.job.dir * o.job.step : o.x;
         if (Math.sign(ox - this.x) === dir && Math.abs(ox - nx) < 120) return true;
       }
@@ -697,7 +699,7 @@
         discover: [Math.max(600, 250 + (1 - a.act) * 1200), 6], dash: [hopMs, 8], brake: [300, 4], sniff: [600, 8], scoop: [750, 10],
         sit: [650, 8], turnHome: [400, 6], carry: [GINFO('hop').dur * 1000 * .95, 8], homeToss: [700, 10], turnFront: [340, 6], wait: [1, 1], waitHome: [1, 1], drop: [400, 5], nudge: [600, 8], rescoop: [900, 8], homeB: [1300, 6], homeV: [1600, 12], homeVNudge: [1300, 10]
       };
-      const job = { name: 'fetch', ticks: true, phase: 'discover', mode };
+      const job = { name: 'fetch', ticks: true, phase: 'discover', mode, ballX: ball.x, homeX: home };
       const go = (ph, now) => { job.phase = ph; job.p0 = now; job.x0 = a.x; };
       // 畫一格（快取）：key 含球種、方向、回程方式
       const frame = (ph, u, mirrorFn) => {
@@ -720,7 +722,7 @@
           case 'discover': frame(ph, u, m); if (u >= 1) go('wait', now); break;
           case 'wait': {                                                 // 路上有別隻：請牠橫向跳開，等路清空再衝（不穿過別隻）
             frame('discover', 1, m);
-            if (now - (job.lastChk || 0) > 220) { job.lastChk = now; job.clear = S.clearPath ? S.clearPath(a, a.x, ball.x + dir * 30 * k) : true; }
+            if (now - (job.lastChk || 0) > 220) { job.lastChk = now; job.clear = S.clearPath ? S.clearPath(a, a.x, ball.x, 52) : true; }
             if (job.clear) { const left = Math.abs(standX - a.x); job.dashHops = Math.max(0, Math.round(left / (DASH.stride * k))); job.dashStep = job.dashHops ? (standX - a.x) / job.dashHops : 0; go(job.dashHops ? 'dash' : 'brake', now); }
             else if (now - job.p0 > 9000) { ball.fade(); job.endOpts = { line: '被擋住了，等一下再撿～' }; return false; }
             break;
@@ -736,14 +738,14 @@
           case 'sit':
             frame(ph, u, m);
             if (u >= 1) {
-              if (Math.abs(home - a.x) < walk * .6) go(kind === 'bball' ? 'homeB' : F.homeToss ? 'homeToss' : 'homeV', now);
+              if (Math.abs(home - a.x) < walk * .6) go(kind === 'bball' && !(ball.coop && F.homeToss) ? 'homeB' : F.homeToss ? 'homeToss' : 'homeV', now);
               else go('turnHome', now);
             }
             break;
           case 'turnHome': frame(ph, u, m); if (u >= 1) go('waitHome', now); break;
           case 'waitHome':                                               // 回程的路上有別隻：抱著球等牠讓開（最多 6 秒）
             frame('turnHome', 1, m);
-            if (now - (job.lastChk || 0) > 220) { job.lastChk = now; job.clear = S.clearPath ? S.clearPath(a, a.x, home) : true; }
+            if (now - (job.lastChk || 0) > 220) { job.lastChk = now; job.clear = S.clearPath ? S.clearPath(a, a.x, home, 36) : true; }
             if (job.clear) go('carry', now);
             else if (now - job.p0 > 6000) { job.home2 = a.x; go('turnFront', now); }             // 還是擋著：就在這裡放下
             break;
@@ -756,11 +758,12 @@
           }
           case 'turnFront':                                              // 到家：抱著球轉回正面
             frame('turnHome', 1 - u, m);
-            if (u >= 1) go(kind === 'bball' ? 'homeB' : F.homeToss ? 'homeToss' : 'homeV', now);
+            if (u >= 1) go(kind === 'bball' && !(ball.coop && F.homeToss) ? 'homeB' : F.homeToss ? 'homeToss' : 'homeV', now);
             break;
           case 'homeToss':                                               // 把球輕拋一下再接住
             frame(ph, u, m2);
-            if (u >= 1) go('homeV', now);
+            // 一起打籃球撿回來的球：輕拋接住就收尾（不畫單人練投用的籃框）
+            if (u >= 1) { if (kind === 'bball') { job.endOpts = { line: '撿回來了！' }; job.endTh = dir > 0 ? 30 : -30; ball.remove(); return false; } go('homeV', now); }
             break;
           case 'drop':                                                   // 趴低，球放到鼻子前的地上
             frame(ph, u, mh);

@@ -256,8 +256,8 @@
   //   回傳 true＝路是空的可以走了。不用深度假裝錯開，兩隻不會重疊穿過。
   // =====================================================================================
   S.avoid = null;
-  S.clearPath = function (mover, x0, x1) {
-    const dir = Math.sign(x1 - x0) || 1, lo = Math.min(x0 + dir * 24, x1 + dir * 56), hi = Math.max(x0 + dir * 24, x1 + dir * 56), W = innerWidth;
+  S.clearPath = function (mover, x0, x1, pad = 50) {
+    const dir = Math.sign(x1 - x0) || 1, lo = Math.min(x0 + dir * 24, x1 + dir * pad), hi = Math.max(x0 + dir * 24, x1 + dir * pad), W = innerWidth;
     let clear = true, n = 0;
     const all = [...S.actors.values()].filter((o) => o !== mover && !o.inPouch && Math.abs(o.y - mover.y) <= 40);
     for (const o of all) {
