@@ -133,6 +133,7 @@
       if ('mom' in q) A.mom = q.mom || null;
       if ('dad' in q) A.dad = q.dad || null;
       if ('partner' in q) A.partner = q.partner || null;
+      if ('crush' in q) A.crush = q.crush || null;           // 喜歡的對象（會偷偷看牠）
       if ('pregnant' in q) A.pregnant = !!q.pregnant;
       if ('hasJoey' in q) A.hasJoey = q.hasJoey || null;
       A.coupled = !!A.partner;
@@ -364,7 +365,11 @@
       if (now >= (this.idleAt || (this.idleAt = now + 6000 + Math.random() * 12000))) {
         this.idleAt = now + 8000 + Math.random() * 12000;
         const nearCursor = Math.abs(S.cursor.x - this.x) < 200 && Math.abs(S.cursor.y - (this.y - this.h / 2)) < 260;
-        if (!S.reduceMotion && !this.queue.length && !this.alerts.length && !this.bubble.kind && !(nearCursor && Math.random() < .7) && ANIM.IDLE && this.idleAct()) return true;
+        const calm = !S.reduceMotion && !this.queue.length && !this.alerts.length && !this.bubble.kind;
+        // 偷偷看喜歡的那一隻（游標不在旁邊時）
+        const C = calm && !nearCursor && this.crushActor();
+        if (C && Math.random() < .4 && this.glanceAt(C)) return false;
+        if (calm && !(nearCursor && Math.random() < .7) && ANIM.IDLE && this.idleAct()) return true;
       }
       return false;
     }
@@ -704,6 +709,33 @@
       return !!this.requestActivity(6, this.animJob('idle:' + pick, an));
     }
     // 兩次散步之間隔多久：活潑的約 30–60 秒、慵懶的 2–4 分鐘
+    // 喜歡的那一隻（在同一層地面、看得到的距離內、醒著）
+    crushActor() {
+      const C = this.attach.crush && S.actors.get(this.attach.crush);
+      if (!C || C === this || C.inPouch || C.mode !== 'awake') return null;
+      const dx = Math.abs(C.x - this.x);
+      return dx > 60 && dx < 1400 && Math.abs(C.y - this.y) < 200 ? C : null;
+    }
+    // 偷偷看：頭轉向牠、看一下，再假裝沒事轉開。對方剛好也在偷看自己＝四目相對 → 冒一顆小愛心，趕快轉開
+    glanceAt(C) {
+      const a = this, side = C.x < a.x ? 'L' : 'R', away = side === 'L' ? 'R' : 'L';
+      let t1 = 0, t2 = 0;
+      const job = { name: 'glance', ticks: false,
+        start() {
+          a.showLook(side);
+          // 兩情相悅：對方閒著時有一半機會也回頭偷看（就會四目相對）
+          if (!C.job && C.attach.crush === a.id && Math.random() < .5) setTimeout(() => { if (!C.job && C.crushActor() === a) C.glanceAt(a); }, 250 + Math.random() * 300);
+          t1 = setTimeout(() => {
+            const caught = C.job && C.job.name === 'glance' && C.lookBucket === away;   // 對方也正看向這邊
+            if (caught) S.burst(a.x, a.y - 170 * a.k, 'heart1');
+            a.showLook(away);
+            t2 = setTimeout(() => { a.lookBucket = null; if (a.job === job) a.finish(job); }, caught ? 500 : 700);
+          }, 900 + Math.random() * 900);
+        },
+        interrupt() { clearTimeout(t1); clearTimeout(t2); a.lookBucket = null; }
+      };
+      return !!this.requestActivity(6, job);
+    }
     // 散步時想去找的同伴：最近的、同一地面、在散步範圍裡、還沒在身邊（250 px 以外）、醒著且沒在忙的成年庫卡
     buddy(lo, hi) {
       let best = null, bd = Infinity;

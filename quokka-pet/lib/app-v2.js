@@ -73,8 +73,18 @@ function start() {
   let stageReady = false; const stageBacklog = [];
   const toStage = (ch, payload) => { if (!stageReady && (ch === 'q:event' || ch === 'presence')) { if (stageBacklog.length < 50) stageBacklog.push([ch, payload]); return; } stage.send(ch, payload); };
   const stageQ = (q) => ({ id: q.id, name: q.name, traits: q.traits, pos: q.home || null, stage: q.stage || 'adult', mom: q.mom || null, dad: q.dad || null,
-    growScale: (q.traits && q.traits.growScale) || null, pregnant: !!q.pregnancy, hasJoey: q.joey ? q.joey.id : null, partner: partnerId(q.id) });
+    growScale: (q.traits && q.traits.growScale) || null, pregnant: !!q.pregnancy, hasJoey: q.joey ? q.joey.id : null, partner: partnerId(q.id), crush: crushId(q.id) });
   function partnerId(qid) { try { return romance.partnerOf(qid) || null; } catch (e) { return null; } }
+  function crushId(qid) { try { return romance.crushOf(qid) || null; } catch (e) { return null; } }
+  // 喜歡的對象變了（好感度變動後）：舞台要知道才會偷看對方；面板顯示也跟著更新
+  let crushSig = '';
+  function syncCrush() {
+    const sig = data.quokkas.map((q) => q.id + ':' + (crushId(q.id) || '')).join('|');
+    if (sig === crushSig) return;
+    crushSig = sig;
+    toStage('stage:quokkas', data.quokkas.map(stageQ));
+    toPanel('store:changed', snapshot());
+  }
   let away = false;
   const digest = {};                    // 離開期間各隻的待報告事項：{ qid: R.digestPush 的累積 }，回來時由各隻報告（R.digestTexts 轉成文字）
   const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -132,7 +142,7 @@ function start() {
     data.reminders = data.reminders.filter((r) => !(spent(r) && !r.missedAt && new Date(r.lastFiredAt).getTime() < cut));
     if (data.reminders.length !== n) changed();
   }
-  setInterval(() => { try { romance.dailyDecay(); sweepReminders(); } catch (e) {} }, 3600000);
+  setInterval(() => { try { romance.dailyDecay(); sweepReminders(); syncCrush(); } catch (e) {} }, 3600000);
 
   let panel = null;
   function createPanel() {
@@ -157,7 +167,7 @@ function start() {
   const quotes = {};                 // symbol → 最新報價
   function snapshot() {
     return { quokkas: data.quokkas, tasks: data.tasks, reminders: data.reminders, stocks: data.stocks, folders: data.folders,
-      relations: data.relations, settings: data.settings, quotes, ringing: data.reminders.filter((r) => r.ringing).map((r) => r.id),
+      relations: data.relations, crushes: Object.fromEntries(data.quokkas.map((q) => [q.id, crushId(q.id)])), settings: data.settings, quotes, ringing: data.reminders.filter((r) => r.ringing).map((r) => r.id),
       folderChanges: folderWatch.recentAll() };
   }
   function changed({ quokkas = false } = {}) {
@@ -641,9 +651,9 @@ function start() {
     if (affTimer) return;
     affTimer = setTimeout(() => { affTimer = null; store.save(); posSaver.markSaved(); }, 10000);
   }
-  ipcMain.on('social:done', (e, { pairId, ok, type } = {}) => { try { const r = social.done(pairId, { ok: !!ok, type }); saveAffinitySoon(); onRomanceEvents(r && r.events); } catch (err) {} });
+  ipcMain.on('social:done', (e, { pairId, ok, type } = {}) => { try { const r = social.done(pairId, { ok: !!ok, type }); saveAffinitySoon(); onRomanceEvents(r && r.events); syncCrush(); } catch (err) {} });
   ipcMain.on('social:abort', (e, { pairId, by, reason } = {}) => { try { social.abort(pairId, by, reason); } catch (err) {} });
-  ipcMain.on('q:pass', (e, { a, b } = {}) => { if (qById(a) && qById(b)) { try { social.passBy(a, b); saveAffinitySoon(); } catch (err) {} } });
+  ipcMain.on('q:pass', (e, { a, b } = {}) => { if (qById(a) && qById(b)) { try { social.passBy(a, b); saveAffinitySoon(); syncCrush(); } catch (err) {} } });
   ipcMain.on('q:dblclick', (e, { qid } = {}) => showPanel(qById(qid) ? qid : null));
   ipcMain.on('q:context', (e, { qid } = {}) => {
     const q = qById(qid); if (!q) return;
