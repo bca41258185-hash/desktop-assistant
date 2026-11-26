@@ -347,13 +347,18 @@ function start() {
     if (back) for (const k of Object.keys(digest)) delete digest[k];
   }
   setInterval(checkPresence, 5000);
-  // 滑鼠快速繞圈（1.5 秒內繞 2 圈）→ 下一陣落葉雨；15 秒內不重複。睡著、藏起來時不理
+  // 滑鼠快速繞圈（1.5 秒內繞 2 圈）→ 從繞圈的位置下一陣落葉雨；冷卻 20 秒。睡著、藏起來時不理
   const circles = createCircleDetector();
   let lastRainAt = 0;
   setInterval(() => {
     if (!stageVisible || sleeping || !stageReady) return;
     const c = screen.getCursorScreenPoint(), t = Date.now();
-    if (circles.push(c.x, c.y, t) && t - lastRainAt > 15000) { lastRainAt = t; toStage('stage:leafrain', { by: 'cursor' }); }
+    const hit = circles.push(c.x, c.y, t);
+    if (hit && t - lastRainAt > 20000) {
+      lastRainAt = t;
+      const wa = screen.getPrimaryDisplay().workArea;                                    // 舞台座標＝螢幕座標 − 工作區左上角
+      toStage('stage:leafrain', { by: 'cursor', x: hit.x - wa.x, y: hit.y - wa.y, r: hit.r });
+    }
   }, 40);
   powerMonitor.on('lock-screen', () => { locked = true; checkPresence(); });
   powerMonitor.on('unlock-screen', () => { locked = false; checkPresence(); });

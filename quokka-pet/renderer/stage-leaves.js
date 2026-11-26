@@ -2,7 +2,7 @@
 //   · 只在醒著（不是睡著、不是藏起來）而且沒開「減少動態效果」時下
 //   · 葉子落地後，閒著的庫卡各自挑最近、沒人要的那片：跳過去 → 撿起來（地上的葉子消失）→ 播吃葉子的動畫
 //   · 每隻一陣雨最多吃 4 片；挑路上沒有別隻擋著的葉子；1 分鐘沒人撿的葉子淡出
-//   · 滑鼠快速繞圈（1.5 秒內繞 2 圈，主行程 lib/gesture.js 偵測）也會馬上下一陣
+//   · 滑鼠快速繞圈（1.5 秒內繞 2 圈，主行程 lib/gesture.js 偵測）：從繞圈的位置冒出來往下飄（冷卻 20 秒）
 //   · 測試、除錯：window.__stage.leafRain()
 (function () {
   const S = window.Stage, ANIM = S.ANIM;
@@ -11,8 +11,8 @@
   const leaves = new Set();        // 地上的葉子：{ el, x, y, claimedBy, born }
   let timer = 0, tickT = 0;
 
-  function leafSVG([fill, vein], rot) {
-    return `<svg viewBox="-12 -20 24 40" width="22" height="34" style="transform:rotate(${rot}deg)" aria-hidden="true">
+  function leafSVG([fill, vein], rot, delay = 0) {
+    return `<svg viewBox="-12 -20 24 40" width="22" height="34" style="transform:rotate(${rot}deg);animation-delay:${delay.toFixed(0)}ms" aria-hidden="true">
       <path d="M0 -18 C 10 -10 11 6 0 18 C -11 6 -10 -10 0 -18 Z" fill="${fill}"/>
       <path d="M0 -15 L0 16 M0 -4 L5 -8 M0 3 L-5 -1 M0 9 L4 6" stroke="${vein}" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg>`;
   }
@@ -21,18 +21,32 @@
     const ys = [...S.actors.values()].filter((a) => !a.inPouch && !a.isFollow).map((a) => Math.round(a.y));
     return ys.length ? ys : [innerHeight - 6];
   }
-  function rain(n) {
+  // at＝{x, y, r}：從那個位置（滑鼠繞圈的地方）冒出來往下飄；沒給就從螢幕上方、庫卡附近一大片落下
+  function rain(n, at) {
     if (S.mode !== 'awake' || S.reduceMotion || !S.actors.size) return false;
     const gs = grounds(), xs = [...S.actors.values()].map((a) => a.x);
     const lo = Math.max(40, Math.min(...xs) - 350), hi = Math.min(innerWidth - 40, Math.max(...xs) + 350);
+    const from = at && Number.isFinite(at.x) && Number.isFinite(at.y) ? { x: S.clamp(at.x, 20, innerWidth - 20), y: S.clamp(at.y, -40, innerHeight - 40), r: S.clamp(Number(at.r) || 60, 20, 200) } : null;
     n = n || 10 + Math.floor(Math.random() * 5);
     for (let i = 0; i < n; i++) {
-      const x = lo + Math.random() * (hi - lo), y = gs[Math.floor(Math.random() * gs.length)];
-      const delay = Math.random() * 4500, dur = 3800 + Math.random() * 2600, rot = Math.random() * 360;
+      let x0, y0, x, delay, dur;
+      // 落在哪一條地面：繞圈位置以下最近的那條（都在上面就用最低的）
+      const below = gs.filter((g) => !from || g > from.y + 10), y = (below.length ? below : gs)[Math.floor(Math.random() * (below.length || gs.length))];
+      if (from) {
+        const a = Math.random() * 2 * Math.PI, rr = from.r * Math.sqrt(Math.random());
+        x0 = from.x + Math.cos(a) * rr; y0 = from.y + Math.sin(a) * rr * 0.6;
+        x = S.clamp(x0 + (Math.random() - 0.5) * (120 + from.r * 2), 30, innerWidth - 30);    // 飄落時往旁邊散開一點
+        delay = Math.random() * 1200;
+        dur = 900 + Math.max(0, y - y0) * 3.6 + Math.random() * 700;                          // 越高掉越久
+      } else {
+        x0 = x = lo + Math.random() * (hi - lo); y0 = -60 - Math.random() * 80;
+        delay = Math.random() * 4500; dur = 3800 + Math.random() * 2600;
+      }
+      const rot = Math.random() * 360;
       const el = document.createElement('div');
-      el.className = 'leaf-fall';
-      el.style.cssText = `--x:${x.toFixed(0)}px;--y0:${(-60 - Math.random() * 80).toFixed(0)}px;--y1:${(y - 8).toFixed(0)}px;--sway:${(20 + Math.random() * 40).toFixed(0)}px;animation-duration:${dur.toFixed(0)}ms;animation-delay:${delay.toFixed(0)}ms`;
-      el.innerHTML = `<div class="leaf-sway" style="animation-duration:${(900 + Math.random() * 700).toFixed(0)}ms">${leafSVG(COLORS[Math.floor(Math.random() * COLORS.length)], rot)}</div>`;
+      el.className = 'leaf-fall' + (from ? ' pop' : '');
+      el.style.cssText = `--x:${x0.toFixed(0)}px;--x1:${x.toFixed(0)}px;--y0:${y0.toFixed(0)}px;--y1:${(y - 8).toFixed(0)}px;--sway:${(20 + Math.random() * 40).toFixed(0)}px;animation-duration:${dur.toFixed(0)}ms;animation-delay:${delay.toFixed(0)}ms`;
+      el.innerHTML = `<div class="leaf-sway" style="animation-duration:${(900 + Math.random() * 700).toFixed(0)}ms">${leafSVG(COLORS[Math.floor(Math.random() * COLORS.length)], rot, delay)}</div>`;
       S.fxEl.appendChild(el);
       setTimeout(() => land(el, x, y), delay + dur);
     }
@@ -116,6 +130,6 @@
   schedule();
   S.leafRain = rain;
   // 使用者用滑鼠快速繞圈（主行程偵測）：馬上下一陣
-  if (S.api && S.api.onLeafRain) S.api.onLeafRain(() => { rain(); });
+  if (S.api && S.api.onLeafRain) S.api.onLeafRain((p) => { rain(0, p && Number.isFinite(p.x) ? p : null); });
   S.groundLeaves = leaves;
 })();

@@ -43,3 +43,20 @@ test('觸發一次後要重新繞才會再觸發', () => {
   pts.forEach((p, i) => { if (d.push(p[0], p[1], i * 40)) hits++; });
   assert.ok(hits >= 1 && hits <= 2, `hits ${hits}`);
 });
+
+test('觸發時回傳繞圈的中心和半徑', () => {
+  const d = createCircleDetector();
+  let hit = null;
+  circle(3, 1200, 90, 700, 420).forEach((p, i) => { const h = d.push(p[0], p[1], i * 40); if (h && !hit) hit = h; });
+  assert.ok(hit);
+  assert.ok(Math.abs(hit.x - 700) < 15 && Math.abs(hit.y - 420) < 15, JSON.stringify(hit));
+  assert.ok(Math.abs(hit.r - 90) < 15);
+});
+
+test('取樣偶爾慢一拍（漏掉幾個點）仍然算繞圈', () => {
+  const pts = circle(3, 1200).filter((_, i) => i % 9 !== 4);     // 每 9 個點掉 1 個（主行程忙的時候）
+  const d = createCircleDetector();
+  let hit = false, t = 0;
+  for (const p of pts) { t += 40; if (d.push(p[0], p[1], t)) hit = true; }
+  assert.ok(hit);
+});
