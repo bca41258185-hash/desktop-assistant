@@ -402,6 +402,7 @@
     const tick = () => {
       a.peekT = 0;
       if (!S.actors.has(a.id) || !pouchJoeys.get(a.id)) return;
+      if (a.mode !== 'awake' || S.mode !== 'awake') return;                               // 睡覺、隱藏時停掉（醒來由 F.refresh 再啟動）
       if (a.joeyHide) { a.joeyHide = false; F.refresh(a, true); a.peekT = setTimeout(tick, 9000 + Math.random() * 14000); }
       else { a.joeyHide = true; F.refresh(a, true); a.peekT = setTimeout(tick, 2200 + Math.random() * 2200); }
     };

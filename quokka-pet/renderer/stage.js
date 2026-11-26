@@ -126,7 +126,12 @@
     const away = !!(p.away || p.locked);
     if (away === awayNow && !p.digest) return;
     awayNow = away;
-    if (S.mode === 'hidden') return;
+    if (away) for (const a of S.actors.values()) a.cancelDrag && a.cancelDrag();   // 鎖定／離開時還拎著：強制放下（mouseup 可能收不到）
+    if (S.mode === 'hidden') {
+      // 藏起來的時候回來：報告先記到各隻的佇列，等舞台顯示出來再講（不丟掉）
+      if (!away) { const items = digestItems(p.digest); for (const [qid, list] of items) for (const it of list) actorOf(qid).enqueue(it); }
+      return;
+    }
     if (away) { S.mode = 'asleep'; for (const a of S.actors.values()) a.setMode('asleep'); S.reportRects(); return; }
     S.mode = 'awake';
     const items = digestItems(p.digest);
@@ -146,19 +151,20 @@
     const now = performance.now();
     for (const a of S.actors.values()) a.onCursor(S.cursor, now);
   });
-  api.onPause(() => {
-    S.paused = true;
-    // 看不到就停：收掉 L2 以下的活動（提醒照常），球淡出
-    for (const a of S.actors.values()) if (a.job && a.job.layer >= 4) { const j = a.job; a.job = null; j.interrupt && j.interrupt('pause'); a.hideLive(); a.setLayer(8); a.showRest(); }
-    for (const a of S.actors.values()) a.stopLife();                    // 看不到的時候：眨眼、耳朵的計時器也停
-  });
-  api.onResume(() => { S.paused = false; for (const a of S.actors.values()) { a.nextAt = Math.max(a.nextAt, performance.now() + 3000); if (a.mode === 'awake') a.startLife(); } S.kick(); });
+  // （stage:pause／stage:resume 主行程不會送，已拿掉；看不到的時候由 stage:hide 與 presence 處理）
   let hideTimer = 0;
   function setHidden(h) {
     document.body.classList.toggle('hidden', h);
     S.mode = h ? 'hidden' : (awayNow ? 'asleep' : 'awake');
+    if (h) for (const a of S.actors.values()) a.cancelDrag && a.cancelDrag();
     for (const a of S.actors.values()) a.setMode(S.mode);
     if (!h) for (const a of S.actors.values()) if (a.alerts.length) a.startRing();   // 回來時補上提醒氣泡
+    // 藏起來期間累積的報告：顯示出來後錯開 0.8 秒講（最多 5 隻先講，其他晚一點）
+    if (!h && S.mode === 'awake') {
+      const rep = [...S.actors.values()].filter((a) => a.queue.length && !a.alerts.length);
+      rep.slice(0, 5).forEach((a, i) => a.scheduleDrain(400 + i * 800));
+      rep.slice(5).forEach((a) => a.scheduleDrain(400 + 5 * 800 + 4000));
+    }
     S.reportRects(); S.kick();
   }
   api.onHide((p) => {

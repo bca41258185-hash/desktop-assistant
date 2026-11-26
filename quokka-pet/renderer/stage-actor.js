@@ -282,7 +282,7 @@
       // 球停了在等主人（名額滿時排隊，L4 優先）
       if (this.ball && this.ball.stopped && !this.ball.picked) { this.startFetch(); return !!(this.job && this.job.ticks); }
       if (now >= this.nextAt) {
-        if (this.queue.length || this.alerts.length) { this.nextAt = now + 3000; return false; }
+        if (this.queue.length || this.alerts.length) { if (this.queue.length && !this.alerts.length && !this.drainTimer) this.scheduleDrain(); this.nextAt = now + 3000; return false; }
         const nearCursor = Math.abs(S.cursor.x - this.x) < 200 && Math.abs(S.cursor.y - (this.y - this.h / 2)) < 260;
         if (nearCursor || S.reduceMotion || S.settings.walk === 'off' || S.fetchWaiting() || this.bubble.kind) { this.nextAt = now + 3000; return false; }
         if (S.family && S.family.coupleIdle(this, now)) return !!(this.job && this.job.ticks);
@@ -327,7 +327,7 @@
     scheduleDrain(delay) {
       clearTimeout(this.drainTimer);
       const wait = delay != null ? delay : Math.max(0, S.REPORT_GAP - (performance.now() - this.lastReportEnd));
-      this.drainTimer = setTimeout(() => this.drain(), wait);
+      this.drainTimer = setTimeout(() => { this.drainTimer = 0; this.drain(); }, wait);
     }
     drain() {
       if (this.mode !== 'awake' || !this.queue.length) return;
@@ -417,6 +417,11 @@
         },
         tick(now) {
           if (job.pre) { if (job.pre.tick(now)) return true; job.pre = null; job.t0 = now; }
+          // 使用者不在（睡覺模式）超過 45 秒、或舞台藏起來：停在靜止格（氣泡留著），不再重畫；回來再恢復動畫
+          if (S.mode !== 'awake') {
+            if (!job.dimAt) job.dimAt = now;
+            if (S.mode === 'hidden' || now - job.dimAt > 45000) { job.still = true; job.ticks = false; a.setFrame('ring', 0, ANIM.STILL.ring); return true; }
+          } else job.dimAt = 0;
           const t = (now - job.t0) / 1000, late = t > 45, an = late ? quiet : ring;
           if (now - job.last < (late ? 100 : 50)) return true;
           job.last = now;
@@ -523,7 +528,8 @@
     // 出發前先看一眼要去的方向 → 平順轉身 → 走（四肢慢走）或跳 → 中途偶爾停下張望／聞地面 → 停下、轉回來
     walkJob(to, o = {}) {
       const a = this, W = innerWidth, margin = 60, range = S.settings.walk === 'screen' ? W : 400;
-      const lo = Math.max(margin, a.home - range), hi = Math.min(W - margin, a.home + range);
+      const hm = S.clamp(a.home, margin, W - margin);                    // 家在畫面外（被拖出去過）：當成在邊上，才走得回來
+      const lo = Math.max(margin, Math.min(hm, a.home - range)), hi = Math.min(W - margin, Math.max(hm, a.home + range));
       let target = to;
       if (target == null) {
         const backHome = Math.abs(a.x - a.home) > 250 && Math.random() < .6;
@@ -824,6 +830,7 @@
         down = { x: e.clientX, y: e.clientY, moved: 0, samples: [{ x: e.clientX, y: e.clientY, t: performance.now() }] };
         const move = (ev) => {
           if (!down) return;
+          if (ev.buttons === 0) { up(); return; }                        // 按鍵其實已經放開（mouseup 在視窗外遺失）：當作放手
           const now = performance.now();
           down.moved = Math.max(down.moved, Math.hypot(ev.clientX - down.x, ev.clientY - down.y));
           down.samples.push({ x: ev.clientX, y: ev.clientY, t: now });
@@ -840,6 +847,7 @@
           clickTimer = setTimeout(() => { clickTimer = 0; patIdx = (patIdx + 1) % 3; this.pat(patIdx); }, 250);
         };
         window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+        this.cancelDrag = () => { if (!down) return; if (down.drag) up(); else { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); down = null; } };                     // 鎖定、離開、舞台藏起來時強制放下
       });
       // 長摸：游標在頭上來回移動
       let rev = [], lastDir = 0;
@@ -892,6 +900,8 @@
         move(cx, cy) { a.x = ox + cx - sx; a.y = Math.min(innerHeight - 4, oy + cy - sy); a.place(); },
         release(vx, vy) {
           job.held = false; a.el.classList.remove('dragging');
+          // 放到畫面外：拉回畫面內（存檔的位置也是夾過的）
+          a.x = S.clamp(a.x, 44, innerWidth - 44); a.y = S.clamp(a.y, Math.min(innerHeight - 4, a.h * .8), innerHeight - 4); a.place();
           if (!S.reduceMotion && Math.hypot(vx, vy) > 1.1) { job.fling = { vx: vx * 16, vy: vy * 16 }; job.ticks = true; S.kick(); }
           else job.land(performance.now());
           S.reportRects(false);
@@ -990,6 +1000,7 @@
       const prev = this.mode;
       this.mode = mode;
       if (mode === 'awake') this.startLife(); else this.stopLife();
+      if (mode === 'awake' && this.job && this.job.name === 'ring' && this.job.still) { this.job.still = false; this.job.dimAt = 0; this.job.ticks = !S.reduceMotion; this.job.t0 = performance.now(); S.kick(); }
       if (mode === 'asleep' || mode === 'hidden') {
         // 只留 L0、L1；其他活動收掉（還沒報的留在佇列）
         if (this.job && this.job.layer >= 2) { const j = this.job; this.job = null; j.interrupt && j.interrupt(mode); this.hideLive(); this.setLayer(8); }
