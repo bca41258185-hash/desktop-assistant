@@ -332,9 +332,17 @@
     FUR_EXT.forEach((c) => { map[c] = tf(c, 'ext'); });
     return map;
   }
+  // 只找換算表裡有的顏色（大小寫都算），其他顏色連看都不看；結果和逐個顏色查表完全一樣
+  const rcMemo = new WeakMap();
   function recolor(svg, t) {
     const m = colorMap(t);
-    return svg.replace(/#[0-9a-fA-F]{6}\b/g, (c) => m[c.toLowerCase()] || c);
+    let re = rcMemo.get(m);
+    if (re === undefined) {
+      const keys = Object.keys(m).filter((k) => /^#[0-9a-f]{6}$/.test(k));
+      re = keys.length ? new RegExp('#(?:' + keys.map((k) => k.slice(1)).join('|') + ')\\b', 'gi') : null;
+      rcMemo.set(m, re);
+    }
+    return re ? svg.replace(re, (c) => m[c.toLowerCase()] || c) : svg;
   }
 
   // 特殊性別：用另一組亂數決定（不影響同一個 seed 原本抽出來的外型、個性）；舊資料沒有這個欄位時補上

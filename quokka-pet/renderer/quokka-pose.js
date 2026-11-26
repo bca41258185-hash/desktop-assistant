@@ -46,15 +46,19 @@
     : (typeof require === 'function' ? require('./quokka-acc.js') : null);
   // 個體特徵模組（體態數值）；沒載入時當標準
   const TRm = () => (typeof window !== 'undefined' && window.QuokkaTraits) ? window.QuokkaTraits : (typeof require === 'function' ? (() => { try { return require('./traits.js'); } catch (e) { return null; } })() : null);
-  const rad = (a) => a * Math.PI / 180, f1 = (v) => (+v).toFixed(1);
+  const fx1 = (v) => { const x = v * 10, n = Math.round(x); if (!(Math.abs(x - n) < .4999) || n > 1e9 || n < -1e9) return v.toFixed(1); const a = n < 0 ? -n : n; return (n < 0 || (n === 0 && v < 0) ? '-' : '') + ((a - a % 10) / 10) + '.' + (a % 10); };   // 和 toFixed(1) 逐字相同（逢 .x5 這種剛好一半的才交給 toFixed），快一倍
+  const rad = (a) => a * Math.PI / 180, f1 = (v) => fx1(+v);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const HEAD = new Set(['head', 'cheekL', 'cheekR', 'snout', 'snoutTip', 'jaw']);
   const FEET_Y = 176, NECK = [0, 80, 0], WAIST = [0, 136, -8], LEAN_ALL = 25;
 
   // ---- 3D 變換 -------------------------------------------------------------
-  function rotX(p, a, c) { const s = Math.sin(rad(a)), co = Math.cos(rad(a)), y = p[1] - c[1], z = p[2] - c[2]; return [p[0], c[1] + y * co + z * s, c[2] + z * co - y * s]; }
-  function rotZ(p, a, c) { const s = Math.sin(rad(a)), co = Math.cos(rad(a)), x = p[0] - c[0], y = p[1] - c[1]; return [c[0] + x * co - y * s, c[1] + y * co + x * s, p[2]]; }
-  function rotY(p, a, c) { const s = Math.sin(rad(a)), co = Math.cos(rad(a)), x = p[0] - c[0], z = p[2] - c[2]; return [c[0] + x * co + z * s, p[1], c[2] - x * s + z * co]; }
+  // 同一個角度連續轉很多點：sin、cos 記住上一次的（數值完全一樣）
+  let scA = NaN, scS = 0, scC = 1;
+  const sc = (a) => { if (a !== scA) { scA = a; scS = Math.sin(rad(a)); scC = Math.cos(rad(a)); } };
+  function rotX(p, a, c) { sc(a); const s = scS, co = scC, y = p[1] - c[1], z = p[2] - c[2]; return [p[0], c[1] + y * co + z * s, c[2] + z * co - y * s]; }
+  function rotZ(p, a, c) { sc(a); const s = scS, co = scC, x = p[0] - c[0], y = p[1] - c[1]; return [c[0] + x * co - y * s, c[1] + y * co + x * s, p[2]]; }
+  function rotY(p, a, c) { sc(a); const s = scS, co = scC, x = p[0] - c[0], z = p[2] - c[2]; return [c[0] + x * co + z * s, p[1], c[2] - x * s + z * co]; }
   function makeT(pose, hs) {
     const sq = pose.sq || 1, k = 1 / Math.sqrt(sq), h = pose.head || {}, FEET = [0, FEET_Y, 0];
     // 前傾：25° 以內整隻以腳底為支點；超過的部分只彎上半身（以腰為支點，越往上彎越多）
@@ -108,6 +112,7 @@
   }
 
   // ---- 輪廓：逐列取橢圓聯集、平滑；回傳路徑與幾撮沿輪廓往外下方翹的短毛 ----------------
+  const UNION_W = Array.from({ length: 13 }, (_, i) => Math.exp(-((i - 6) * (i - 6)) / 14));
   function union(E, noTuft) {
     let y0 = Infinity, y1 = -Infinity;
     E.forEach((e) => { y0 = Math.min(y0, e.cy - e.ry); y1 = Math.max(y1, e.cy + e.ry); });
@@ -118,7 +123,8 @@
       if (R > L) rows.push([y, L, R]);
     }
     if (rows.length < 3) return { d: '', tufts: '' };
-    const sm = (k) => rows.map((r0, i) => { let w = 0, v = 0; for (let j = -6; j <= 6; j++) { const q = rows[i + j]; if (!q) continue; const ww = Math.exp(-(j * j) / 14); w += ww; v += q[k] * ww; } return v / w; });
+    // 平滑：只算用得到的列（右邊從頭每 3 列、左邊從尾每 3 列＋頭尾），權重先算好；數值和逐列全算完全一樣
+    const sm = (k) => { const out = new Array(rows.length); const one = (i) => { let w = 0, v = 0; for (let j = -6; j <= 6; j++) { const q = rows[i + j]; if (!q) continue; const ww = UNION_W[j + 6]; w += ww; v += q[k] * ww; } out[i] = v / w; }; const n = rows.length; for (let i = 0; i < n; i += 3) one(i); if (k === 1) for (let i = n - 1; i >= 0; i -= 3) one(i); else one(n - 1); return out; };
     const Ls = sm(1), Rs = sm(2), pts = [];
     const top = rows[0][0], bot = rows[rows.length - 1][0];
     pts.push([(Ls[0] + Rs[0]) / 2, top - 1]);

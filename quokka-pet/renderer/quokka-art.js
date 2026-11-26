@@ -8,8 +8,9 @@
 // views()／render3d() 的十六方位靜態圖也交給 quokka-pose.js 畫，所以靜態圖與動態畫面必定一致；
 // 下面 side()/back()/f34()/b34()/frontLayered() 與 q3render() 的後半是舊畫法，只在姿勢模組沒載入時當後備。
 (function () {
+const fx1 = (v) => { const x = v * 10, n = Math.round(x); if (!(Math.abs(x - n) < .4999) || n > 1e9 || n < -1e9) return v.toFixed(1); const a = n < 0 ? -n : n; return (n < 0 || (n === 0 && v < 0) ? '-' : '') + ((a - a % 10) / 10) + '.' + (a % 10); };   // 和 toFixed(1) 逐字相同（逢 .x5 這種剛好一半的才交給 toFixed），快一倍
 function cr(pts) {
-  const n = pts.length, f = (v) => v.toFixed(1);
+  const n = pts.length, f = fx1;
   let d = `M${f(pts[0][0])} ${f(pts[0][1])}`;
   for (let i = 0; i < n; i++) {
     const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
@@ -65,7 +66,7 @@ function armPath(sx, sy, wx, wy, w1, w2, bend) {
   const p = (x, y, s, w) => [x + nx * w * s, y + ny * w * s];
   const a1 = p(sx, sy, 1, w1 / 2), a2 = p(mx, my, 1, wm / 2), a3 = p(wx, wy, 1, w2 / 2);
   const b3 = p(wx, wy, -1, w2 / 2), b2 = p(mx, my, -1, wm / 2), b1 = p(sx, sy, -1, w1 / 2);
-  const f = (q) => q.map((v) => v.toFixed(1)).join(' ');
+  const f = (q) => q.map(fx1).join(' ');
   return { d: `M${f(a1)} Q${f(a2)} ${f(a3)} Q${wx + dx / L * w2 * .55} ${wy + dy / L * w2 * .55} ${f(b3)} Q${f(b2)} ${f(b1)} Z`,
     hi: `M${f(p(sx, sy, 1, w1 * .28))} Q${f(p(mx, my, 1, wm * .3))} ${f(p(wx, wy, 1, w2 * .25))}`, nx, ny };
 }
@@ -109,7 +110,7 @@ function tube(P, w1, w2, bulge) {
     const w = (w1 + (w2 - w1) * t + bulge * Math.sin(Math.PI * Math.min(1, t * 1.25))) / 2;
     L.push([c[0] - ty * w, c[1] + tx * w]); R.push([c[0] + ty * w, c[1] - tx * w]); H.push([c[0] - ty * w * .45, c[1] + tx * w * .45]);
   }
-  const f = (q) => q[0].toFixed(1) + ' ' + q[1].toFixed(1), end = P[3], dir = [P[3][0] - P[2][0], P[3][1] - P[2][1]], dl = Math.hypot(...dir);
+  const f = (q) => fx1(q[0]) + ' ' + fx1(q[1]), end = P[3], dir = [P[3][0] - P[2][0], P[3][1] - P[2][1]], dl = Math.hypot(...dir);
   const tip = [end[0] + dir[0] / dl * w2 * .5, end[1] + dir[1] / dl * w2 * .5];
   return { d: 'M' + L.map(f).join(' L') + ` Q${f(tip)} ${f(R[N])} L` + R.slice().reverse().map(f).join(' L') + ' Z',
     hi: 'M' + H.slice(1, N - 2).map(f).join(' L'), shade: 'M' + R.slice(2, N).map(f).join(' L') };
@@ -426,7 +427,7 @@ function q3render(th, id, opts = {}) {
   // 姿勢模組已載入：十六方位直接用同一套 3D 繪製（造型、五官、手腳與動態畫面完全一致）；下面的舊畫法只當後備
   const PM = opts.front ? null : POSEM();
   if (PM && PM.render) return `<svg viewBox="0 0 160 196" class="view-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${PM.render(th, id, { raw: true }).svg}</svg>`;
-  const c = Math.cos(rad(th)), s = Math.sin(rad(th)), P = (p) => q3proj(p, th), f1 = (v) => v.toFixed(1);
+  const c = Math.cos(rad(th)), s = Math.sin(rad(th)), P = (p) => q3proj(p, th), f1 = fx1;
   const outline = q3outline(th);
   // 尾巴：由粗到細，從臀部往後沿地面拖；正背面時只看到朝觀者的一小截
   const tq = [[0, 158, -26, 6.5], [0, 164, -40, 5.4], [0, 168, -54, 4.4], [0, 170.5, -68, 3.4], [0, 171.5, -80, 2.4]].map(([x, y, z, r]) => ({ ...P([x, y, -26 + (z + 26) * TAILK]), r }));

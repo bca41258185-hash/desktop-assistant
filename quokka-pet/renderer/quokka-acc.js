@@ -20,7 +20,8 @@
 //   earsOver  true＝耳朵要畫在帽子上面（毛線帽有耳洞）
 
 (function () {
-  const rad = (a) => a * Math.PI / 180, f1 = (v) => (+v).toFixed(1), f2 = (v) => (+v).toFixed(3);
+  const fx1 = (v) => { const x = v * 10, n = Math.round(x); if (!(Math.abs(x - n) < .4999) || n > 1e9 || n < -1e9) return v.toFixed(1); const a = n < 0 ? -n : n; return (n < 0 || (n === 0 && v < 0) ? '-' : '') + ((a - a % 10) / 10) + '.' + (a % 10); };   // 和 toFixed(1) 逐字相同（逢 .x5 這種剛好一半的才交給 toFixed），快一倍
+  const rad = (a) => a * Math.PI / 180, f1 = (v) => fx1(+v), f2 = (v) => (+v).toFixed(3);
   const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
   const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];

@@ -14,10 +14,11 @@
   const RX = {};
   const attr = (s, n) => { const m = s.match(RX[n] || (RX[n] = new RegExp('(?:^|\\s)' + n + '="([^"]*)"'))); return m ? m[1] : null; };
   function learn(svg) {
-    if (svg.indexOf('feGaussianBlur') < 0) return;
+    const end = svg.lastIndexOf('feGaussianBlur'); if (end < 0) return;
+    const src = svg.length > end + 400 ? svg.slice(0, end + 400) : svg;           // 只掃到最後一個模糊濾鏡（後面都是圖形）
     FILTER_RE.lastIndex = 0;
     let m;
-    while ((m = FILTER_RE.exec(svg))) {
+    while ((m = FILTER_RE.exec(src))) {
       const a = m[1], id = attr(a, 'id'); if (!id) continue;
       const user = attr(a, 'filterUnits') === 'userSpaceOnUse';
       const pc = (v) => (v && /%$/.test(v) ? parseFloat(v) / 100 : null);

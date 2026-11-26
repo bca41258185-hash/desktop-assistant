@@ -186,9 +186,10 @@
     if (t && st.sig === t.sig && st.els && st.els.length === t.attrs.length && host.firstElementChild === st.els[0]) {
       for (let i = 0; i < t.attrs.length; i++) {
         const a = t.attrs[i], b = st.attrs[i]; if (a === b) continue;
-        const el = st.els[i], seen = new Set(); let m; ATT.lastIndex = 0;
-        while ((m = ATT.exec(a))) { seen.add(m[1]); const v = ent(m[2]); if (el.getAttribute(m[1]) !== v) el.setAttribute(m[1], v); }
-        ATT.lastIndex = 0; while ((m = ATT.exec(b))) if (!seen.has(m[1])) el.removeAttribute(m[1]);
+        const el = st.els[i], old = new Map(); let m;
+        ATT.lastIndex = 0; while ((m = ATT.exec(b))) old.set(m[1], m[2]);                    // 上一格的屬性（字串比，不必問 DOM）
+        ATT.lastIndex = 0; while ((m = ATT.exec(a))) { const o = old.get(m[1]); old.delete(m[1]); if (o !== m[2]) el.setAttribute(m[1], ent(m[2])); }
+        for (const k of old.keys()) el.removeAttribute(k);
       }
       st.attrs = t.attrs; return;
     }
