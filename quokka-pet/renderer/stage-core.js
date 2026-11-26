@@ -21,14 +21,13 @@
   S.MAX_MOVING = 3;                                   // 同時最多 3 隻在動（只限 L4–L7）
   S.REPORT_GAP = 1200;                                // 報告佇列每則間隔
   S.QUEUE_MAX = 5;
-  // ---- 幀率：目標幀率由主行程決定（stage:perf {fps: 60|30}；沒收到＝60），太吃力時自動降一級 ----------------
-  //   S.fps        目前實際使用的幀率（60 → 45 → 30 → 20）
+  // ---- 幀率：預設每秒 60 格；只有主行程送 stage:perf {fps:30}（使用者手動開省電）才用 30 格。不自動降幀率 ----------
+  //   S.fps        目前的幀率（60 或 30）
   //   S.frameGap   共用迴圈兩格之間至少隔多少毫秒（比一格的時間少一點容差，60 格時每次 rAF 都跑）
   //   S.LIVE_MS    即時繪製（live SVG）的間隔，跟著幀率走
-  //   S.qMul       快取畫格（走路、跳、撿球）每段的格數倍率：45 格以上用兩倍的格數（動作更細），位移照樣以時間計算
+  //   S.qMul       快取畫格（走路、跳、撿球）每段的格數倍率：60 格時用兩倍的格數（動作更細），位移照樣以時間計算
   // 所有位移、步態相位、球的物理都以「經過的時間」計算，所以改幀率不會變快或變慢。
-  const LEVELS = [60, 45, 30, 20];
-  const perf = S.perf = { target: 60, fps: 60, win: [], cost: [], lastChange: 0, okSince: 0, backoff: 10000, history: [] };
+  const perf = S.perf = { target: 60, fps: 60, frames: 0, work: 0, stages: {} };
   function applyFps(fps) {
     S.fps = perf.fps = fps;
     S.frameGap = 1000 / fps - 3;
@@ -37,41 +36,13 @@
   }
   applyFps(60);
   S.setTargetFps = function (fps) {
-    fps = Number(fps) >= 45 ? 60 : 30;
+    fps = Number(fps) === 30 ? 30 : 60;
     if (fps === perf.target) return;
-    perf.target = fps; perf.win = []; perf.cost = []; perf.lastChange = performance.now(); perf.okSince = 0; perf.backoff = 10000;
-    applyFps(LEVELS.find((l) => l <= fps));
+    perf.target = fps; applyFps(fps);
   };
-  // 每一格呼叫一次：gap＝和上一格隔多久、cost＝這一格自己花了多久（毫秒）
-  // 降級：最近 2 秒內平均每格超過目標時間的 1.5 倍；
-  // 升級：在較低一級穩定順暢（每格的工作量不到上一級一格時間的 45%）超過 backoff 毫秒；剛升上去 20 秒內又降回來，backoff 加倍（最多 2 分鐘），不會來回抖
-  function perfSample(now, gap, cost) {
-    if (gap > 250) { perf.win = []; perf.cost = []; return; }                  // 迴圈剛醒來（之前停著）：不算
-    perf.win.push([now, gap]); perf.cost.push([now, cost]);
-    while (perf.win.length && now - perf.win[0][0] > 2000) perf.win.shift();
-    while (perf.cost.length && now - perf.cost[0][0] > 3000) perf.cost.shift();
-    if (now - perf.lastChange < 2000 || perf.win.length < 20) return;
-    const avg = perf.win.reduce((n, w) => n + w[1], 0) / perf.win.length, budget = 1000 / perf.fps;
-    const i = LEVELS.indexOf(perf.fps);
-    if (avg > budget * 1.5 && i < LEVELS.length - 1) {
-      if (now - perf.lastUp < 20000) perf.backoff = Math.min(120000, perf.backoff * 2);
-      perf.history.push({ t: Math.round(now), from: perf.fps, to: LEVELS[i + 1], avg: +avg.toFixed(1) });
-      applyFps(LEVELS[i + 1]); perf.lastChange = now; perf.okSince = 0; perf.win = []; perf.cost = [];
-      return;
-    }
-    const up = LEVELS[i - 1];
-    if (up && up <= perf.target) {
-      const c = perf.cost.reduce((n, w) => n + w[1], 0) / Math.max(1, perf.cost.length);
-      if (avg <= budget * 1.15 && c < (1000 / up) * .45) { if (!perf.okSince) perf.okSince = now; }
-      else perf.okSince = 0;
-      if (perf.okSince && now - perf.okSince > perf.backoff && now - perf.lastChange > perf.backoff) {
-        perf.history.push({ t: Math.round(now), from: perf.fps, to: up, cost: +c.toFixed(1) });
-        applyFps(up); perf.lastChange = perf.lastUp = now; perf.okSince = 0; perf.win = []; perf.cost = [];
-      }
-    }
-  }
-  // 量測用：實際跑了幾格（每次迴圈真的做事就 +1）
-  perf.frames = 0;
+  // 分段計時（量效能用，平常只是累加幾個數字）：S.prof('svg', ms)
+  S.prof = (k, ms) => { const o = perf.stages[k] || (perf.stages[k] = { n: 0, ms: 0 }); o.n++; o.ms += ms; };
+
   S.actors = new Map();
   S.balls = new Set();
   S.cursor = { x: -9999, y: -9999 };
@@ -89,8 +60,10 @@
   S.frameURL = function (a, key, th, pose, wide) {
     const k = a.id + '|' + key + (wide ? '|w' : '') + (a.decoKey || '');
     const hit = cache.get(k);
-    if (hit) { cache.delete(k); cache.set(k, hit); return hit.url; }   // 最近使用的移到最後
+    if (hit) { cache.delete(k); cache.set(k, hit); S.prof('frame.hit', 0); return hit.url; }   // 最近使用的移到最後
+    const t0 = performance.now();
     let svg = S.svgFor(a, th, 'f' + a.uid, pose, wide ? S.VBW_STR : S.VB_STR);
+    S.prof('frame.miss.pose+svg', performance.now() - t0);
     // 圖片是獨立文件，讀不到 CSS 變數 → 把頭帶等顏色直接寫進去
     const dpr = window.devicePixelRatio || 1;
     svg = svg.replace(/var\(--band,\s*#[0-9a-fA-F]{6}\)/g, a.traits.band || '#e5533d')
@@ -188,7 +161,7 @@
   function loop(now) {
     raf = 0;
     if (now - lastFrame < S.frameGap) { raf = requestAnimationFrame(loop); return; }   // 每秒最多 S.fps 格（預設 60，吃力時自動降級）
-    const gap = lastFrame ? now - lastFrame : 1e9, c0 = performance.now();
+    const c0 = performance.now();
     lastFrame = now; perf.frames++;
     let busy = false;
     const dt = Math.min(0.05, (now - (lastBall || now)) / 1000); lastBall = now;
@@ -198,7 +171,7 @@
       try { if (a.tick(now)) busy = true; }
       catch (e) { console.warn('活動出錯，強制結束：' + (a.job && a.job.name), e); S.failJob(a); busy = true; }
     }
-    perfSample(now, gap, performance.now() - c0);
+    perf.work += performance.now() - c0;
     if (busy) { raf = requestAnimationFrame(loop); S.reportRectsThrottled(); }
     else { lastBall = 0; lastFrame = 0; wakeLater(); S.reportRects(); }
   }

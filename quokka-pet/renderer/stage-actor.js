@@ -239,7 +239,9 @@
       if (!this.liveShown) { this.liveShown = true; this.el.classList.add('live-on'); }
       // 常駐層（呼吸、眨眼、耳朵抖）也疊到即時繪製的動作上
       if (ANIM.ambient && !pose.noAmbient) { const am = ANIM.ambient(performance.now() / 1000, this.seed, { still: false }); pose = ANIM.applyAmbient(pose, { ...am, look: [0, 0], head: { yaw: 0, pitch: 0 } }); }
-      this.live.innerHTML = S.svgFor(this, th, 'L' + this.uid, pose, S.VB_STR);
+      const t0 = performance.now(), svg = S.svgFor(this, th, 'L' + this.uid, pose, S.VB_STR), t1 = performance.now();
+      this.live.innerHTML = svg;
+      S.prof('live.pose+svg', t1 - t0); S.prof('live.dom', performance.now() - t1);
     }
     // 收掉即時 SVG：狀態馬上改；畫面上等下一張圖解碼好再換（同一個呼叫流程裡接著 setFrame 也一樣），不會空白一格
     hideLive() { if (!this.liveOn) return; this.liveOn = false; queueMicrotask(() => this.flushLive()); }

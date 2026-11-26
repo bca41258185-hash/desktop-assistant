@@ -137,12 +137,14 @@
         // 常駐層：眨眼
         if (ANIM.ambient) for (const [key, a] of [['a', I], ['b', O]]) { const am = ANIM.ambient(now / 1000, a.seed, { still: false }); if (am.blink) fr[key].pose.blink = Math.max(fr[key].pose.blink || 0, am.blink); }
         this.ctx.b.oy = O.y - I.y;
-        const res = SOC.compose(this.ctx, fr, { ground: I.y, id: 'D' + this.uid });
+        const res = SOC.compose(this.ctx, fr, { ground: I.y, id: 'D' + this.uid }), c1 = performance.now();
+        S.prof('duet.pose+svg', c1 - c0);
         const x0 = Math.min(res.pos.a.x, res.pos.b.x) - 230, x1 = Math.max(res.pos.a.x, res.pos.b.x) + 230, y0 = Math.max(0, I.y - 440), y1 = I.y + 24;
         const st = this.el.style;
         st.left = x0 + 'px'; st.top = y0 + 'px'; st.width = (x1 - x0) + 'px'; st.height = (y1 - y0) + 'px'; st.zIndex = Math.round(Math.max(I.y, O.y)) + 1;
         this.el.innerHTML = `<svg viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${res.svg}</svg>`;
         this.pos = res.pos;
+        S.prof('duet.dom', performance.now() - c1);
         for (const [key, a] of [['a', I], ['b', O]]) {
           const nx = res.pos[key].x;
           a.x = nx; a.place();

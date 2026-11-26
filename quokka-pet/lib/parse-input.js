@@ -542,8 +542,10 @@
   // N 分鐘／小時後（中文數字、半小時、一個半小時也可以）
   const REL_N = `(?:(?<n>\\d+(?:\\.\\d+)?|[${CN}]{1,3})(?:個)?(?<hf>半)?|(?<only>半)(?:個)?)`;
   const REL_U = '(?<u>分鐘|分|mins?|m|小時|鐘頭|時|hrs?|h)';
-  const RE_REL = new RegExp(`^${REL_N}\\s*${REL_U}(?<after>之後|以後|後)?\\s*(?![鐘內以左前])(?<text>.*)$`, 'i');
-  const RE_REL_TAIL = new RegExp(`^(?<text>.+?)[\\s,，]*${REL_N}\\s*${REL_U}(?<after>之後|以後|後)$`, 'i');
+  // 小時後面還可以接「半」或「Y分（鐘）」：1小時半後、2小時30分後、兩小時十五分鐘後
+  const REL_X = `(?:(?<hf2>半)|(?<m2>\\d{1,2}|[${CN}]{1,3})\\s*(?<u2>分鐘|分))?`;
+  const RE_REL = new RegExp(`^${REL_N}\\s*${REL_U}${REL_X}(?<after>之後|以後|後)?\\s*(?![鐘內以左前])(?<text>.*)$`, 'i');
+  const RE_REL_TAIL = new RegExp(`^(?<text>.+?)[\\s,，]*${REL_N}\\s*${REL_U}${REL_X}(?<after>之後|以後|後)$`, 'i');
   // 沒寫「後」的「30分 泡茶」：只有內容是常見的倒數情境才當成倒數（「30分 簡報」多半是指長度 → 待辦）
   const TIMER_WORDS = /^(泡|煮|燉|滷|蒸|烤|熬|悶|燜|休息|喝水|關火|收衣|洗衣|晾|叫我|提醒|起來|動一動|伸展|出門|出發|吃藥|回電|跨日)/;
   function parseRelative(s, now, re) {
@@ -555,6 +557,11 @@
     let n = g.only ? 0.5 : cnNum(g.n);
     if (!Number.isFinite(n)) return null;
     if (g.hf) { if (!isHour) return null; n += 0.5; }
+    if (g.hf2 || g.m2) {                                           // 「X小時半」「X小時Y分」：只有小時後面能接
+      if (!isHour || g.hf) return null;
+      if (g.hf2) n += 0.5;
+      else { const mm = /^\d/.test(g.m2) ? Number(g.m2) : cnNum(g.m2); if (!Number.isFinite(mm) || mm >= 60) return null; n += mm / 60; }
+    }
     const text = tidy(g.text || '').replace(PREFIX, '');
     if (!text && !g.after) return null;                           // 「100分」「5m」不是提醒
     if (!g.after) {
@@ -617,6 +624,13 @@
     return null;
   }
 
+  // 提醒內容去掉句中的「提醒我／記得／要記得…」（「明天早上提醒我帶便當」→「帶便當」）；去光了就保留原文
+  const MID_CUE = /(?:請|麻煩)?(?:幫我)?(?:提醒我|要記得|記得要|記得|別忘記?了|不要忘記?了)\s*[:,，]?\s*/g;
+  function remText(t) {
+    const out = tidy(String(t || '').replace(PREFIX, '').replace(MID_CUE, ''));
+    return out || t;
+  }
+
   function parseInput(raw, now = new Date()) {
     const s = normalize(raw);
     if (!s) return { type: 'none' };
@@ -627,7 +641,7 @@
     const stripped = s.replace(PREFIX, '');
     let rem = stripped !== s && stripped ? parseReminder(stripped, now) : null;
     if (!rem || rem.type !== 'reminder') rem = parseReminder(s, now) || rem;
-    if (rem && rem.type === 'reminder') return rem;
+    if (rem && rem.type === 'reminder') { rem.text = remText(rem.text); return rem; }
     // 6) 其他：待辦（看得出有日期時間但排不了的，帶 note 說明原因）
     const task = { type: 'task', text: s.slice(0, 200) };
     if (rem && rem.note) { task.note = rem.note; if (rem.uncertain) task.uncertain = true; }
