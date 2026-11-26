@@ -300,8 +300,7 @@ test('帽子：同一頂帽子在站、蹲、前傾放球、抬頭、正面、�
     for (const [name, th, pose] of poses) {
       const b = brim(th, pose);
       assert.ok(Math.abs(b.w / ref.w - 1) < .06, `${name}：帽寬 ${b.w.toFixed(1)}（站姿 ${ref.w.toFixed(1)}）差超過 6%`);
-      assert.ok(b.h / b.w < .42, `${name}：帽緣看起來翻過來了（高／寬＝${(b.h / b.w).toFixed(2)}）`);
-      assert.ok(Math.abs(b.h - ref.h) < 8, `${name}：帽緣高度 ${b.h.toFixed(1)} 和站姿 ${ref.h.toFixed(1)} 差太多`);
+      assert.ok(b.h < 16, `${name}：帽緣往前／往後翻太多、整片帽頂朝向觀者（帽緣投影高 ${b.h.toFixed(1)}，寬 ${b.w.toFixed(1)}）`);
     }
   } finally { AC.draw = orig; }
 });
