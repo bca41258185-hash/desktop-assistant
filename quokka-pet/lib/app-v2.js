@@ -297,7 +297,9 @@ function start() {
     onStatus: (f, status, prev) => {
       if (status === 'missing' && prev !== 'missing') event(f.owner, 'folder-note', { text: `「${folderName(f)}」資料夾找不到了（可能被改名、刪掉或隨身碟拔掉），我每 5 分鐘再找一次` });
       else if (status === 'ok' && prev === 'missing') event(f.owner, 'folder-note', { text: `「${folderName(f)}」資料夾找回來了，我繼續幫你看著` });
-      else if (status === 'error' && prev !== 'error') event(f.owner, 'folder-note', { text: `「${folderName(f)}」資料夾讀不到（權限或系統限制），先暫停監看` });
+      else if (status === 'ok' && prev === 'error') event(f.owner, 'folder-note', { text: `「${folderName(f)}」資料夾讀得到了，我繼續幫你看著` });
+      // 只有資料夾本身讀不到才會是 error，這時監看真的停了（folder-watch 會關掉），每 5 分鐘再試
+      else if (status === 'error' && prev !== 'error') event(f.owner, 'folder-note', { text: `「${folderName(f)}」資料夾讀不到（權限不夠），先暫停監看，我每 5 分鐘再試一次` });
       changed();
     }
   });

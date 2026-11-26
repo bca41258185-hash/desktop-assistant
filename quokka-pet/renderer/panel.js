@@ -699,10 +699,13 @@
     if (f.status === 'missing') {
       pill = ['找不到', 'bad'];
       below = '<p class="f-missing">找不到這個資料夾（改名、刪掉或隨身碟拔掉了？）。每 5 分鐘會再找一次，找回來就繼續看著。</p>';
-    } else if (f.status === 'error') pill = ['讀不到', 'bad'];
+    } else if (f.status === 'error') {
+      pill = ['讀不到', 'bad'];
+      below = '<p class="f-missing">這個資料夾讀不到（權限不夠），先暫停監看。每 5 分鐘會再試一次，讀得到就繼續看著。</p>';
+    }
     else if (changes.length) { pill = ['有變動', 'good']; sum = changeSummary(changes); }
     else pill = ['看著中', 'calm'];
-    if (changes.length && f.status !== 'missing') {
+    if (changes.length && f.status === 'ok') {
       const open = ui.folderOpen.has(f.id);
       below = `<details class="f-changes" data-fid="${esc(f.id)}"${open ? ' open' : ''}><summary data-fk="folder:${esc(f.id)}:chg">最近的變動（${changes.length}）</summary>
         <ul>${changes.map((c) => `<li title="${esc(c.path)}"><span class="fc-k">${esc(FC_KIND[c.kind] || c.kind)}</span> ${esc(hm(c.at))}　<bdi>${esc(c.path)}</bdi></li>`).join('')}</ul></details>`;
