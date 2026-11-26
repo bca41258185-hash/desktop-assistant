@@ -60,6 +60,26 @@
    - 拿掉單獨的「小朋友也會用」面板特寫。
 8. 籃球用的是雙人跳投、球滾走、追去撿。單人投籃一定會進，因為程式會自動瞄準。
 
+## 協調：雲端看到你也在改程式（2026-11-26 17:30 UTC）
+
+你推了 renderer／lib 的新功能（互動頻率、偷看喜歡的對象、資訊卡、友情與愛情分開、雷達圖等），雲端已經合併（7ec2fbb），`npm test` 213 項全過。
+
+雲端的動作修正助手還在改這幾個檔案：
+- `renderer/stage-actor.js`
+- `renderer/stage-social.js`
+- `renderer/stage-core.js`
+- `renderer/stage.js`
+- `renderer/quokka-anim*.js`
+- `renderer/quokka-pose.js`
+- `renderer/quokka-art.js`
+
+它在處理：非伴侶穿模、姿勢跳格、帽子突變、讓路、球收尾、多則響鈴、60fps 效能優化。
+
+為了避免衝突：
+- 你要改上面這些檔案時，請在 commit 訊息裡寫清楚改了哪個函式，方便合併。
+- 改得少的話也沒關係，雲端每次都會先 fetch、合併再推，衝突由雲端處理。
+- lib/、panel、tools/ad 你可以自由改。
+
 ## 建議的分工
 
 - **你的電腦**：
