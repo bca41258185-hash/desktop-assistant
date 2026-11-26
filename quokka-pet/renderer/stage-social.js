@@ -40,7 +40,7 @@
       // 背後的空間：到螢幕邊或最近的第三隻為止（追逐、並肩散步、籃框不會跑到別隻身上）
       const third = [...S.actors.values()].filter((o) => o !== I && o !== O && !o.inPouch && Math.abs(o.y - I.y) <= 40 && !(o.isFollow && (momOf(o) === I || momOf(o) === O)));
       const roomL = (x) => Math.min(x - 50, ...third.filter((o) => o.x < x).map((o) => x - o.x - 120)), roomR = (x) => Math.min(W - 50 - x, ...third.filter((o) => o.x > x).map((o) => o.x - x - 120));
-      return SOC.context(act(I), act(O), { couple: I.attach.partner === O.id, room: { a: Math.max(0, side > 0 ? roomL(I.x) : roomR(I.x)), b: Math.max(0, side > 0 ? roomR(O.x) : roomL(O.x)) } });
+      return SOC.context(act(I), act(O), { rnd: S.testRnd || Math.random, couple: I.attach.partner === O.id, room: { a: Math.max(0, side > 0 ? roomL(I.x) : roomR(I.x)), b: Math.max(0, side > 0 ? roomR(O.x) : roomL(O.x)) } });
     }
     begin(now) {
       const I = this.I, O = this.O, W = innerWidth;

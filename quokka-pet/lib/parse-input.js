@@ -145,9 +145,10 @@
       const mk = (yy) => { const x = new Date(yy, mo - 1, d); return x.getMonth() === mo - 1 && x.getDate() === d ? x : null; };
       let date = mk(y); if (!date) return null;
       const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      if (!m[1] && date < today0) { date = mk(y + 1); if (!date) return null; }      // 今年的已過 → 明年
+      let rolled = false;
+      if (!m[1] && date < today0) { date = mk(y + 1); rolled = true; if (!date) return null; }      // 今年的已過 → 明年
       if (date < today0) return null;
-      return { kind: 'once', date, label: tok };
+      return { kind: 'once', date, label: tok, rolled };
     }
     if ((m = tok.match(new RegExp(`^(\\d{1,2}|[${CN}]{1,2})天`)))) { const n = cnNum(m[1]); return n >= 1 ? { kind: 'once', offset: n, label: tok } : null; }
     return null;
@@ -177,19 +178,19 @@
       if (H === 12) { H = 0; wrap = true; } else if (H <= 4) wrap = true; else if (H < 12) H += 12;
     }
     else if (per === '中午') { if (H <= 4) H += 12; }
-    else if (per === '上午' || per === '早上' || per === '早晨' || per === '清晨' || per === '一早' || per === '凌晨') { if (H === 12) { H = 0; soft = true; } }
+    else if (per === '上午' || per === '早上' || per === '早晨' || per === '清晨' || per === '一早' || per === '凌晨') { if (H === 12) { H = 0; soft = true; } else if (per === '凌晨' && H < 6) soft = true; }
     if (H > 23) return null;
     return { H, M, wrap, soft };
   }
 
   // 把一段「［日期］［上下午］時間［~結束時間］［前］」算成規則
-  function build(g, content, dayTok, now, colonOnly) {
+  function build(g, content, dayTok, now) {
     const day = parseDay(dayTok, now);
     if (!day) return null;
     const per = g.per || day.per || null;
     const c = clock(g, '', per);
     if (!c) return null;
-    let { H, M, wrap, soft } = c, note = null, guessedPM = false;
+    let { H, M, wrap, soft } = c, note = null;
     const literalH = cnNum(g.h);
     const nowHM = hm(now.getHours(), now.getMinutes());
     const explicitDay = day.kind !== 'none' && !day.today;      // 明天、週五、12/5、每天…（今天另外處理）
@@ -199,8 +200,11 @@
       else if (cue === 'evening') { if (H < 12) H += 12; }
       else if (cue === 'noon') { if (H <= 3) H += 12; }
       else if (cue === 'morning') { /* 照字面（早上） */ }
-      else if (explicitDay) {
-        // 有寫日期就照字面；1–5 點容易誤會，提示一下
+      else if (day.kind === 'daily' || day.kind === 'weekly') {
+        // 重複提醒的 1–6 點：當成下午（沒有人想每天凌晨 3 點被叫），並提示
+        if (H <= 6) { note = `當成下午 ${H} 點；凌晨請寫「凌晨${H}點」`; H += 12; }
+      } else if (explicitDay) {
+        // 有寫日期（明天、週五、12/5）就照字面；1–5 點容易誤會，提示一下
         if (H <= 5) note = `當成凌晨 ${H} 點；下午請寫「下午${H}點」`;
       } else if (H <= 6) {
         // 1–6 點：上班時間幾乎都是指下午。例外：半夜還醒著、而且那個凌晨時刻還沒到
@@ -211,12 +215,12 @@
         if (hm(H + 12, M) > nowHM && (day.today || now.getHours() >= 17 || H === 7)) {
           const am = sayHour(hm(H, M)), pm = sayHour(hm(H + 12, M));
           note = day.today ? `今天${am}已過，改成${pm}？` : `${am}已過，當成${pm}`;
-          H += 12; guessedPM = true;
+          H += 12;
         }
       }
     }
-    if (wrap && day.kind === 'none' && !per && !cueOf(content)) wrap = false;
     let time = hm(H, M);
+    if (day.rolled) note = `${day.label} 今年已過，當成明年`;
 
     // 結束時間（時間範圍）：只用來寫進內容
     let rangeTxt = '';
@@ -252,7 +256,7 @@
     const passedToday = time <= nowHM;
     if (day.kind === 'none' || day.today) {
       date = new Date(now);
-      if (wrap && (day.today || per || true) && !(day.kind === 'none')) date = addDays(date, 1);     // 今晚12點＝明天 00:00
+      if (wrap && day.today) date = addDays(date, 1);                                                // 今晚12點＝明天 00:00
       else if (wrap || soft) { if (passedToday) date = addDays(date, 1); }                            // 沒寫日期：直接找下一次，不算「已過」
       else if (passedToday) {
         date = addDays(date, 1); moved = true;
@@ -267,7 +271,6 @@
       if (wrap) date = addDays(date, 1);
       else if (ymd(date) === ymd(now) && passedToday) { date = addDays(date, 1); moved = true; note = `今天${sayHour(time)}已過，改成明天`; }
     }
-    void colonOnly; void guessedPM;
 
     if (deadline) {
       // 截止型：提早提醒（30 分鐘；來不及就 10 分鐘；再來不及就準時）
@@ -304,17 +307,17 @@
       const rest0 = s.slice(end);
       let ok;
       if (g.day || g.per) ok = true;
-      else if (hourCN) ok = bounded && !(atStart && !hasMin && !g.dl && CN_NOT_TIME.test(rest0)) && (atStart || hasMin || end === s.length || /^\s/.test(rest0));
+      else if (hourCN) ok = bounded && !(!hasMin && !g.dl && CN_NOT_TIME.test(rest0.trim())) && (atStart || hasMin || end === s.length || /^\s/.test(rest0));
       else if (g.colon) ok = bounded || end === s.length;
       else ok = bounded || hasMin || leadDay;
       if (!ok) { next(); continue; }
-      let content = tidy(s.slice(0, idx) + ' ' + rest0), dayTok = g.day || null;
+      let content = tidy(s.slice(0, idx) + rest0), dayTok = g.day || null;
       if (!dayTok) {
         let dm;
         if ((dm = content.match(RE_DAY_HEAD))) { dayTok = dm[1]; content = tidy(content.slice(dm[0].length)); }
         else if ((dm = content.match(RE_DAY_TAIL))) { dayTok = dm[1]; content = tidy(content.slice(0, dm.index)); }
       }
-      if (!content) { next(); continue; }
+      if (!content) { if (!dayTok) return null; content = '時間到了'; }      // 只有時間 → 待辦；有日期詞 → 提醒（預設內容）
       if (g.colon && !g.per && !dayTok && cnNum(g.h) === 1 && SCALE_WORDS.test(content)) { next(); continue; }
       const r = build(g, content, dayTok, now);
       if (r) return r;
@@ -356,7 +359,7 @@
     else return null;
     const day = parseDay(tok, now);
     if (!day || day.kind !== 'once' || day.today || !content) return null;
-    const r = build({ h: '9', mm: '00', colon: ':' }, content, tok, now);
+    const r = build({ h: '9', mm: '00', colon: ':', per: '上午' }, content, tok, now);
     if (!r || r.movedToTomorrow) return null;
     const label = tok.replace(/[早晚]$/, '天');
     r.text = `${content}（${label}前）`;
