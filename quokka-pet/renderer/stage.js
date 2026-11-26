@@ -191,6 +191,6 @@
 
   window.addEventListener('resize', () => { for (const a of S.actors.values()) { a.y = Math.min(a.y, innerHeight - 4); a.x = S.clamp(a.x, 20, innerWidth - 20); a.place(); } S.reportRects(); });
   // 給測試和除錯用
-  window.__stage = { actors: S.actors, balls: S.balls, cache: S.cacheInfo, kick: S.kick, running: S.running, S };
+  window.__stage = { actors: S.actors, balls: S.balls, cache: S.cacheInfo, kick: S.kick, running: S.running, leafRain: (n) => S.leafRain && S.leafRain(n), S };
   api.ready();
 })();
