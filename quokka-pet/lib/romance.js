@@ -152,6 +152,7 @@
       band: base.band,
       accessory: base.accessory,
       gender: base.gender,                         // 特殊性別（性別認同）不遺傳，跟著新抽的那組
+      sexK: base.sexK,                             // 體態（公母特徵強弱）另外抽
       personality: P
     };
     applyScale(t, C.joeyScale);

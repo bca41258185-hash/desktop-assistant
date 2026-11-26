@@ -44,6 +44,8 @@
   // 飾品模組（頭帶、帽子、眼鏡、圍巾…）；沒載入時就不畫飾品
   const ACC = () => (typeof window !== 'undefined' && window.QuokkaAcc) ? window.QuokkaAcc
     : (typeof require === 'function' ? require('./quokka-acc.js') : null);
+  // 個體特徵模組（體態數值）；沒載入時當標準
+  const TRm = () => (typeof window !== 'undefined' && window.QuokkaTraits) ? window.QuokkaTraits : (typeof require === 'function' ? (() => { try { return require('./traits.js'); } catch (e) { return null; } })() : null);
   const rad = (a) => a * Math.PI / 180, f1 = (v) => (+v).toFixed(1);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const HEAD = new Set(['head', 'cheekL', 'cheekR', 'snout', 'snoutTip', 'jaw']);
@@ -439,15 +441,15 @@
     const spine = [[66, -22], [86, -34], [108, -40], [130, -44], [150, -46], [166, -42]].map(([y, z]) => PB([0, y, z]));
     const spineD = 'M' + spine.map((q) => f1(q.X) + ' ' + f1(q.Y)).join(' L');
     const big = Math.abs(T.lean) > 18 || Math.abs(pose.roll || 0) > 12;
-    const femaleBody = !!(tr && tr.sex === 'female' && !juv);
+    const femaleBody = !!(tr && tr.sex === 'female' && !juv), bodyK = femaleBody && TRm() ? TRm().sexKOf(tr) : 1;
     const bodyLayer = `<path d="${bodyD}" fill="none" stroke="#5e4632" stroke-width="2" opacity=".2" filter="url(#fz${id})"/><path d="${bodyD}${U.tufts}" fill="url(#bg${id})" filter="url(#fz${id})"/>
       <g clip-path="url(#cb${id})">
         ${bF > -0.3 ? `<ellipse cx="${f1(belly.X)}" cy="${f1(belly.Y)}" rx="${f1((17 + 23 * Math.max(0, bF)) * T.k)}" ry="${f1(29 * T.sq)}" transform="rotate(${f1(T.leanAt(146) * s)} ${f1(belly.X)} ${f1(belly.Y)})" fill="#f0dcb9" opacity="${(0.92 * Math.min(1, bF + .5)).toFixed(2)}" filter="url(#b6${id})"/>
           <ellipse cx="${f1(chestP.X)}" cy="${f1(chestP.Y)}" rx="${f1(6 + 9 * Math.max(0, bF))}" ry="13" fill="#f0dcb9" opacity="${(0.4 * Math.min(1, bF + .5)).toFixed(2)}" filter="url(#b6${id})"/>` : ''}
         ${femaleBody && bF > 0.15 ? (() => {                  // 母的：像穿著衣服那樣，胸口整片柔和鼓起（不是兩個點）：上面一整片寬的柔光、下緣一條連續的淡陰影曲線
           const c = PB([0, 111, 28]), L = PB([-18, 118, 23]), R = PB([18, 118, 23]), mL = PB([-9.5, 123.5, 27]), mR = PB([9.5, 123.5, 27]), m = PB([0, 120.5, 29]);
-          return `<ellipse cx="${f1(c.X)}" cy="${f1(c.Y)}" rx="${f1(18 * T.k * (.7 + .3 * bF))}" ry="8.5" fill="#f8ead2" opacity="${(0.38 * bF).toFixed(2)}" filter="url(#b3${id})"/>
-            <path d="M${f1(L.X)} ${f1(L.Y)} Q${f1(mL.X)} ${f1(mL.Y)} ${f1(m.X)} ${f1(m.Y)} Q${f1(mR.X)} ${f1(mR.Y)} ${f1(R.X)} ${f1(R.Y)}" fill="none" stroke="#8f6c48" stroke-width="3" stroke-linecap="round" opacity="${(0.22 * bF).toFixed(2)}" filter="url(#b1${id})"/>`;
+          return `<ellipse cx="${f1(c.X)}" cy="${f1(c.Y)}" rx="${f1(18 * T.k * (.7 + .3 * bF))}" ry="8.5" fill="#f8ead2" opacity="${(0.38 * bF * bodyK).toFixed(2)}" filter="url(#b3${id})"/>
+            <path d="M${f1(L.X)} ${f1(L.Y)} Q${f1(mL.X)} ${f1(mL.Y)} ${f1(m.X)} ${f1(m.Y)} Q${f1(mR.X)} ${f1(mR.Y)} ${f1(R.X)} ${f1(R.Y)}" fill="none" stroke="#8f6c48" stroke-width="3" stroke-linecap="round" opacity="${(0.22 * bF * bodyK).toFixed(2)}" filter="url(#b1${id})"/>`;
         })() : ''}
         ${bF < 0.3 ? `<path d="${spineD}" fill="none" stroke="#68533e" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" opacity=".1" filter="url(#b6${id})"/>` : ''}
         <path d="${spineD}" fill="none" stroke="#76604a" stroke-width="30" stroke-linecap="round" stroke-linejoin="round" opacity="${(0.3 * Math.abs(s)).toFixed(2)}" filter="url(#b6${id})"/>
@@ -499,7 +501,7 @@
 
     // 五官
     const face = [];
-    const female = !!(tr && tr.sex === 'female' && !juv);
+    const female = !!(tr && tr.sex === 'female' && !juv), femK = female && TRm() ? TRm().sexKOf(tr) : 1;   // 體態數值（個體差異）
     const look = pose.look || [0, 0], blink = clamp(pose.blink || 0, 0, 1);
     const spiral = (x, y) => { let d = ''; for (let i = 0; i <= 40; i++) { const t = i / 40, a = t * Math.PI * 4.6, r = .4 + 4.5 * t; d += (i ? ' L' : 'M') + f1(x + Math.cos(a) * r) + ' ' + f1(y + Math.sin(a) * r); } return d; };
     for (const k of [-1, 1]) {
@@ -524,16 +526,16 @@
           case 'focus': face.push(g(I.eye(ex, ey, id) + brow(-5.2, -7.8))); break;
           case 'sad': face.push(g(I.eye(ex, ey + .4, id, { scale: 1.04 }) + `<ellipse cx="${f1(ex)}" cy="${f1(ey + 3.3)}" rx="2.6" ry="1" fill="#bfe0f8" opacity=".7"/>` + brow(-8.2, -5.4))); break;
           case 'sleepy': face.push(g(I.eye(ex, ey + .4, id) + `<path d="M${f1(e.X - 5.6)} ${f1(e.Y + .2)} A5.6 5.6 0 0 1 ${f1(e.X + 5.6)} ${f1(e.Y + .2)} Q${f1(e.X)} ${f1(e.Y + .9)} ${f1(e.X - 5.6)} ${f1(e.Y + .2)} Z" fill="#a37a52"/><path d="M${f1(e.X - 4.6)} ${f1(e.Y + .3)} Q${f1(e.X)} ${f1(e.Y + 1)} ${f1(e.X + 4.6)} ${f1(e.Y + .3)}" fill="none" stroke="#3a2c22" stroke-width="1" stroke-linecap="round"/>`)); break;
-          default: face.push(g(I.eye(ex, ey, id, female ? { scale: 1.08 } : undefined)));
+          default: face.push(g(I.eye(ex, ey, id, female ? { scale: 1 + .08 * femK } : undefined)));
         }
         // 母的：眼角兩根小睫毛（睜眼、笑眼、閉眼都有；暈眩不畫）
         if (female && mode !== 'dizzy') {
           const up = mode === 'happy' ? -1.4 : mode === 'closed' ? 1.2 : mode === 'wide' ? -1.6 : 0;
-          face.push(g(`<path d="M${f1(e.X + k * 4.3)} ${f1(e.Y - 1.2 + up)} l${f1(k * 2.8)} ${-1.6} M${f1(e.X + k * 3.4)} ${f1(e.Y - 2.9 + up)} l${f1(k * 2.2)} ${-2.4}" stroke="#1f1814" stroke-width="1.1" stroke-linecap="round" fill="none"/>`));   // 兩根
+          face.push(g(`<path d="M${f1(e.X + k * 4.3)} ${f1(e.Y - 1.2 + up)} l${f1(k * 2.8)} ${-1.6}${femK >= .95 ? ` M${f1(e.X + k * 3.4)} ${f1(e.Y - 2.9 + up)} l${f1(k * 2.2)} ${-2.4}` : ''}" stroke="#1f1814" stroke-width="1.1" stroke-linecap="round" fill="none"/>`));   // 體態數值低的一根、高的兩根
         }
       }
       const b = PH([k * 20, 57, 17]), fb = facingH([k * .6, 0, .8]);
-      if (fb > 0.1) face.push(`<ellipse cx="${f1(b.X)}" cy="${f1(b.Y)}" rx="${f1(6.5 * fb)}" ry="4" fill="#f0907c" opacity="${(Math.min(.66, 0.3 * (female ? 1.6 : 1) * (pose.blush == null ? 1 : pose.blush))).toFixed(2)}" filter="url(#b1${id})"/>`);   // 母的腮紅濃一點
+      if (fb > 0.1) face.push(`<ellipse cx="${f1(b.X)}" cy="${f1(b.Y)}" rx="${f1(6.5 * fb)}" ry="4" fill="#f0907c" opacity="${(Math.min(.66, 0.3 * (female ? 1 + .6 * femK : 1) * (pose.blush == null ? 1 : pose.blush))).toFixed(2)}" filter="url(#b1${id})"/>`);   // 母的腮紅濃一點
     }
     if (hF > -0.25) {
       // 鼻子：正面寬、側面扁而小，貼著口鼻前端（不會像掛在臉外的球）

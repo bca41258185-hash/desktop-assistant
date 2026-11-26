@@ -356,15 +356,16 @@ function configure(traits) {
   if (!sh) { Q3 = Q3_BASE; TAILK = 1; EARK = 1; return; }
   const w = sh.widthK, c = sh.cheekK, k = (f) => 1 + (w - 1) * f;
   // 男女特徵（在桌面大小也看得出來）：公的胸背脖子寬、臉頰寬、頭稍大（比較壯）；母的胸口脖子窄一點、臉頰小一點（比較秀氣）
-  const sx = sh.juvenile ? 1 : sh.male ? 1.12 : .93, sc = sh.juvenile ? 1 : sh.male ? 1.15 : .94, sh2 = sh.juvenile ? 1 : sh.male ? 1.05 : .98;
+  // 強弱看每隻的體態數值 sk（1＝標準）
+  const sk = sh.sexK || 1, sx = sh.juvenile ? 1 : sh.male ? 1 + .12 * sk : 1 - .07 * sk, sc = sh.juvenile ? 1 : sh.male ? 1 + .15 * sk : 1 - .06 * sk, sh2 = sh.juvenile ? 1 : sh.male ? 1 + .05 * sk : 1 - .02 * sk;
   Q3 = Q3_BASE.map(([n, x, y, z, rx, ry, rz]) => {
     // 母的（成年）女性曲線：胸口飽滿一點、腰收進去（臀部上緣往下、稍窄）、臀部寬度不變 → 上下圓、中間收
     const fem = !sh.juvenile && !sh.male;
-    if (fem && n === 'hips') return [n, x, y + 4, z, rx * w * .97, ry * .9, rz * w];
+    if (fem && n === 'hips') return [n, x, y + 4 * sk, z, rx * w * (1 - .03 * sk), ry * (1 - .1 * sk), rz * w];
     if (n === 'hips' || n === 'rump') return [n, x, y, z, rx * w, ry, rz * w];
     if (n.startsWith('thigh')) return [n, x * k(.8), y, z, rx * w, ry, rz * w];
-    if (fem && n === 'chest') return [n, x, y - 1, z + 1.5, rx * k(.6) * 1.04, ry * 1.02, rz * k(.6) * 1.14];
-    if (fem && n === 'back') return [n, x, y, z, rx * k(.6) * .94, ry, rz * k(.6) * .96];
+    if (fem && n === 'chest') return [n, x, y - sk, z + 1.5 * sk, rx * k(.6) * (1 + .04 * sk), ry * (1 + .02 * sk), rz * k(.6) * (1 + .14 * sk)];
+    if (fem && n === 'back') return [n, x, y, z, rx * k(.6) * (1 - .06 * sk), ry, rz * k(.6) * (1 - .04 * sk)];
     if (n === 'chest' || n === 'back') return [n, x, y, z, rx * k(.6) * sx, ry, rz * k(.6) * sx];
     if (n === 'neck') return [n, x, y, z, rx * k(.3) * sx, ry, rz * k(.3) * sx];
     if (n.startsWith('cheek')) return [n, x * (1 + (c * sc - 1) * .5), y, z, rx * c * sc, ry * c * sc, rz * c * sc];

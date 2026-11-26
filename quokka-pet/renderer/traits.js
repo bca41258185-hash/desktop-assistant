@@ -147,6 +147,7 @@
     if (!t) return [];
     return [
       ['性別', sexSym(t) + ' ' + sexName(t)],
+      ...(t.stage === 'juvenile' ? [] : [['體態', `${t.sex === 'male' ? '壯碩' : '曲線'} ${Math.round(sexKOf(t) / 1.45 * 100)}`]]),
       ['年齡', ageText(t.ageMonths) + '（' + { juvenile: '亞成體', adult: '成年', senior: '年長' }[t.stage] + '）'],
       ['頭身長', t.lengthCm + ' cm'],
       ['尾長', t.tailCm + ' cm'],
@@ -276,7 +277,7 @@
     // 畫面大小：最小的亞成體約 0.84、最大的公成體約 1.06
     const sizeK = clamp(lerp(0.88, 1.06, (t.lengthCm - 39) / 15), 0.82, 1.06);
     const tailK = clamp((t.tailCm / t.lengthCm) / 0.58, 0.86, 1.14);
-    return { widthK, sizeK, tailK, earK, cheekK: t.cheekK || 1, juvenile: t.stage === 'juvenile', R, male: t.sex === 'male' };
+    return { widthK, sizeK, tailK, earK, cheekK: t.cheekK || 1, juvenile: t.stage === 'juvenile', R, male: t.sex === 'male', sexK: sexKOf(t) };
   }
 
   // 毛色換算：只改「毛」的顏色（身體、背、尾、耳、手腳、陰影），眼睛、鼻子、頭帶、腮紅、道具都不動
@@ -329,9 +330,15 @@
   // 特殊性別：用另一組亂數決定（不影響同一個 seed 原本抽出來的外型、個性）；舊資料沒有這個欄位時補上
   function ensureGender(t) {
     if (t && t.gender == null) t.gender = rng(((Number(t.seed) || 1) ^ 0x5bd1e995) >>> 0)() < SPECIAL_GENDER_P ? 'special' : 'cis';
+    return ensureSexK(t);
+  }
+  // 體態：公母特徵的強弱（個體差異）。0.55–1.45，1＝標準；公的越大越壯、母的越大曲線越明顯。另一組亂數，不影響原本的外型
+  function ensureSexK(t) {
+    if (t && t.sexK == null) t.sexK = round(0.55 + rng(((Number(t.seed) || 1) ^ 0x2c1b3c6d) >>> 0)() * 0.9, 2);
     return t;
   }
-  const api = { SEXES, sexName, sexSym, GENDER_SPECIAL, ensureGender, generate, describe, describePersonality, ensurePersonality, ensureAccessory, accessoryName, ACCESSORIES, behavior, personaText, ARCHETYPES, shape, recolor, colorMap, RANGES, FUR_TYPES, BAND_COLORS };
+  const sexKOf = (t) => (t && Number.isFinite(t.sexK) ? clamp(t.sexK, 0.4, 1.6) : 1);
+  const api = { SEXES, sexName, sexSym, GENDER_SPECIAL, ensureGender, ensureSexK, sexKOf, generate, describe, describePersonality, ensurePersonality, ensureAccessory, accessoryName, ACCESSORIES, behavior, personaText, ARCHETYPES, shape, recolor, colorMap, RANGES, FUR_TYPES, BAND_COLORS };
   if (typeof window !== 'undefined') window.QuokkaTraits = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();
