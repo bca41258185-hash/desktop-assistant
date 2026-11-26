@@ -271,23 +271,39 @@
       <path d="M-18 -2.2 Q-10 -5 0 -4.9" fill="none" stroke="#ffd9bd" stroke-width="1" stroke-linecap="round" opacity=".8" filter="url(#lb${id})"/></g>`;
   // 禮物（使用者給的道具）：玫瑰＝原點在握著的花莖，花朵往 −x 方向；點心＝圓餅乾（巧克力豆），原點在中心
   //   畫風同葉子：漸層、柔邊、模糊的亮面與陰影
-  const rose = (id, x, y, rot = 0, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
-      <defs><radialGradient id="rp${id}" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#f06a7e"/><stop offset=".55" stop-color="#d33449"/><stop offset="1" stop-color="#8f1d2c"/></radialGradient></defs>
-      <path d="M2 .5 C-8 0 -18 -1 -26 -2" fill="none" stroke="#4a3a2e" stroke-width="2" opacity=".16" stroke-linecap="round" filter="url(#lb${id})"/>
-      <path d="M2 0 C-8 -.4 -18 -1.2 -26 -2.4" fill="none" stroke="#4f7a3a" stroke-width="1.8" stroke-linecap="round"/>
-      <path d="M-11 -1 C-13 -7 -8 -10 -4 -9 C-5 -6 -7 -3 -11 -1 Z" fill="#6fa04e" stroke="#44663a" stroke-width=".6" stroke-opacity=".6" filter="url(#lz${id})"/>
-      <path d="M-24 -2 l -3 -3 M-23 -1.4 l -2 3.4" stroke="#4f7a3a" stroke-width="1.4" stroke-linecap="round"/>
-      <g transform="translate(-33 -3)">
-        <ellipse cx=".6" cy="1.4" rx="9" ry="8" fill="#4a3a2e" opacity=".18" filter="url(#lb${id})"/>
-        <path d="M0 -8 C6 -9 10 -3 8 2 C6 7 -2 9 -6 6 C-10 3 -9 -5 -4 -7 Z" fill="url(#rp${id})" filter="url(#lz${id})"/>
-        <path d="M-3 -3 C0 -6 5 -4 4 0 C3 3 -1 3 -2 1 C-3 -1 -1 -2 0 -1" fill="none" stroke="#7d1726" stroke-width="1.1" stroke-linecap="round" opacity=".75"/>
-        <path d="M-6 3 C-3 6 3 6 6 2" fill="none" stroke="#a5233a" stroke-width="1" stroke-linecap="round" opacity=".6"/>
-        <ellipse cx="-2" cy="-4" rx="3" ry="1.6" fill="#ffd0d8" opacity=".55" filter="url(#lb${id})"/>
+  // 玫瑰：杯狀的花——外層三片花瓣往外翻、中間一片包著、最裡面捲起來的花心；底下綠色花萼，花莖帶兩根小刺，一片有鋸齒的葉子
+  const rose = (id, x, y, rot = 0, s = 1) => {
+    const g = (k) => `gift${k}${id}`;            // 禮物專用的漸層名稱（不和球、籃框的漸層撞名）
+    return `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
+      <defs>
+        <linearGradient id="${g('ro')}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e8475c"/><stop offset=".6" stop-color="#c62a42"/><stop offset="1" stop-color="#8c1729"/></linearGradient>
+        <linearGradient id="${g('ri')}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b81f37"/><stop offset="1" stop-color="#6e0f1f"/></linearGradient>
+        <linearGradient id="${g('rf')}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f25c70"/><stop offset="1" stop-color="#cf3149"/></linearGradient>
+      </defs>
+      <path d="M2 .6 C-8 .2 -16 -.6 -24 -1.6" fill="none" stroke="#4a3a2e" stroke-width="2.2" opacity=".15" stroke-linecap="round" filter="url(#lb${id})"/>
+      <path d="M2 0 C-8 -.4 -16 -1 -24 -2.2" fill="none" stroke="#3f6b2c" stroke-width="2" stroke-linecap="round"/>
+      <path d="M-6 -.7 l -1.2 -2.4 l 2.2 1.4 Z M-16 -1.4 l -.6 2.6 l -1.6 -2 Z" fill="#3f6b2c"/>
+      <path d="M-10 -1.2 C-12 -7 -6 -11.5 -1.5 -10 C-2.6 -6 -5 -2.6 -10 -1.2 Z" fill="#5f9440" stroke="#3a5f2a" stroke-width=".6"/>
+      <path d="M-10 -1.2 C-7 -4 -4 -7 -1.8 -9.6" fill="none" stroke="#a9cf86" stroke-width=".6" opacity=".8"/>
+      <path d="M-2.6 -9.2 l .9 -.4 M-4.4 -8.4 l .8 -.6 M-6.4 -7 l .7 -.7 M-8.2 -5.2 l .6 -.7" stroke="#3a5f2a" stroke-width=".6" stroke-linecap="round"/>
+      <g transform="translate(-27 -2.8) rotate(-90)">
+        <path d="M-5 1 C-7 -2 -4 -3 -2 -1 Z M5 1 C7 -2 4 -3 2 -1 Z M0 1.5 C-1 -2 1 -2.4 1.6 0 Z" fill="#4f8a36"/>
+        <ellipse cx="0" cy="-9" rx="10.5" ry="10" fill="#4a3a2e" opacity=".16" filter="url(#lb${id})"/>
+        <path d="M-9.5 -6 C-12 -12 -8 -18 -3 -17 C-5 -13 -6 -9 -5 -3 C-7 -2.5 -8.6 -3.6 -9.5 -6 Z" fill="url(#${g('ro')})"/>
+        <path d="M9.5 -6 C12 -12 8 -18 3 -17 C5 -13 6 -9 5 -3 C7 -2.5 8.6 -3.6 9.5 -6 Z" fill="url(#${g('ro')})"/>
+        <path d="M-6 -15 C-4 -20 4 -20 6 -15 C3 -16.5 -3 -16.5 -6 -15 Z" fill="url(#${g('ri')})"/>
+        <path d="M-4.5 -13.5 C-3 -17.5 3.5 -17.5 4.5 -13 C3 -11 -3 -11 -4.5 -13.5 Z" fill="url(#${g('ri')})"/>
+        <path d="M-2.4 -14.6 C-1 -16.4 2 -16 2.2 -14 C1 -15 -.8 -15 -1.2 -13.6" fill="none" stroke="#5a0b18" stroke-width=".9" stroke-linecap="round"/>
+        <path d="M-7.5 -9 C-7.5 -13.5 7.5 -13.5 7.5 -9 C7.5 -3 3 -.4 0 -.4 C-3 -.4 -7.5 -3 -7.5 -9 Z" fill="url(#${g('rf')})"/>
+        <path d="M-7 -9.6 C-4 -12 4 -12 7 -9.6" fill="none" stroke="#ff9aa8" stroke-width="1" stroke-linecap="round" opacity=".8"/>
+        <path d="M-3.2 -3 C-1 -1.6 1.4 -1.6 3.4 -3.2" fill="none" stroke="#9e1a2f" stroke-width=".8" stroke-linecap="round" opacity=".6"/>
+        <ellipse cx="-3" cy="-8" rx="2.2" ry="1.2" fill="#ffd0d8" opacity=".5" filter="url(#lb${id})"/>
       </g></g>`;
+  };
   const snack = (id, x, y, rot = 0, s = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${s})">
-      <defs><radialGradient id="ck${id}" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#f3d19a"/><stop offset=".6" stop-color="#d9a45e"/><stop offset="1" stop-color="#a9743c"/></radialGradient></defs>
+      <defs><radialGradient id="giftck${id}" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#f3d19a"/><stop offset=".6" stop-color="#d9a45e"/><stop offset="1" stop-color="#a9743c"/></radialGradient></defs>
       <ellipse cx=".8" cy="1.6" rx="10" ry="9" fill="#4a3a2e" opacity=".18" filter="url(#lb${id})"/>
-      <circle cx="0" cy="0" r="9.5" fill="url(#ck${id})" stroke="#8a5a2c" stroke-width=".8" stroke-opacity=".5" filter="url(#lz${id})"/>
+      <circle cx="0" cy="0" r="9.5" fill="url(#giftck${id})" stroke="#8a5a2c" stroke-width=".8" stroke-opacity=".5" filter="url(#lz${id})"/>
       ${[[-4, -3, 1.6], [3, -4, 1.4], [4, 2.5, 1.7], [-2, 4, 1.3], [0, -.5, 1.2]].map(([cx, cy, r]) => `<ellipse cx="${cx}" cy="${cy}" rx="${r}" ry="${(r * .85).toFixed(2)}" fill="#5a3522"/>`).join('')}
       <ellipse cx="-3" cy="-5" rx="4" ry="1.8" fill="#fff3d6" opacity=".45" filter="url(#lb${id})"/></g>`;
   // 葉子：短尾矮袋鼠在羅特尼斯島最偏好的食物 Guichenotia ledifolia（錦葵科）
@@ -423,10 +439,16 @@
     const spine = [[66, -22], [86, -34], [108, -40], [130, -44], [150, -46], [166, -42]].map(([y, z]) => PB([0, y, z]));
     const spineD = 'M' + spine.map((q) => f1(q.X) + ' ' + f1(q.Y)).join(' L');
     const big = Math.abs(T.lean) > 18 || Math.abs(pose.roll || 0) > 12;
+    const femaleBody = !!(tr && tr.sex === 'female' && !juv);
     const bodyLayer = `<path d="${bodyD}" fill="none" stroke="#5e4632" stroke-width="2" opacity=".2" filter="url(#fz${id})"/><path d="${bodyD}${U.tufts}" fill="url(#bg${id})" filter="url(#fz${id})"/>
       <g clip-path="url(#cb${id})">
         ${bF > -0.3 ? `<ellipse cx="${f1(belly.X)}" cy="${f1(belly.Y)}" rx="${f1((17 + 23 * Math.max(0, bF)) * T.k)}" ry="${f1(29 * T.sq)}" transform="rotate(${f1(T.leanAt(146) * s)} ${f1(belly.X)} ${f1(belly.Y)})" fill="#f0dcb9" opacity="${(0.92 * Math.min(1, bF + .5)).toFixed(2)}" filter="url(#b6${id})"/>
           <ellipse cx="${f1(chestP.X)}" cy="${f1(chestP.Y)}" rx="${f1(6 + 9 * Math.max(0, bF))}" ry="13" fill="#f0dcb9" opacity="${(0.4 * Math.min(1, bF + .5)).toFixed(2)}" filter="url(#b6${id})"/>` : ''}
+        ${femaleBody && bF > 0.15 ? (() => {                  // 母的：像穿著衣服那樣，胸口整片柔和鼓起（不是兩個點）：上面一整片寬的柔光、下緣一條連續的淡陰影曲線
+          const c = PB([0, 111, 28]), L = PB([-18, 118, 23]), R = PB([18, 118, 23]), mL = PB([-9.5, 123.5, 27]), mR = PB([9.5, 123.5, 27]), m = PB([0, 120.5, 29]);
+          return `<ellipse cx="${f1(c.X)}" cy="${f1(c.Y)}" rx="${f1(18 * T.k * (.7 + .3 * bF))}" ry="8.5" fill="#f8ead2" opacity="${(0.38 * bF).toFixed(2)}" filter="url(#b3${id})"/>
+            <path d="M${f1(L.X)} ${f1(L.Y)} Q${f1(mL.X)} ${f1(mL.Y)} ${f1(m.X)} ${f1(m.Y)} Q${f1(mR.X)} ${f1(mR.Y)} ${f1(R.X)} ${f1(R.Y)}" fill="none" stroke="#8f6c48" stroke-width="3" stroke-linecap="round" opacity="${(0.22 * bF).toFixed(2)}" filter="url(#b1${id})"/>`;
+        })() : ''}
         ${bF < 0.3 ? `<path d="${spineD}" fill="none" stroke="#68533e" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" opacity=".1" filter="url(#b6${id})"/>` : ''}
         <path d="${spineD}" fill="none" stroke="#76604a" stroke-width="30" stroke-linecap="round" stroke-linejoin="round" opacity="${(0.3 * Math.abs(s)).toFixed(2)}" filter="url(#b6${id})"/>
         <path d="${bodyD}" fill="none" stroke="#fff6e6" stroke-width="3" opacity=".3" filter="url(#b1${id})"/>
@@ -477,6 +499,7 @@
 
     // 五官
     const face = [];
+    const female = !!(tr && tr.sex === 'female' && !juv);
     const look = pose.look || [0, 0], blink = clamp(pose.blink || 0, 0, 1);
     const spiral = (x, y) => { let d = ''; for (let i = 0; i <= 40; i++) { const t = i / 40, a = t * Math.PI * 4.6, r = .4 + 4.5 * t; d += (i ? ' L' : 'M') + f1(x + Math.cos(a) * r) + ' ' + f1(y + Math.sin(a) * r); } return d; };
     for (const k of [-1, 1]) {
@@ -501,11 +524,16 @@
           case 'focus': face.push(g(I.eye(ex, ey, id) + brow(-5.2, -7.8))); break;
           case 'sad': face.push(g(I.eye(ex, ey + .4, id, { scale: 1.04 }) + `<ellipse cx="${f1(ex)}" cy="${f1(ey + 3.3)}" rx="2.6" ry="1" fill="#bfe0f8" opacity=".7"/>` + brow(-8.2, -5.4))); break;
           case 'sleepy': face.push(g(I.eye(ex, ey + .4, id) + `<path d="M${f1(e.X - 5.6)} ${f1(e.Y + .2)} A5.6 5.6 0 0 1 ${f1(e.X + 5.6)} ${f1(e.Y + .2)} Q${f1(e.X)} ${f1(e.Y + .9)} ${f1(e.X - 5.6)} ${f1(e.Y + .2)} Z" fill="#a37a52"/><path d="M${f1(e.X - 4.6)} ${f1(e.Y + .3)} Q${f1(e.X)} ${f1(e.Y + 1)} ${f1(e.X + 4.6)} ${f1(e.Y + .3)}" fill="none" stroke="#3a2c22" stroke-width="1" stroke-linecap="round"/>`)); break;
-          default: face.push(g(I.eye(ex, ey, id)));
+          default: face.push(g(I.eye(ex, ey, id, female ? { scale: 1.08 } : undefined)));
+        }
+        // 母的：眼角兩根小睫毛（睜眼、笑眼、閉眼都有；暈眩不畫）
+        if (female && mode !== 'dizzy') {
+          const up = mode === 'happy' ? -1.4 : mode === 'closed' ? 1.2 : mode === 'wide' ? -1.6 : 0;
+          face.push(g(`<path d="M${f1(e.X + k * 4.3)} ${f1(e.Y - 1.2 + up)} l${f1(k * 2.8)} ${-1.6} M${f1(e.X + k * 3.4)} ${f1(e.Y - 2.9 + up)} l${f1(k * 2.2)} ${-2.4}" stroke="#1f1814" stroke-width="1.1" stroke-linecap="round" fill="none"/>`));   // 兩根
         }
       }
       const b = PH([k * 20, 57, 17]), fb = facingH([k * .6, 0, .8]);
-      if (fb > 0.1) face.push(`<ellipse cx="${f1(b.X)}" cy="${f1(b.Y)}" rx="${f1(6.5 * fb)}" ry="4" fill="#f0907c" opacity="${(0.3 * (pose.blush == null ? 1 : pose.blush)).toFixed(2)}" filter="url(#b1${id})"/>`);
+      if (fb > 0.1) face.push(`<ellipse cx="${f1(b.X)}" cy="${f1(b.Y)}" rx="${f1(6.5 * fb)}" ry="4" fill="#f0907c" opacity="${(Math.min(.66, 0.3 * (female ? 1.6 : 1) * (pose.blush == null ? 1 : pose.blush))).toFixed(2)}" filter="url(#b1${id})"/>`);   // 母的腮紅濃一點
     }
     if (hF > -0.25) {
       // 鼻子：正面寬、側面扁而小，貼著口鼻前端（不會像掛在臉外的球）

@@ -276,7 +276,7 @@
     // 畫面大小：最小的亞成體約 0.84、最大的公成體約 1.06
     const sizeK = clamp(lerp(0.88, 1.06, (t.lengthCm - 39) / 15), 0.82, 1.06);
     const tailK = clamp((t.tailCm / t.lengthCm) / 0.58, 0.86, 1.14);
-    return { widthK, sizeK, tailK, earK, cheekK: t.cheekK || 1, juvenile: t.stage === 'juvenile', R };
+    return { widthK, sizeK, tailK, earK, cheekK: t.cheekK || 1, juvenile: t.stage === 'juvenile', R, male: t.sex === 'male' };
   }
 
   // 毛色換算：只改「毛」的顏色（身體、背、尾、耳、手腳、陰影），眼睛、鼻子、頭帶、腮紅、道具都不動
