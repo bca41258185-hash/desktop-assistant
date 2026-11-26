@@ -165,6 +165,38 @@
       return '';
     }).replace(/<defs>\s*<\/defs>/g, '');
   };
+  // ---- 只改有變的地方：即時繪製每格的 SVG 結構（元素的種類、順序）幾乎都一樣，只有座標在變 ----------------
+  //   原本每格整段 innerHTML 換掉 → 瀏覽器要重新解析、建立一百多個元素、重算全部樣式。
+  //   結構和上一格一樣時，只對「屬性有變」的元素改屬性（沒變的元素完全不碰）；結構不同（換動作、多了道具）才整段重建。
+  //   畫出來的結果和整段換掉完全一樣（同樣的元素、同樣的屬性）。
+  const TOK = /<(\/?)([a-zA-Z][\w:-]*)((?:\s+[\w:-]+="[^"]*")*)\s*(\/?)>|([^<]+)/g, ATT = /([\w:-]+)="([^"]*)"/g;
+  const ent = (v) => (v.indexOf('&') < 0 ? v : v.replace(/&(quot|amp|lt|gt|apos|#\d+|#x[0-9a-f]+);/gi, (m, e) => ({ quot: '"', amp: '&', lt: '<', gt: '>', apos: "'" })[e.toLowerCase()] || (e[1] === 'x' || e[1] === 'X' ? String.fromCodePoint(parseInt(e.slice(2), 16)) : String.fromCodePoint(+e.slice(1)))));
+  function tokens(str) {
+    const tags = [], attrs = []; let sig = '', m; TOK.lastIndex = 0;
+    while ((m = TOK.exec(str))) {
+      if (m[5] != null) { if (/\S/.test(m[5])) return null; continue; }          // 有文字內容：不走省力路線
+      if (m[1]) { sig += '/'; continue; }
+      sig += m[2] + (m[4] ? '/,' : ','); tags.push(m[2]); attrs.push(m[3]);
+    }
+    return { sig, attrs };
+  }
+  S.patchSvg = function (host, svg) {
+    const st = host.__patch || (host.__patch = {});
+    const t = tokens(svg);
+    if (t && st.sig === t.sig && st.els && st.els.length === t.attrs.length && host.firstElementChild === st.els[0]) {
+      for (let i = 0; i < t.attrs.length; i++) {
+        const a = t.attrs[i], b = st.attrs[i]; if (a === b) continue;
+        const el = st.els[i], seen = new Set(); let m; ATT.lastIndex = 0;
+        while ((m = ATT.exec(a))) { seen.add(m[1]); const v = ent(m[2]); if (el.getAttribute(m[1]) !== v) el.setAttribute(m[1], v); }
+        ATT.lastIndex = 0; while ((m = ATT.exec(b))) if (!seen.has(m[1])) el.removeAttribute(m[1]);
+      }
+      st.attrs = t.attrs; return;
+    }
+    host.innerHTML = svg;
+    if (!t) { st.sig = null; st.els = null; return; }
+    const els = []; const walk = (n) => { for (let c = n.firstElementChild; c; c = c.nextElementSibling) { els.push(c); walk(c); } }; walk(host);
+    st.sig = t.sig; st.attrs = t.attrs; st.els = els;
+  };
   S.slimInfo = () => ({ hoisted: hoisted.size, dyn: dynId.size, fur: furIds.size });
   // 互動結束：那一輪用的共用定義（id 以 suffix 結尾）拿掉，不會越積越多
   S.unslim = function (suffixes) {

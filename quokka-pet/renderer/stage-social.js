@@ -43,7 +43,7 @@
       el.appendChild(this.defs.d);
       this.cache = new Map(); this.near = null; this.W = 0; this.H = 0; this.k = {};
     }
-    set(node, key, str) { if (this.cache.get(key) === str) return; this.cache.set(key, str); node.innerHTML = str; }
+    set(node, key, str) { if (this.cache.get(key) === str) return; this.cache.set(key, str); S.patchSvg(node, str); }   // 只改有變的屬性
     order(near, far) {
       if (this.near === near) return;
       this.near = near;
