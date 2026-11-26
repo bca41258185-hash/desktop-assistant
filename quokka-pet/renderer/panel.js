@@ -110,10 +110,20 @@
     const P = t && t.personality;
     return P ? (ARCH_NAME[P.archetype] || '') : '';
   }
+  const sexSym = (t) => TR.sexSym(t);
+  const sexMark = (t) => TR.sexSym(t) + ' ' + TR.sexName(t);
+  const sexCls = (t) => (t && t.sex === 'male' ? 'm' : 'f');
+  // 特殊性別一開始不顯現：跟你相處滿 3 天、或有了好朋友／喜歡的對象（熟了、敞開心）之後才看得到
+  function genderShown(q) {
+    if (!q || !q.traits || q.traits.gender !== 'special') return false;
+    const days = (Date.now() - (Date.parse(q.createdAt || '') || Date.now())) / 86400000;
+    return days >= 3 || relationsOf(q.id).some((r) => r.friend || r.couple || (r.attracted && (r.love || 0) >= 20));
+  }
+  const genderTag = (q) => (genderShown(q) ? ` <span class="sex x" aria-label="${TR.GENDER_SPECIAL.name}" title="${TR.GENDER_SPECIAL.name}">${TR.GENDER_SPECIAL.sym}</span>` : '');
   function traitLine(t, months) {
     if (!t) return '';
     const m = months != null ? months : t.ageMonths;
-    return [t.sex === 'male' ? '公' : '母', ageText(m), `頭身長 ${Math.round(t.lengthCm)} cm`,
+    return [sexMark(t), ageText(m), `頭身長 ${Math.round(t.lengthCm)} cm`,
       (t.fur && t.fur.name ? t.fur.name + '色' : ''), archetypeName(t) && `個性：${archetypeName(t)}`,
       `飾品：${TR.accessoryName(t.accessory)}`].filter(Boolean).join('・');
   }
@@ -523,6 +533,26 @@
     if (q) { slot.innerHTML = infoCardHTML(q); return; }
     slot.innerHTML = '';
   }
+  // ---- 個性雷達圖：五個面向 0–100 ----
+  const RADAR = [['activity', '活潑'], ['sociability', '親人'], ['boldness', '膽量'], ['curiosity', '好奇'], ['affection', '黏人']];
+  const RADAR_KEYS = new Set(RADAR.map((x) => x[1]));
+  function radarHTML(t) {
+    const P = t && t.personality; if (!P) return '';
+    const W = 260, H = 200, cx = W / 2, cy = 104, R = 70, n = RADAR.length;
+    const pt = (i, k) => { const a = -Math.PI / 2 + i * 2 * Math.PI / n; return [cx + Math.cos(a) * R * k, cy + Math.sin(a) * R * k]; };
+    const poly = (k) => RADAR.map((_, i) => pt(i, k).map((v) => v.toFixed(1)).join(',')).join(' ');
+    const val = (key) => Math.max(0, Math.min(1, Number(P[key]) || 0));
+    const shape = RADAR.map(([key], i) => pt(i, val(key)).map((v) => v.toFixed(1)).join(',')).join(' ');
+    const rings = [0.25, 0.5, 0.75, 1].map((k) => `<polygon points="${poly(k)}" class="rd-ring"/>`).join('');
+    const axes = RADAR.map((_, i) => { const [x, y] = pt(i, 1); return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" class="rd-axis"/>`; }).join('');
+    const labels = RADAR.map(([key, name], i) => {
+      const [x, y] = pt(i, 1.24), anchor = Math.abs(x - cx) < 4 ? 'middle' : x > cx ? 'start' : 'end';
+      return `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="${anchor}" class="rd-l">${name} <tspan class="rd-v">${Math.round(val(key) * 100)}</tspan></text>`;
+    }).join('');
+    const dots = RADAR.map(([key], i) => { const [x, y] = pt(i, val(key)); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" class="rd-dot"/>`; }).join('');
+    const desc = RADAR.map(([key, name]) => `${name} ${Math.round(val(key) * 100)}`).join('、');
+    return `<svg class="radar" viewBox="0 0 ${W} ${H}" role="img" aria-label="個性雷達圖：${desc}">${rings}${axes}<polygon points="${shape}" class="rd-shape"/>${dots}${labels}</svg>`;
+  }
   // ---- 資訊卡：選了某隻（沒開 ⚙）時顯示牠的基本資料、個性、喜歡誰、和每一隻的好感度 ----
   function infoCardHTML(q) {
     const t = q.traits || {}, crushes = S.crushes || {};
@@ -532,8 +562,8 @@
     const likes = crushes[q.id] ? qById(crushes[q.id]) : null;
     const likedBy = S.quokkas.filter((o) => o.id !== q.id && crushes[o.id] === q.id);
     const others = S.quokkas.filter((o) => o.id !== q.id && !isJoey(o))
-      .map((o) => ({ o, r: rels.get(o.id) || { affinity: 0 } }))
-      .sort((x, y) => (y.r.affinity || 0) - (x.r.affinity || 0));
+      .map((o) => ({ o, r: rels.get(o.id) || { affinity: 0, love: 0 } }))
+      .sort((x, y) => ((y.r.love || 0) + (y.r.affinity || 0)) - ((x.r.love || 0) + (x.r.affinity || 0)));
     const tag = (o, r) => [r.couple && '<span class="itag heart">♥ 伴侶</span>', !r.couple && r.friend && '<span class="itag star">★ 好朋友</span>',
       !r.couple && likes && likes.id === o.id && '<span class="itag crush">偷偷喜歡</span>', crushes[o.id] === q.id && !r.couple && '<span class="itag crush">喜歡牠</span>',
       kin(o) && '<span class="itag">家人</span>'].filter(Boolean).join('');
@@ -542,15 +572,18 @@
       : '還沒有特別喜歡誰';
     const open = !!ui.infoOpen;
     return `<div class="card info" role="group" aria-label="${esc(q.name)}的資訊">
-      <div class="card-h">${avatar(q, 'md')}<h2>${esc(q.name)}</h2>
+      <div class="card-h">${avatar(q, 'md')}<h2>${esc(q.name)} <span class="sex ${sexCls(t)}" aria-label="${TR.sexName(t)}">${sexSym(t)}</span>${genderTag(q)}</h2>
         <button type="button" class="link-btn" data-act="infoToggle" data-fk="i:toggle" aria-expanded="${open}" aria-controls="infoMore">${open ? '收起' : '更多資訊'}</button></div>
-      <p class="info-line">${esc(traitLine(t, ageMonths(q)))}</p>
+      <p class="info-line">${esc(traitLine(t, ageMonths(q)))}${genderShown(q) ? `・${TR.GENDER_SPECIAL.sym} ${TR.GENDER_SPECIAL.name}` : ''}</p>
       <p class="info-line">💕 ${likeLine}${!partner && likedBy.length ? `・${likedBy.map((o) => esc(o.name)).join('、')}喜歡牠` : ''}</p>
       ${open ? `<div id="infoMore">
-        <dl class="info-dl">${TR.describePersonality(t).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-        ${others.length ? `<h3 class="info-h">和大家的好感度</h3><ul class="aff-list">${others.map(({ o, r }) => {
-          const v = Math.max(0, Math.min(100, Math.round(r.affinity || 0)));
-          return `<li>${avatar(o, 'sm')}<span class="aff-name">${esc(o.name)}</span><span class="aff-bar" role="img" aria-label="好感度 ${v}／100"><i style="width:${v}%"></i></span><span class="aff-n">${v}</span>${tag(o, r)}</li>`;
+        ${radarHTML(t)}
+        <dl class="info-dl">${TR.describePersonality(t).filter(([k]) => !RADAR_KEYS.has(k)).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+        ${others.length ? `<h3 class="info-h">和大家的關係<span class="legend"><i class="lg f"></i>友情　<i class="lg l"></i>愛情</span></h3><ul class="aff-list">${others.map(({ o, r }) => {
+          const f = Math.max(0, Math.min(100, Math.round(r.affinity || 0))), l = Math.max(0, Math.min(100, Math.round(r.love || 0)));
+          const bar = (cls, v, label) => `<span class="aff-row"><span class="aff-k">${label}</span><span class="aff-bar ${cls}" role="img" aria-label="${label} ${v}／100"><i style="width:${v}%"></i></span><span class="aff-n">${v}</span></span>`;
+          const loveRow = r.attracted ? bar('love', l, '愛情') : r.attracted === false ? '<span class="aff-row"><span class="aff-k">愛情</span><span class="aff-none">只是朋友</span></span>' : '';
+          return `<li><div class="aff-who">${avatar(o, 'sm')}<span class="aff-name">${esc(o.name)} <span class="sex ${sexCls(o.traits)}" aria-label="${TR.sexName(o.traits)}">${sexSym(o.traits)}</span>${genderTag(o)}</span>${tag(o, r)}</div>${bar('friend', f, '友情')}${loveRow}</li>`;
         }).join('')}</ul>` : '<p class="note">只有牠一隻，還沒有可以互動的同伴。</p>'}
       </div>` : ''}
     </div>`;

@@ -14,6 +14,13 @@
     male: { len: [43, 54], tail: [25, 31], wt: [2.7, 4.2] },
     female: { len: [39, 50], tail: [23.5, 28.5], wt: [1.6, 3.5] }
   };
+  // 生理性別：公 ♂、母 ♀（決定體型、誰能生寶寶；一開始就看得到）
+  const SEXES = { male: { name: '公', sym: '♂' }, female: { name: '母', sym: '♀' } };
+  const sexName = (t) => (SEXES[t && t.sex] || SEXES.female).name;
+  const sexSym = (t) => (SEXES[t && t.sex] || SEXES.female).sym;
+  // 特殊性別（性別認同，少數約 4%）：和生理性別分開，一開始不顯現，熟了以後才看得到（見面板）
+  const SPECIAL_GENDER_P = 0.04;
+  const GENDER_SPECIAL = { name: '特殊性別', sym: '⚥' };
   // 毛色類型：相對於預設暖棕的色相／彩度／明度位移；rufous＝臉部偏紅程度
   const FUR_TYPES = [
     { id: 'warm', name: '暖棕', w: 30, dh: 0, sat: 1, dl: 0, rufous: 0.2 },
@@ -100,7 +107,7 @@
     };
     t.personality = personality(t);
     t.accessory = accessoryFor(seed, t.band);
-    return t;
+    return ensureGender(t);
   }
 
   // 飾品：用從 seed 衍生的獨立亂數抽，不動到上面體型、毛色、個性的亂數序列（舊的 seed 生出來的那隻不會變）
@@ -139,7 +146,7 @@
   function describe(t) {
     if (!t) return [];
     return [
-      ['性別', t.sex === 'male' ? '公' : '母'],
+      ['性別', sexSym(t) + ' ' + sexName(t)],
       ['年齡', ageText(t.ageMonths) + '（' + { juvenile: '亞成體', adult: '成年', senior: '年長' }[t.stage] + '）'],
       ['頭身長', t.lengthCm + ' cm'],
       ['尾長', t.tailCm + ' cm'],
@@ -252,7 +259,7 @@
   function personaText(t) {
     const P = t && t.personality; if (!P) return '';
     const A = ARCHETYPES[P.archetype];
-    return `這一隻庫卡的個體設定：${t.sex === 'male' ? '公' : '母'}的，${ageText(t.ageMonths)}，個性是「${A.name}」，` +
+    return `這一隻庫卡的個體設定：${sexName(t)}的，${ageText(t.ageMonths)}，個性是「${A.name}」，` +
       `社交上${SOCIAL_STYLES[P.socialStyle]}；最喜歡${P.likes.map((a) => ACTIVITIES[a]).join('和')}，不太愛${ACTIVITIES[P.dislike]}，` +
       `平常的嗜好是${P.hobbies.join('和')}。說話語氣請符合這個個性（例如：${A.greet}）。`;
   }
@@ -319,7 +326,12 @@
     return svg.replace(/#[0-9a-fA-F]{6}\b/g, (c) => m[c.toLowerCase()] || c);
   }
 
-  const api = { generate, describe, describePersonality, ensurePersonality, ensureAccessory, accessoryName, ACCESSORIES, behavior, personaText, ARCHETYPES, shape, recolor, colorMap, RANGES, FUR_TYPES, BAND_COLORS };
+  // 特殊性別：用另一組亂數決定（不影響同一個 seed 原本抽出來的外型、個性）；舊資料沒有這個欄位時補上
+  function ensureGender(t) {
+    if (t && t.gender == null) t.gender = rng(((Number(t.seed) || 1) ^ 0x5bd1e995) >>> 0)() < SPECIAL_GENDER_P ? 'special' : 'cis';
+    return t;
+  }
+  const api = { SEXES, sexName, sexSym, GENDER_SPECIAL, ensureGender, generate, describe, describePersonality, ensurePersonality, ensureAccessory, accessoryName, ACCESSORIES, behavior, personaText, ARCHETYPES, shape, recolor, colorMap, RANGES, FUR_TYPES, BAND_COLORS };
   if (typeof window !== 'undefined') window.QuokkaTraits = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

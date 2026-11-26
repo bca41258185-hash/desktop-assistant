@@ -409,12 +409,34 @@ body.dragging .chip[data-drop] { background: var(--surface-2); border-style: das
 .info-dl dt { color: var(--muted); }
 .info-h { font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
 .aff-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.aff-list li { display: flex; align-items: center; gap: 6px; font-size: 13px; flex-wrap: wrap; }
-.aff-name { min-width: 4.5em; }
+.aff-list li { display: grid; gap: 2px; font-size: 13px; padding: 4px 0; border-top: 1px solid var(--line); }
+.aff-list li:first-child { border-top: 0; }
+.aff-who { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.aff-name { min-width: 4.5em; font-weight: 600; }
+.aff-row { display: flex; align-items: center; gap: 6px; padding-left: 28px; }
+.aff-k { width: 2.4em; color: var(--muted); font-size: 12px; }
+.aff-none { color: var(--muted); font-size: 12px; }
 .aff-bar { flex: 1 1 60px; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
-.aff-bar i { display: block; height: 100%; background: #e07a8f; border-radius: 4px; }
+.aff-bar i { display: block; height: 100%; border-radius: 4px; }
+.aff-bar.friend i, .lg.f { background: #e2b04a; }
+.aff-bar.love i, .lg.l { background: #e07a8f; }
+.legend { float: right; font-weight: 400; font-size: 12px; }
+.lg { display: inline-block; width: 10px; height: 8px; border-radius: 3px; margin: 0 3px 0 6px; vertical-align: middle; }
+.sex { font-weight: 700; }
+.sex.m { color: #2f6fb3; }
+.sex.f { color: #c2185b; }
+.sex.x { color: #7b4bb3; }
 .aff-n { width: 2.2em; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 .itag { font-size: 12px; padding: 0 6px; border-radius: 9px; background: var(--paper); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .itag.heart { color: #c2185b; border-color: #f3c1d3; background: #fff0f5; }
 .itag.star { color: #8a6d00; border-color: #ecd98a; background: #fffbe6; }
 .itag.crush { color: #ad3f63; border-color: #f0c9d6; background: #fff6f9; }
+
+/* 個性雷達圖 */
+.radar { display: block; width: 100%; max-width: 300px; margin: 8px auto 0; }
+.rd-ring { fill: none; stroke: var(--line); stroke-width: 1; }
+.rd-axis { stroke: var(--line); stroke-width: 1; }
+.rd-shape { fill: rgba(224, 122, 143, .28); stroke: #d9667f; stroke-width: 2; stroke-linejoin: round; }
+.rd-dot { fill: #d9667f; }
+.rd-l { font-size: 12px; fill: var(--muted); }
+.rd-v { font-weight: 700; fill: var(--ink); }

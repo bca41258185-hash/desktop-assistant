@@ -19,7 +19,11 @@
     decayAfterDays: 7,           // 連續 7 天沒互動
     decayPerDay: 2,              // 之後每天 −2
     friendAt: 80,
-    crushAt: 20,                 // 好感達 20 才會「偷偷喜歡」（有伴侶就是伴侶）
+    crushAt: 20,                 // 愛情達 20 才會「偷偷喜歡」（有伴侶就是伴侶；好朋友不算）
+    // 友情（affinity）和愛情（love）分開：每次互動都加友情；愛情只在「對牠有感覺」的一對之間累積
+    loveP: 0.75,                 // 異性：成年後第一次一起互動時，有 75% 會對彼此有感覺
+    sameSexLoveP: 0.12,          // 同性：也可能相愛，但機率低（12%）；大多是友情
+    specialLoveP: 0.4,           // 有一方是特殊性別（性別認同）：40%；生不生寶寶仍看生理性別
     coupleAt: 100,
     matureMonths: { female: 18, male: 12 },
     juvenileUntilMonths: 18,     // 未滿 18 個月是亞成體
@@ -141,6 +145,7 @@
       fur,
       band: base.band,
       accessory: base.accessory,
+      gender: base.gender,                         // 特殊性別（性別認同）不遺傳，跟著新抽的那組
       personality: P
     };
     applyScale(t, C.joeyScale);
@@ -156,6 +161,13 @@
     data.lineage = data.lineage || {};
     data.settings = data.settings || {};
     data.quokkas = data.quokkas || [];
+    // 舊資料（友情和愛情還沒分開）：已經是一對的＝愛情滿、互相有感覺；其他的愛情從 0 開始，有沒有感覺之後再決定
+    for (const r of Object.values(data.relations)) {
+      if (!r) continue;
+      if (r.love == null) r.love = r.couple ? 100 : 0;
+      if (r.attracted == null && r.couple) r.attracted = true;
+      if (r.attracted === undefined) r.attracted = null;
+    }
 
     const nowISO = () => new Date(now()).toISOString();
     const today = () => dayStr(now());
@@ -217,7 +229,7 @@
     function rel(aId, bId, create = true) {
       const k = pairKey(aId, bId);
       let r = data.relations[k];
-      if (!r && create) r = data.relations[k] = { affinity: 0, couple: false, friend: false, since: null, lastTogetherDay: null, dailyGain: 0, gainDay: null, lastConceptionRollDay: null, lastPassDay: null, decayDays: 0 };
+      if (!r && create) r = data.relations[k] = { affinity: 0, love: 0, attracted: null, loveGain: 0, loveDay: null, couple: false, friend: false, since: null, lastTogetherDay: null, dailyGain: 0, gainDay: null, lastConceptionRollDay: null, lastPassDay: null, decayDays: 0 };
       return r || null;
     }
     function partnerOf(qid) {
@@ -226,7 +238,7 @@
       }
       return null;
     }
-    // 喜歡的對象：有伴侶就是伴侶；否則是好感最高（至少 crushAt）、不是親人的那一隻。小袋鼠（育兒袋、跟隨期）不算
+    // 喜歡的對象：有伴侶就是伴侶；否則是愛情最高（至少 crushAt）、不是親人的那一隻（好朋友不算）。小袋鼠（育兒袋、跟隨期）不算
     function crushOf(qid) {
       const isKid = (q) => !q || q.stage === 'pouch' || q.stage === 'follow';
       if (isKid(byId(qid))) return null;
@@ -234,10 +246,10 @@
       if (p) return p;
       let best = null, top = C.crushAt - 1e-9;
       for (const [k, v] of Object.entries(data.relations)) {
-        if (!v || !(v.affinity > top)) continue;
+        if (!v || !v.attracted || !((v.love || 0) > top)) continue;
         const [a, b] = k.split('|'), o = a === qid ? b : b === qid ? a : null;
         if (!o || isKid(byId(o)) || isKin(qid, o)) continue;
-        best = o; top = v.affinity;
+        best = o; top = v.love;
       }
       return best;
     }
@@ -247,7 +259,25 @@
     function refreshFriend(r, a, b) {
       r.friend = !!(a && b && r.affinity >= C.friendAt);
     }
-    // 加好感，受每對每天上限限制；回傳實際加了多少
+    // 這一對對彼此有沒有感覺（愛情）：兩隻都成年、不是親人時，第一次一起互動決定一次（異性 75%、同性 12%），之後不變
+    function attraction(a, b, r) {
+      if (r.attracted != null) return !!r.attracted;
+      if (!romanceOn() || isBaby(a) || isBaby(b) || !isMature(a) || !isMature(b)) return false;   // 還沒決定（長大後再說）
+      if (isKin(a.id, b.id)) { r.attracted = false; return false; }
+      const sa = sexOf(a), sb = sexOf(b), same = sa && sa === sb;
+      const special = (q) => q.traits && q.traits.gender === 'special';
+      r.attracted = random() < (special(a) || special(b) ? C.specialLoveP : same ? C.sameSexLoveP : C.loveP);
+      return r.attracted;
+    }
+    // 加愛情：和友情一樣每對每天最多 +20，最高 100
+    function gainLove(r, amount) {
+      const d = today();
+      if (r.loveDay !== d) { r.loveDay = d; r.loveGain = 0; }
+      const add = Math.max(0, Math.min(amount, C.dailyGainCap - (r.loveGain || 0), C.affinityMax - (r.love || 0)));
+      r.love = (r.love || 0) + add; r.loveGain = (r.loveGain || 0) + add;
+      return add;
+    }
+    // 加好感（友情），受每對每天上限限制；回傳實際加了多少
     function gain(r, amount) {
       const d = today();
       if (r.gainDay !== d) { r.gainDay = d; r.dailyGain = 0; }
@@ -261,12 +291,12 @@
       a = typeof a === 'string' ? byId(a) : a; b = typeof b === 'string' ? byId(b) : b;
       if (!a || !b || a.id === b.id) return { ok: false, reason: 'missing' };
       if (!romanceOn()) return { ok: false, reason: 'romance-off' };
-      const sa = sexOf(a), sb = sexOf(b);
-      if (!sa || !sb || sa === sb) return { ok: false, reason: 'same-sex' };
+      if (!sexOf(a) || !sexOf(b)) return { ok: false, reason: 'missing' };
       if (isBaby(a) || isBaby(b) || !isMature(a) || !isMature(b)) return { ok: false, reason: 'too-young' };
       if (partnerOf(a.id) || partnerOf(b.id)) return { ok: false, reason: 'has-partner' };
       const r = rel(a.id, b.id, false);
-      if (!r || r.affinity < C.coupleAt) return { ok: false, reason: 'affinity' };
+      if (!r || !r.attracted) return { ok: false, reason: 'no-love' };            // 只是朋友（大多數同性、少數異性）
+      if ((r.love || 0) < C.coupleAt) return { ok: false, reason: 'love' };     // 愛情還沒滿
       if (isKin(a.id, b.id)) return { ok: false, reason: 'kin' };
       return { ok: true };
     }
@@ -293,6 +323,7 @@
       const sim = 1 - Math.abs((pa.activity != null ? pa.activity : 0.5) - (pb.activity != null ? pb.activity : 0.5));
       const amount = Math.round(lerp(C.togetherMin, C.togetherMax, clamp(0.5 * soc + 0.5 * sim, 0, 1)));
       const gained = gain(r, amount);
+      const loveGained = attraction(a, b, r) ? gainLove(r, amount) : 0;
       const d = today();
       const firstToday = r.lastTogetherDay !== d;
       r.lastTogetherDay = d; r.decayDays = 0;
@@ -303,8 +334,8 @@
         r.couple = true; r.since = nowISO();
         events.push({ type: 'couple', a: aId, b: bId });
       }
-      // 成為一對「之後」每天第一次一起互動：擲一次 30%
-      if (wasCouple && r.couple && r.lastConceptionRollDay !== d) {
+      // 成為一對「之後」每天第一次一起互動：異性、而且愛情是滿的，才擲一次 30%（同性伴侶不會生寶寶）
+      if (wasCouple && r.couple && (r.love || 0) >= C.affinityMax && r.lastConceptionRollDay !== d) {
         const mom = sexOf(a) === 'female' ? a : b, dad = mom === a ? b : a;
         if (canConceive(mom, dad)) {
           r.lastConceptionRollDay = d;
@@ -314,7 +345,7 @@
           }
         }
       }
-      return { gained, affinity: r.affinity, friend: r.friend, couple: r.couple, firstToday, kind: kind || null, events };
+      return { gained, affinity: r.affinity, loveGained, love: r.love || 0, attracted: !!r.attracted, friend: r.friend, couple: r.couple, firstToday, kind: kind || null, events };
     }
     // 播放中被工作反應打斷：+1（也受每日上限）
     function onInterrupted(aId, bId) {
@@ -345,6 +376,7 @@
         if (target > done) {
           const before = r.affinity;
           r.affinity = Math.max(0, r.affinity - C.decayPerDay * (target - done));
+          r.love = Math.max(0, (r.love || 0) - C.decayPerDay * (target - done));     // 愛情也一樣會淡
           r.decayDays = target;
           const [a, b] = k.split('|');
           refreshFriend(r, byId(a), byId(b));
@@ -530,7 +562,7 @@
     }
     // 重新生成後：好感度歸零
     function onRegenerate(qid) {
-      for (const [k, r] of Object.entries(data.relations)) if (k.split('|').includes(qid)) { r.affinity = 0; r.friend = false; r.dailyGain = 0; r.decayDays = 0; }
+      for (const [k, r] of Object.entries(data.relations)) if (k.split('|').includes(qid)) { r.affinity = 0; r.love = 0; r.attracted = null; r.loveGain = 0; r.friend = false; r.dailyGain = 0; r.decayDays = 0; }
     }
 
     // 可以交辦事情嗎（跟隨期以前的小袋鼠不行）
