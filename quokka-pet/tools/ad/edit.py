@@ -135,9 +135,9 @@ cap('grown', s + 0.5, s + 4.0, 960, 150)
 # 9 下班：甩到頭暈（慢動作由程式虛擬時鐘處理）、離開打盹、回來打招呼
 chapter('groove')
 g = mark('dizzy', 'grab', 0, 0.4)
-s = clip('dizzy', g - 0.3, g + 5.2)
+s = clip('dizzy', g - 0.3, g + 6.0)
 sfx(s, 'whoosh', .5); sfx(s + 0.6, 'spring', .9); sfx(s + 2.2, 'boing', .9); sfx(s + 3.0, 'spring', .6)
-cap('dizzy', s + 2.5, s + 5.5, 960, 150)
+cap('dizzy', s + 2.6, s + 6.3, 960, 975)
 chapter('soft')
 lv = mark('away', 'asleep', 0, 3)
 s = clip('away', lv - 0.6, lv + 3.4)
@@ -191,11 +191,11 @@ plan = {'total': TOTAL, 'secs': secs, 'endChord': round((TITLE) / 2) * 2, 'sfx':
 json.dump(plan, open(os.path.join(AUD, 'plan.json'), 'w'), ensure_ascii=False, indent=0)
 run([sys.executable, os.path.join(HERE, 'music.py'), AUD])
 MIX = os.path.join(AUD, 'mix.wav')
-# 響度 -16 LUFS、真峰值 < -1 dBTP：兩段式 loudnorm（先量再正規化）
+# 響度 -16 LUFS、真峰值 < -1 dBTP：兩段式 loudnorm（先量再正規化），再用 4 倍取樣的限幅器壓住真峰值（AAC 編碼後仍要低於 -1）
 r = subprocess.run(['ffmpeg', '-hide_banner', '-i', os.path.join(AUD, 'mix_raw.wav'), '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json', '-f', 'null', '-'], capture_output=True, text=True)
 js = r.stderr[r.stderr.rindex('{'):r.stderr.rindex('}') + 1]; m = json.loads(js)
 run(['ffmpeg', '-v', 'error', '-y', '-i', os.path.join(AUD, 'mix_raw.wav'), '-af',
-     f"loudnorm=I=-16:TP=-1.5:LRA=11:measured_I={m['input_i']}:measured_TP={m['input_tp']}:measured_LRA={m['input_lra']}:measured_thresh={m['input_thresh']}:offset={m['target_offset']}:linear=true,aresample=48000",
+     f"loudnorm=I=-16:TP=-1.5:LRA=11:measured_I={m['input_i']}:measured_TP={m['input_tp']}:measured_LRA={m['input_lra']}:measured_thresh={m['input_thresh']}:offset={m['target_offset']}:linear=true,aresample=192000,alimiter=limit=0.76:level=false:attack=1:release=60,aresample=48000",
      '-ar', '48000', MIX])
 print('audio ok')
 

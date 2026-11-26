@@ -138,7 +138,14 @@ module.exports = async function drive(shot) {
       '-c:v', 'libx264', '-preset', process.env.X264_PRESET || 'veryfast', '-crf', process.env.CRF || '12', '-pix_fmt', 'yuv420p', '-r', '60', OUT], { stdio: ['pipe', 'inherit', 'inherit'] });
   };
   // ---- 輸入：舞台滑鼠、面板打字 --------------------------------------------------------
-  A.mouse = (type, x, y, extra = {}) => stage.sendInputEvent({ type, x: Math.round(x), y: Math.round(y), button: 'left', clickCount: 1, ...extra });
+  // 舞台滑鼠：用 DevTools 協定送（等頁面收到才回來，事件順序和時間戳都固定）
+  let held = 0;
+  A.mouse = async (type, x, y, extra = {}) => {
+    const dbg = stage.debugger; if (!dbg.isAttached()) dbg.attach('1.3');
+    const T = { mouseMove: 'mouseMoved', mouseDown: 'mousePressed', mouseUp: 'mouseReleased' }[type];
+    if (type === 'mouseDown') held = 1; if (type === 'mouseUp') held = 0;
+    await dbg.sendCommand('Input.dispatchMouseEvent', { type: T, x: Math.round(x), y: Math.round(y), button: type === 'mouseMove' && !held ? 'none' : 'left', buttons: held, clickCount: type === 'mouseMove' ? 0 : 1 });
+  };
   A.openPanel = async (qid, bounds, zoom = 1) => {
     v2.showPanel(qid || null);
     for (let i = 0; i < 200 && !panelWin; i++) { panelWin = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('panel.html')); if (!panelWin) await sleep(30); }
@@ -195,7 +202,7 @@ module.exports = async function drive(shot) {
   // 點一下某隻（摸頭）：游標移過去、按下、放開
   A.clickActor = async (qid, dy = .7) => {
     const a = await A.actor(qid), x = a.x, y = a.y - a.h * dy;
-    A.mouse('mouseMove', x, y); A.mouse('mouseDown', x, y); await A.frame(); A.mouse('mouseUp', x, y);
+    await A.mouse('mouseMove', x, y); await A.mouse('mouseDown', x, y); await A.frame(); await A.mouse('mouseUp', x, y);
   };
   // 面板 HTML5 拖放（用 DevTools 協定，和真的拖曳一樣走 dragstart／dragover／drop）
   A.dragPanel = async (fromSel, toSel, frames = 40) => {

@@ -107,7 +107,7 @@ S.work = {
     if (b) {
       A.curShow = true;
       for (let i = 0; i <= 24; i++) { const u = A.ease(i / 24); A.cursor(A.lerp(b[0] + 120, b[0], u), A.lerp(b[1] + 120, b[1], u)); await A.frame(); }
-      A.mark('ack'); A.mouse('mouseMove', b[0], b[1]); A.mouse('mouseDown', b[0], b[1]); await A.frame(); A.mouse('mouseUp', b[0], b[1]);
+      A.mark('ack'); await A.mouse('mouseMove', b[0], b[1]); await A.mouse('mouseDown', b[0], b[1]); await A.frame(); await A.mouse('mouseUp', b[0], b[1]);
     } else A.log('no ack button');
     await A.wait(2.5);
   }
@@ -230,7 +230,7 @@ S.love = {
   async run(A) {
     await A.place([['ad0', 440, 20], ['ad2', 560, -20]]); await A.hold();
     let cx = 500;
-    A.views = () => [{ src: 'stage', rect: A.cam(cx, 520), dst: [0, 0, 1920, 1080] }];
+    A.views = () => [{ src: 'stage', rect: A.cam(cx, 560), dst: [0, 0, 1920, 1080] }];
     A.start();
     await A.until(0.3); A.social('cuddle', 'ad2', 'ad0'); A.mark('cuddle');
     await A.until(7.5); A.mark('cut1');
@@ -280,15 +280,15 @@ S.dizzy = {
     A.curShow = true; A.cursor(hx + 180, hy - 60);
     A.start();
     for (let i = 0; i <= 24; i++) { const u = A.ease(i / 24); A.cursor(A.lerp(hx + 180, hx, u), A.lerp(hy - 60, hy, u)); await A.frame(); }
-    A.curKind = 'hand'; A.mouse('mouseMove', hx, hy); A.mouse('mouseDown', hx, hy, { buttons: 1 }); A.mark('grab');
-    const mv = (x, y) => { A.cursor(x, y); A.mouse('mouseMove', x, y, { buttons: 1, modifiers: ['leftButtonDown'] }); };
-    for (let i = 1; i <= 20; i++) { mv(hx, hy - i * 4.5); await A.frame(); }
+    A.curKind = 'hand'; await A.mouse('mouseMove', hx, hy); await A.mouse('mouseDown', hx, hy); A.mark('grab');
+    const mv = (x, y) => { A.cursor(x, y); return A.mouse('mouseMove', x, y); };
+    for (let i = 1; i <= 20; i++) { await mv(hx, hy - i * 4.5); await A.frame(); }
     A.mark('shake');
-    for (let i = 0; i < 66; i++) { mv(hx - Math.sin(i / 66 * Math.PI * 2 * 5.5) * 95, hy - 90 + Math.cos(i / 66 * Math.PI * 2 * 11) * 14); await A.frame(); }
+    for (let i = 0; i < 66; i++) { await mv(hx - Math.sin(i / 66 * Math.PI * 2 * 5.5) * 95, hy - 90 + Math.cos(i / 66 * Math.PI * 2 * 11) * 14); await A.frame(); }
     // 最後往右一甩、在移動中放手（程式判斷放手速度夠快＝甩出去 → 滑行 → 頭暈）
     let x = hx, y = hy - 90;
-    for (let i = 0; i < 7; i++) { x += 22; y += 6; mv(x, y); await A.frame(); }
-    A.mouse('mouseUp', x, y, { buttons: 0 }); A.mark('drop'); A.curKind = 'arrow';
+    for (let i = 0; i < 7; i++) { x += 22; y += 6; await mv(x, y); await A.frame(); }
+    await A.mouse('mouseUp', x, y); A.mark('drop'); A.curKind = 'arrow';
     for (let i = 0; i <= 20; i++) { const u = A.ease(i / 20); A.cursor(A.lerp(x, x + 260, u), A.lerp(y, y - 140, u)); await A.frame(); }
     A.curShow = false;
     await A.wait(4.5);
