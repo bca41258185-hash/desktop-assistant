@@ -494,6 +494,7 @@
       <div class="set-row col"><span class="set-l">散步</span>${seg('walk', [['home', '家附近'], ['screen', '整個螢幕'], ['off', '不散步']], st.walk || 'home', '散步範圍')}</div>
       <div class="set-row"><span class="set-l">戀愛系統</span>${sw('romance', romance, '戀愛系統')}</div>
       <div class="set-row"><span class="set-l">寶寶出生${romance ? '' : '<small>（戀愛系統關著）</small>'}</span>${sw('babies', romance && st.babies !== false, '寶寶出生', !romance)}</div>
+      <div class="set-row"><span class="set-l">省電<small>（動畫較不流暢）</small></span>${sw('saver', !!st.saver, '省電：開啟後動畫每秒 30 格，比較省電但較不流暢')}</div>
       <div class="set-row col"><span class="set-l">動作減少</span>${seg('reducedMotion', [['system', '跟系統'], ['on', '開'], ['off', '關']], st.reducedMotion || 'system', '動作減少')}</div>
       <div class="set-row"><label class="set-l" for="defOwner">選「全部」時交給</label>
         <select id="defOwner" data-fk="set:defOwner">${workers().map((q) => `<option value="${esc(q.id)}"${q.id === targetOwnerForAll() ? ' selected' : ''}>${esc(q.name)}</option>`).join('')}</select></div>
@@ -1023,7 +1024,11 @@
         r.enabled = next;
         if (!next && isRinging(r)) { r.ringing = false; S.ringing = (S.ringing || []).filter((x) => x !== r.id); }
         render();
-        api.updateItem({ kind: 'reminder', id, patch: { enabled: next } });
+        // 主行程可能回一句說明（例如一次性提醒時間已過 → 改到明天同一時間）或擋下（名額滿了）
+        Promise.resolve(api.updateItem({ kind: 'reminder', id, patch: { enabled: next } })).then((res) => {
+          if (res && res.message) showToast(res.message);
+          if (res && res.ok === false) { r.enabled = !next; render(); }
+        }).catch(() => {});
         break;
       }
       case 'ack': api.ackAlert({ reminderId: id }); break;

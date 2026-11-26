@@ -214,3 +214,46 @@ test('離開期間的報告：錯過與提醒類一律保留且排最前面，�
   assert.equal(go.filter((t) => t.startsWith('m')).length, 12);
   assert.equal(go[12], '…還有 1 則');
 });
+
+test('停用的每天／每週提醒過了時間才重新打開：停用期間的時段不算錯過，下一次照常響', () => {
+  const { reenable, dueNow, nextWake } = require('../lib/reminders');
+  const now = new Date(2026, 10, 26, 12, 0);
+  for (const rule of [{ type: 'daily', time: '09:00' }, { type: 'weekly', weekdays: [now.getDay()], time: '09:00' }]) {
+    const rem = { id: 'r', rule, enabled: false, createdAt: new Date(2026, 10, 1).toISOString(), lastFiredAt: new Date(2026, 10, 25, 9, 0).toISOString() };
+    assert.ok(dueNow({ ...rem, enabled: true }, now).missed, '沒有基準時間時會被當成錯過（修正前的行為）');
+    const r = reenable(rem, now);
+    assert.equal(r.moved, false); assert.equal(rem.enabled, true); assert.equal(rem.enabledAt, now.toISOString());
+    assert.equal(dueNow(rem, now), null);
+    assert.equal(dueNow(rem, new Date(2026, 10, 26, 18, 0)), null);           // 之後的檢查也不會補報
+    if (rule.type === 'daily') {
+      assert.equal(nextWake([rem], now).getTime(), new Date(2026, 10, 27, 9, 0).getTime());
+      const d = dueNow(rem, new Date(2026, 10, 27, 9, 0, 30));
+      assert.ok(d && !d.missed);                                              // 明天照常響
+    }
+  }
+});
+
+test('重新開啟還沒到的一次性提醒：不改時間', () => {
+  const { reenable } = require('../lib/reminders');
+  const now = new Date(2026, 10, 26, 12, 0);
+  const rem = { rule: { type: 'once', date: '2026-11-27', time: '10:00' }, enabled: false };
+  assert.deepEqual(reenable(rem, now), { moved: false });
+  assert.equal(rem.rule.date, '2026-11-27'); assert.equal(rem.enabled, true);
+});
+
+test('重新開啟響過的一次性提醒：改到下一次同一時間（今天還沒到就今天，否則明天），而且真的會響', () => {
+  const { reenable, dueNow, nextWake, markFired } = require('../lib/reminders');
+  const now = new Date(2026, 10, 26, 12, 0);
+  const rem = { rule: { type: 'once', date: '2026-11-20', time: '09:00', at: new Date(2026, 10, 20, 9).toISOString() }, enabled: false, lastFiredAt: new Date(2026, 10, 20, 9).toISOString() };
+  const r = reenable(rem, now);
+  assert.deepEqual(r, { moved: true, date: '2026-11-27', time: '09:00', tomorrow: true });
+  assert.equal(rem.rule.at, new Date(2026, 10, 27, 9).toISOString());
+  assert.equal(dueNow(rem, now), null);
+  assert.equal(nextWake([rem], now).getTime(), new Date(2026, 10, 27, 9).getTime());
+  const d = dueNow(rem, new Date(2026, 10, 27, 9, 0, 10));
+  assert.ok(d && !d.missed);
+  markFired(rem, new Date(2026, 10, 27, 9, 0, 10)); assert.equal(rem.enabled, false);
+  // 今天稍晚的時間：改到今天
+  const later = { rule: { type: 'once', date: '2026-11-25', time: '15:30' }, enabled: false, lastFiredAt: new Date(2026, 10, 25, 15, 30).toISOString() };
+  assert.deepEqual(reenable(later, now), { moved: true, date: '2026-11-26', time: '15:30', tomorrow: false });
+});

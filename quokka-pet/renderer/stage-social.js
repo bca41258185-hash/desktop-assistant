@@ -7,8 +7,7 @@
 (function () {
   const S = window.Stage, ANIM = S.ANIM, SOC = S.SOC, EASE = ANIM.EASE, Actor = S.Actor;
   const COUPLE = new Set(['cuddle', 'groom', 'leanNap', 'walkTogether']);
-  const SLOW_COST = 7;                                          // 單格（算姿勢＋合成＋換上去）超過這麼多毫秒就算吃力
-  const DUET_MS = 28;                                           // 兩隻一起即時繪製：跟著共用迴圈，每秒最多 30 格
+  // 兩隻一起即時繪製：跟著共用迴圈的幀率（S.frameGap；預設 60 格，吃力時 stage-core 自動降級）
   let duetSeq = 0;
   S.duets = new Set();
 
@@ -121,7 +120,6 @@
       this.ctx = this.ctxFor();
       try { this.sc = this.T.build(this.ctx); } catch (e) { console.error('互動劇本建立失敗', e); this.cancel(I, 'user'); return; }
       this.phase = 'play'; this.p0 = now; this.lastDraw = 0; this.frames = 0;
-      if (S.duetSlow) { this.slow = true; S.frameGap = 46; }
       this.el = document.createElement('div'); this.el.className = 'duet';
       S.stageEl.appendChild(this.el);
       for (const a of [I, O]) { a.hideLive(); a.duetOn = true; a.el.classList.add('in-duet'); }
@@ -130,7 +128,7 @@
     playTick(now) {
       const I = this.I, O = this.O, sc = this.sc, t = (now - this.p0) / 1000;
       if (sc.handoff && !this.handed && t >= sc.handoff.t) this.handoff();
-      if (now - this.lastDraw >= DUET_MS || t >= sc.dur) {
+      if (now - this.lastDraw >= S.frameGap || t >= sc.dur) {
         this.lastDraw = now;
         const c0 = performance.now();
         const fr = sc.at(Math.min(t, sc.dur));
@@ -149,10 +147,9 @@
           const nx = res.pos[key].x;
           a.x = nx; a.place();
         }
-        // 自適應格率：量到單格耗時太高（機器吃力）就降到每秒 20 格
         const cost = performance.now() - c0;
         this.cost = this.cost == null ? cost : this.cost * .9 + cost * .1;
-        if (++this.frames === 20 && this.cost > SLOW_COST && !this.slow) { this.slow = true; S.frameGap = 46; }
+        this.frames++;
       }
       if (t >= sc.dur) this.finish();
     }
@@ -167,8 +164,6 @@
       this.ball = b;
     }
     teardown() {
-      if (this.slow) S.duetSlow = true;                          // 這台機器吃力：之後的互動直接用 20 格
-      S.frameGap = 30;
       if (this.el) { this.el.remove(); this.el = null; }
       S.duets.delete(this);
       for (const a of [this.I, this.O]) { a.duetOn = false; a.el.classList.remove('in-duet'); }

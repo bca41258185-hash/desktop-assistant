@@ -63,3 +63,12 @@ test('比較新的版本不會被當成 v1 清空', () => {
   assert.equal(d.reminders.length, 1);
   assert.equal(d.quokkas.length, 1);
 });
+
+test('省電模式 settings.saver：預設 false；舊設定檔（v2 沒有這欄、v1）補上預設值，已設定的保留', () => {
+  const { migrate, defaults } = require('../lib/store');
+  assert.equal(defaults().settings.saver, false);
+  assert.equal(migrate({ version: 2, settings: { walk: 'screen' } }).settings.saver, false);
+  assert.equal(migrate({ version: 2, settings: { saver: true } }).settings.saver, true);
+  assert.equal(migrate({ tasks: [], settings: {} }).settings.saver, false);      // v1
+  assert.equal(migrate(null).settings.saver, false);
+});

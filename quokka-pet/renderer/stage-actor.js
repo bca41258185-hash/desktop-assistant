@@ -183,7 +183,8 @@
       (N.decode ? N.decode() : Promise.resolve()).then(done, done);
     }
     // 依時間取第幾格（快取用），回傳 [格號, 取樣點]
-    static q(u, n) { const f = Math.min(n - 1, Math.floor(u * n)); return [f, (f + .5) / n]; }
+    // 60／45 格時每段的格數加倍（S.qMul），格號加上 x2 後綴（快取鍵不會和 30 格的混在一起）
+    static q(u, n) { const m = S.qMul || 1; n *= m; const f = Math.min(n - 1, Math.floor(u * n)); return [m > 1 ? f + 'x' + m : f, (f + .5) / n]; }
     // 待機時的樣子：睡覺／待機（含看游標，量化成 8 個方向）→ { key, th, pose }
     restSpec() {
       if (this.isSleeping()) return { key: 'sleep', th: -10, pose: ANIM.STILL.sleep, sleep: true };
@@ -983,15 +984,23 @@
           job.held = false; a.el.classList.remove('dragging');
           // 放到畫面外：拉回畫面內（存檔的位置也是夾過的）
           a.x = S.clamp(a.x, 44, innerWidth - 44); a.y = S.clamp(a.y, Math.min(innerHeight - 4, a.h * .8), innerHeight - 4); a.place();
-          if (!S.reduceMotion && Math.hypot(vx, vy) > 1.1) { job.fling = { vx: vx * 16, vy: vy * 16 }; job.ticks = true; S.kick(); }
+          if (!S.reduceMotion && Math.hypot(vx, vy) > 1.1) {
+            job.fling = { vx: vx * 16, vy: vy * 16 }; job.ticks = true; S.kick();
+            // 甩出去：放手當下先用預計的落點存一次（滑行＋頭暈約 3 秒，中途當掉或關掉也不會回到舊位置），停下來再存一次
+            const sum = .86 / (1 - .86);
+            S.api.savePos(a.id, { x: Math.round(S.clamp(a.x + job.fling.vx * sum, Math.max(44, a.w * .3), innerWidth - Math.max(44, a.w * .3))), y: Math.round(S.clamp(a.y + job.fling.vy * sum, Math.min(innerHeight - 4, a.h * .8), innerHeight - 4)) });
+          }
           else job.land(performance.now());
           S.reportRects(false);
         },
         tick(now) {
           if (job.fling) {                                               // 滑行減速（每格 0.86）
-            const f = job.fling; f.vx *= .86; f.vy *= .86;
-            a.x = S.clamp(a.x + f.vx, a.w * .3, innerWidth - a.w * .3); a.y = S.clamp(a.y + f.vy, a.h * .8, innerHeight - 4); a.place();
-            if (Math.hypot(f.vx, f.vy) < 1.2) { job.fling = null; job.after = { anim: ANIM.REACT.dizzy, t0: now, line: '頭好暈……下次輕一點啦。' }; }
+            // 以時間計算（原本是每 1/30 秒乘 0.86）：不管幀率多少，滑行的距離和時間都一樣
+            const f = job.fling, n = S.clamp((now - (f.t || now - 33.3)) / 33.3, 0, 3), dec = Math.pow(.86, n), mv = n > 0 ? (1 - dec) / (1 - .86) : 0;
+            f.t = now;
+            a.x = S.clamp(a.x + f.vx * mv, a.w * .3, innerWidth - a.w * .3); a.y = S.clamp(a.y + f.vy * mv, a.h * .8, innerHeight - 4); a.place();
+            f.vx *= dec; f.vy *= dec;
+            if (Math.hypot(f.vx, f.vy) < 1.2) { job.fling = null; S.api.savePos(a.id, { x: Math.round(S.clamp(a.x, 44, innerWidth - 44)), y: Math.round(a.y) }); job.after = { anim: ANIM.REACT.dizzy, t0: now, line: '頭好暈……下次輕一點啦。' }; }
             return true;
           }
           if (job.after) {

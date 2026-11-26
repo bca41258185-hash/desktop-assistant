@@ -69,10 +69,11 @@
   // 現在該不該響：回傳 { at, missed } 或 null
   function dueNow(rem, now) {
     if (!isActive(rem)) return null;
-    const fired = dateOrNull(rem.lastFiredAt), created = dateOrNull(rem.createdAt);
+    const fired = dateOrNull(rem.lastFiredAt), created = dateOrNull(rem.createdAt), enabledAt = dateOrNull(rem.enabledAt);
     const cands = [];
     const occ = latestOccurrence(rem.rule, now);
-    if (occ && (!fired || fired < occ) && (!created || created <= occ)) cands.push(occ);
+    // 建立之前、或停用期間（重新開啟 enabledAt 之前）的時段都不算，不能變成「錯過」
+    if (occ && (!fired || fired < occ) && (!created || created <= occ) && (!enabledAt || enabledAt <= occ)) cands.push(occ);
     const s = dateOrNull(rem.snoozeUntil);
     if (s && s <= now && (!fired || fired < s)) cands.push(s);
     if (!cands.length) return null;
@@ -140,6 +141,27 @@
     if (rem.snoozeUntil) { const s = dateOrNull(rem.snoozeUntil); if (!s || s <= when) delete rem.snoozeUntil; }
     if (rem.rule && rem.rule.type === 'once' && !rem.snoozeUntil) rem.enabled = false;
   }
+  // 使用者把停用的提醒重新打開（停用 → 開啟）：
+  //   - 記下 enabledAt：停用期間錯過的每天／每週時段不算「錯過」，從現在起才開始算。
+  //   - 一次性提醒的時間已經過了（響過、或停用期間過了）：直接改到「下一次的同一時間」
+  //     （今天還沒到就今天，否則明天），回傳 { moved: true, date, time, tomorrow } 讓面板提示；
+  //     不能顯示「開著」卻永遠不會響。
+  function reenable(rem, now = new Date()) {
+    if (!rem || typeof rem !== 'object') return { moved: false };
+    rem.enabled = true;
+    rem.enabledAt = now.toISOString();
+    delete rem.snoozeUntil;
+    const rule = rem.rule;
+    if (!rule || rule.type !== 'once' || !isValidRule(rule) || at(rule.date, rule.time) > now) return { moved: false };
+    let d = sameDayAt(now, rule.time);
+    if (d <= now) d = addDays(d, 1);
+    d = sameDayAt(d, rule.time);                              // 換日線（夏令時間）後再對一次時間
+    const pad = (n) => String(n).padStart(2, '0');
+    rule.date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    rule.at = d.toISOString();
+    const tomorrow = d.getDate() !== now.getDate();
+    return { moved: true, date: rule.date, time: rule.time, tomorrow };
+  }
   // 使用者按「知道了」：清掉錯過標記
   function ackMissed(rem) { if (rem && rem.missedAt) { delete rem.missedAt; return true; } return false; }
   function snooze(rem, minutes, now = new Date()) {
@@ -195,7 +217,7 @@
     return { push, flush, get size() { return pending.length; } };
   }
 
-  const api = { latestOccurrence, nextOccurrence, dueNow, nextWake, createScheduler, markFired, ackMissed, snooze, isValidRule, parseTime, parseDate,
+  const api = { latestOccurrence, nextOccurrence, dueNow, nextWake, createScheduler, markFired, ackMissed, snooze, reenable, isValidRule, parseTime, parseDate,
     digestPush, digestTexts, createNotifyBatcher, MISSED_MS, DIGEST_MAX, NOTIFY_MERGE_MS, DRIFT_CHECK_MS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

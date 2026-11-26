@@ -14,6 +14,7 @@ const { createStepTracker } = require('./stock-step');
 const { createStageManager } = require('./stage-main');
 const { createFolderWatch } = require('./folder-watch');
 const { createPosSaver } = require('./pos-saver');
+const { createPerfSender } = require('./perf');
 const { transferProblem } = require('./owner-ops');
 const { createRomance } = require('./romance');
 const { createSocialDirector } = require('./social');
@@ -411,7 +412,7 @@ function start() {
     return { ok: true, type: 'folder', item: f };
   }
   ipcMain.handle('item:update', (e, { kind, id, patch } = {}) => {
-    const it = findItem(kind, id);
+    const it = findItem(kind, id); let message;
     if (!it || !patch || typeof patch !== 'object') return { ok: false };
     if (kind === 'task') {
       if ('text' in patch && str(patch.text)) it.text = str(patch.text);
@@ -421,11 +422,20 @@ function start() {
       }
     } else if (kind === 'reminder') {
       if ('text' in patch && str(patch.text)) it.text = str(patch.text);
-      if ('enabled' in patch) { it.enabled = !!patch.enabled; if (!it.enabled) { delete it.snoozeUntil; if (it.ringing) clearAlert(it); } }
+      if ('enabled' in patch) {
+        const was = it.enabled !== false;
+        if (!patch.enabled) { it.enabled = false; delete it.snoozeUntil; if (it.ringing) clearAlert(it); }
+        else if (!was) {
+          // 重新開啟：停用期間的時段不算錯過；時間已過的一次性提醒改到下一次同一時間，並告訴使用者
+          if (countOf('reminder', it.owner) >= LIM.reminder && spent(it)) return { ok: false, message: '這隻的提醒已經滿了，先刪掉幾個吧' };
+          const mv = R.reenable(it, new Date());
+          if (mv.moved) message = `時間已經過了，改成${mv.tomorrow ? '明天' : '今天'} ${mv.time} 提醒`;
+        }
+      }
       clock.schedule();
     }
     changed();
-    return { ok: true };
+    return { ok: true, message };
   });
   ipcMain.handle('item:remove', (e, { kind, id } = {}) => {
     const list = data[KINDS[kind]]; if (!list) return { ok: false };
@@ -545,6 +555,7 @@ function start() {
     const S = data.settings, n = (v, a, b) => Math.max(a, Math.min(b, Number(v)));
     if ('stockStepPct' in patch && [1, 2, 3].includes(Number(patch.stockStepPct))) { S.stockStepPct = Number(patch.stockStepPct); steps.setStep(S.stockStepPct); }
     if ('reminderVoice' in patch) S.reminderVoice = !!patch.reminderVoice;
+    if ('saver' in patch) S.saver = !!patch.saver;
     if ('awayMinutes' in patch && isNum(Number(patch.awayMinutes)) && patch.awayMinutes !== null && String(patch.awayMinutes).trim() !== '') S.awayMinutes = n(patch.awayMinutes, 0, 240);
     if ('walk' in patch && ['home', 'screen', 'off'].includes(patch.walk)) S.walk = patch.walk;
     for (const k of ['romance', 'babies']) if (k in patch) S[k] = !!patch[k];
@@ -554,6 +565,7 @@ function start() {
     if ('fetchReturn' in patch && ['carry', 'nudge', 'alternate'].includes(patch.fetchReturn)) S.fetchReturn = patch.fetchReturn;
     changed({ quokkas: true });
     toStage('stage:settings', S);
+    sendPerf();
     return { ok: true };
   });
   ipcMain.handle('folders:pick', async (e, { owner } = {}) => {
@@ -578,10 +590,15 @@ function start() {
   ipcMain.handle('alert:ack', ack); ipcMain.handle('alert:snooze', snooze);
   ipcMain.on('alert:ack', ack); ipcMain.on('alert:snooze', snooze);
 
+  // ---- 動畫幀率：預設每秒 60 格；只有手動開「省電」才 30 格（lib/perf.js） ----
+  const perf = createPerfSender({ getSaver: () => data.settings.saver, send: (p) => stage.send('stage:perf', p) });
+  const sendPerf = (force = false) => perf.update(force);
+
   // ---- 舞台 → 主行程 ---------------------------------------------------------------
   ipcMain.on('stage:ready', (e) => {
     e.sender.send('stage:quokkas', data.quokkas.map(stageQ));
     e.sender.send('stage:settings', data.settings);
+    sendPerf(true);                                   // 舞台（重新）載入好：一定補送目前的幀率
     for (const r of data.reminders) if (r.ringing) e.sender.send('q:alert', { qid: r.owner, reminderId: r.id, text: r.text });
     stageReady = true;
     const backlog = stageBacklog.splice(0);
@@ -655,7 +672,7 @@ function start() {
   try { romance.refreshAges(); romance.dailyDecay(); sweepReminders(); } catch (e) {}
   scheduleSocial(90000);               // 開機 1.5 分鐘後才開始安排互動
   app.on('before-quit', () => { app.isQuitting = true; clearTimeout(socialTimer); stocks.stop(); clock.stop(); folderWatch.stop(); reminderNotes.flush(); posSaver.flush(); store.saveNow(); });
-  return { store, stage, data, showPanel, unhide, stocks, quotes, layers, positions, folderWatch, posSaver };
+  return { store, stage, data, showPanel, unhide, stocks, quotes, layers, positions, folderWatch, posSaver, perf };
 }
 
 module.exports = { start };
