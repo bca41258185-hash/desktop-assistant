@@ -404,7 +404,7 @@ function createStockService({
         if (i < lookupAttempts - 1) await new Promise((r) => setTimer(r, 800 * 2 ** i));
       }
     }
-    if (lastErr) return { ok: false, reason: `無法連線到報價來源，請稍後再試（${lastErr.message}）` };
+    if (lastErr) return { ok: false, offline: true, reason: `無法連線到報價來源，請稍後再試（${lastErr.message}）` };
     if (!q) return { ok: false, reason: it.market === 'tw' ? `查無此台股代號：${it.symbol}` : `查無此美股代號：${it.symbol}` };
     const r = { ok: true, symbol: it.symbol, market: it.market, name: q.name || it.symbol, quote: q };
     if (it.market === 'tw') { r.ex = q.ex; if (q.ex) exCache.set(it.symbol, q.ex); }

@@ -54,6 +54,7 @@
     });
     for (const id of [...S.actors.keys()]) if (!seen.has(id)) remove(id);
     S.family.setPouch(pouchList);
+    S.checkOverlapSoon();
     S.reportRects(); S.kick();
   }
   api.onQuokkas(setList);

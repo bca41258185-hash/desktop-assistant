@@ -119,7 +119,13 @@ function start() {
     if (!active && (idleTicks = (idleTicks + 1) % 20) !== 0) return;
     try { onRomanceEvents(romance.tickClock(dt)); } catch (e) { console.error('遊戲時鐘失敗:', e.message); }
   }, 30000);
-  setInterval(() => { try { romance.dailyDecay(); } catch (e) {} }, 3600000);
+  // 響過的一次性提醒隔天自動清掉（錯過還沒按「知道了」的留著）
+  function sweepReminders() {
+    const cut = Date.now() - 24 * 3600000, n = data.reminders.length;
+    data.reminders = data.reminders.filter((r) => !(spent(r) && !r.missedAt && new Date(r.lastFiredAt).getTime() < cut));
+    if (data.reminders.length !== n) changed();
+  }
+  setInterval(() => { try { romance.dailyDecay(); sweepReminders(); } catch (e) {} }, 3600000);
 
   let panel = null;
   function createPanel() {
@@ -275,7 +281,7 @@ function start() {
     if (!fs.existsSync(f.path)) { f.status = 'missing'; return; }
     f.status = 'ok';
     const st = { count: 0, timer: null };
-    st.w = chokidar.watch(f.path, { ignoreInitial: true, depth: 4, ignored: /(^|[\/\\])\../, awaitWriteFinish: { stabilityThreshold: 800 } });
+    st.w = chokidar.watch(f.path, { ignoreInitial: true, depth: 4, ignored: (p) => path.relative(f.path, p).split(/[\/\\]/).some((seg) => seg.startsWith('.') && seg !== '.' && seg !== '..'), awaitWriteFinish: { stabilityThreshold: 800 } });   // ignored 只看監看根目錄底下的隱藏項目
     const bump = () => {
       st.count++;
       if (st.timer) return;
@@ -315,7 +321,8 @@ function start() {
   const str = (v, n = LIMITS.text) => String(v == null ? '' : v).trim().slice(0, n);
   const nameTooLong = (v) => String(v == null ? '' : v).trim().length > LIMITS.name;   // 名字上限 12 字：超過就擋下，不偷偷截斷
   const findItem = (kind, id) => (KINDS[kind] ? data[KINDS[kind]].find((x) => x.id === id) : null);
-  const countOf = (kind, owner) => data[KINDS[kind]].filter((x) => x.owner === owner && !(kind === 'task' && x.done)).length;   // 已完成的待辦不佔名額
+  const countOf = (kind, owner) => data[KINDS[kind]].filter((x) => x.owner === owner && !(kind === 'task' && x.done) && !(kind === 'reminder' && spent(x))).length;   // 已完成的待辦不佔名額
+  const spent = (r) => r.enabled === false && r.rule && r.rule.type === 'once' && !!r.lastFiredAt && !r.ringing;   // 響過的一次性提醒
   const normName = (n) => String(n).normalize('NFKC').toLowerCase().replace(/\s+/g, '');
   const LIM = { task: LIMITS.tasksPerQuokka, reminder: LIMITS.remindersPerQuokka, stock: LIMITS.stocksPerQuokka, folder: 50 };
   const undoBox = new Map();
@@ -327,6 +334,7 @@ function start() {
     // 貼上一個存在的資料夾路徑 → 監看資料夾
     if (!p.forceType && /[\\/]/.test(text)) {
       try { if (fs.statSync(text).isDirectory()) return addFolder(text, owner); } catch (err) { /* 不是路徑就當一般文字 */ }
+      if (/^(?:[A-Za-z]:[\\/]|\\\\|\/|~[\\/])/.test(text)) return { ok: false, type: 'folder', message: '找不到這個資料夾，請確認路徑。要當成待辦嗎？', askTask: true };
     }
     let r = parseInput(text);
     if (p.forceType === 'task') r = { type: 'task', text };
@@ -340,7 +348,8 @@ function start() {
     let stockFound = null;
     if (r.type === 'stock') {
       if (data.stocks.some((s) => s.owner === owner && s.symbol === r.symbol)) return { ok: false, message: '這檔已經在盯了' };
-      const found = await stocks.lookup(r.symbol, r.market, r.ex);
+      // 查詢最多等 12 秒，不讓輸入框一直鎖著
+      const found = await Promise.race([stocks.lookup(r.symbol, r.market, r.ex), new Promise((res) => setTimeout(() => res({ ok: false, offline: true, reason: '查詢太久沒有回應，請稍後再試' }), 12000))]);
       let problem = found.ok ? null : (found.reason || '找不到這檔股票') + '。要當成待辦嗎？';
       // 使用者有打名稱（「2330 台積電」「台積電」）：查到的名稱要對得上（互相包含就算），對不上就不加入
       if (!problem && r.nameHint && found.name && found.name !== found.symbol) {
@@ -348,11 +357,15 @@ function start() {
         const a = clean(found.name), b = clean(r.nameHint);
         if (a && b && !a.includes(b) && !b.includes(a)) problem = `查到的是「${found.name}」，和你打的「${r.nameHint}」不一樣。要當成待辦嗎？`;
       }
-      if (problem && r.loose) {
+      if (problem && r.loose && !found.offline) {      // 連不上時不能斷定不是股票：照常詢問
         if (countOf('task', owner) >= LIM.task) return { ok: false, message: '這隻盯的東西太多了，先完成或交給別隻吧' };
         r = { type: 'task', text };
       } else if (problem) return { ok: false, type: 'stock', message: problem, askTask: true };
-      else stockFound = found;
+      else {
+        if (!qById(owner)) return { ok: false, message: '這隻庫卡已經不在了' };                       // 查詢期間被刪掉
+        if (data.stocks.some((s) => s.owner === owner && s.symbol === found.symbol)) return { ok: false, message: '這檔已經在盯了' };   // 查詢期間連按兩次
+        stockFound = found;
+      }
     }
     if (r.type === 'stock') {
       const found = stockFound;
@@ -373,6 +386,10 @@ function start() {
     return { ok: true, type: 'task', item };
   });
   function addFolder(p, owner) {
+    p = path.resolve(p);
+    if (countOf('folder', owner) >= LIM.folder) return { ok: false, message: '這隻看的資料夾太多了，先移掉幾個吧' };
+    // 整顆硬碟或整個家目錄太大，會拖慢電腦
+    if (p === path.parse(p).root || p === app.getPath('home')) return { ok: false, message: '這個範圍太大了，請選裡面的專案資料夾' };
     const dup = data.folders.find((f) => f.path === p);
     if (dup) return { ok: false, message: `這個資料夾已經由「${(qById(dup.owner) || {}).name || '別隻'}」負責了` };
     const f = { id: newId('f'), owner, path: p, status: 'ok', createdAt: nowISO() };
@@ -391,7 +408,7 @@ function start() {
       }
     } else if (kind === 'reminder') {
       if ('text' in patch && str(patch.text)) it.text = str(patch.text);
-      if ('enabled' in patch) { it.enabled = !!patch.enabled; if (!it.enabled && it.ringing) clearAlert(it); }
+      if ('enabled' in patch) { it.enabled = !!patch.enabled; if (!it.enabled) { delete it.snoozeUntil; if (it.ringing) clearAlert(it); } }
       clock.schedule();
     }
     changed();
@@ -579,7 +596,7 @@ function start() {
       { label: '陪我玩', submenu: [play('badminton', '羽球'), play('volleyball', '排球'), play('basketball', '籃球'), play('eat', '吃葉子'), play('hop', '跳一跳'), play('nap', '打盹')] },
       { label: '打開面板', click: () => showPanel(qid) },
       { type: 'separator' },
-      { label: '暫時藏起來 30 分鐘', click: () => hideAll(30) },
+      { label: '暫時藏起來 30 分鐘', enabled: !data.reminders.some((r) => r.ringing), click: () => hideAll(30) },   // 有提醒在響時不能藏
       { label: '結束庫卡助理', click: () => { app.isQuitting = true; app.quit(); } }
     ]).popup();
   });
@@ -602,11 +619,13 @@ function start() {
   }
 
   // ---- 啟動 ------------------------------------------------------------------------
-  stage.start();                       // 面板等使用者第一次打開才建立
-  data.folders.forEach(watchFolder);
-  syncWatchlist(); stocks.start();
-  clock.check();                       // 啟動時先處理錯過的提醒，再排下一個
-  try { romance.refreshAges(); romance.dailyDecay(); } catch (e) {}
+  // 各子系統各自保護：任何一個失敗都不能讓提醒排不起來
+  const boot = (name, fn) => { try { fn(); } catch (e) { console.error(`啟動 ${name} 失敗:`, e); } };
+  boot('舞台', () => stage.start());              // 面板等使用者第一次打開才建立
+  boot('提醒', () => clock.check());              // 先處理錯過的提醒，再排下一個
+  boot('資料夾', () => data.folders.forEach((f) => boot('資料夾 ' + f.path, () => watchFolder(f))));
+  boot('股價', () => { syncWatchlist(); stocks.start(); });
+  try { romance.refreshAges(); romance.dailyDecay(); sweepReminders(); } catch (e) {}
   scheduleSocial(90000);               // 開機 1.5 分鐘後才開始安排互動
   app.on('before-quit', () => { app.isQuitting = true; clearTimeout(socialTimer); stocks.stop(); clock.stop(); reminderNotes.flush(); store.saveNow(); });
   return { store, stage, data, showPanel, unhide };

@@ -19,6 +19,11 @@
       win.setIgnoreMouseEvents(true, { forward: true });
       win.loadFile(path.join(dir, 'renderer', 'stage.html'));
       win.once('ready-to-show', () => win.showInactive());
+      // 舞台頁面當掉或沒回應：重新載入（stage:ready 會補送名單與正在響的提醒），最多每 10 秒一次
+      let lastReload = 0;
+      const revive = () => { const t = Date.now(); if (win.isDestroyed() || t - lastReload < 10000) return; lastReload = t; try { win.webContents.reload(); } catch (e) {} };
+      win.webContents.on('render-process-gone', revive);
+      win.on('unresponsive', revive);
       const st = { win, display, rects: [], ignoring: true };
       stages.set(display.id, st);
       return st;
@@ -52,13 +57,14 @@
       }
       cursorTimer = setTimeout(poll, near ? 50 : look ? 120 : 400);
     }
-    ipcMain.on('stage:rects', (e, { rects, dragging } = {}) => {
+    ipcMain.on('stage:rects', (e, msg) => {
+      const { rects, dragging } = msg || {};
       for (const st of stages.values()) {
         if (st.win.isDestroyed() || st.win.webContents.id !== e.sender.id) continue;
         const ox = st.display.workArea.x, oy = st.display.workArea.y;
-        st.rects = (Array.isArray(rects) ? rects : []).slice(0, 500).map((r) => ({ id: r.id, x: r.x + ox, y: r.y + oy, w: r.w, h: r.h }));
-        st.dragging = !!dragging;
-        if (dragging) setIgnore(st, false);
+        st.rects = (Array.isArray(rects) ? rects : []).slice(0, 500).filter((r) => r && [r.x, r.y, r.w, r.h].every(Number.isFinite)).map((r) => ({ id: r.id, x: r.x + ox, y: r.y + oy, w: r.w, h: r.h }));
+        st.dragging = !!dragging && !paused;                 // 暫停（離開、鎖定、隱藏）時不接受拖曳狀態，舞台維持穿透
+        if (st.dragging) setIgnore(st, false);
       }
     });
     function start() { primary(); if (!cursorTimer) poll(); }

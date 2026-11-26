@@ -21,7 +21,11 @@
     if (!raw || typeof raw !== 'object') return defaults();
     if (raw.version === 2) {
       const d = defaults();
-      return { ...d, ...raw, settings: { ...d.settings, ...(raw.settings || {}) } };
+      const out = { ...d, ...raw, settings: { ...d.settings, ...(raw.settings && typeof raw.settings === 'object' ? raw.settings : {}) } };
+      // 欄位型別不對（手動改壞、同步軟體衝突）：該欄用空的，其他照讀，不讓程式起不來
+      for (const k of ['quokkas', 'tasks', 'reminders', 'stocks', 'folders']) out[k] = Array.isArray(out[k]) ? out[k].filter((x) => x && typeof x === 'object') : [];
+      if (!out.relations || typeof out.relations !== 'object' || Array.isArray(out.relations)) out.relations = {};
+      return out;
     }
     const v1 = raw, s = v1.settings || {}, d = defaults();
     const q1 = { id: 'q1', name: '庫卡', traits: s.quokkaTraits || null, pos: null, createdAt: new Date().toISOString() };
@@ -36,18 +40,21 @@
   }
 
   function createStore(file, { debounceMs = 300 } = {}) {
-    let data = defaults(), timer = null, readOnly = false;
+    let data = defaults(), timer = null; const readOnly = false;
     // 把讀不懂的檔案另存一份，絕不直接用預設值蓋掉使用者的資料
     function quarantine(tag) {
       try { fs.copyFileSync(file, file.replace(/\.json$/, '') + `.${tag}-${Date.now()}.json`); } catch (e) { /* 備份失敗不阻擋 */ }
     }
     function load() {
       let raw = null, text = null;
-      try { text = fs.readFileSync(file, 'utf-8'); }
-      catch (e) {
-        if (e.code !== 'ENOENT') {           // 暫時讀不到（被鎖住、權限）：這次用記憶體中的預設值，但不寫回去
-          console.error('讀取設定失敗:', e.message);
-          readOnly = true; data = defaults(); return data;
+      // 暫時讀不到（防毒、同步軟體鎖住）：重試幾次；還是不行就丟出去，由呼叫端告訴使用者並結束，
+      // 絕不拿空白資料繼續跑（那樣提醒不會響、新增的東西也存不了）
+      for (let i = 0; ; i++) {
+        try { text = fs.readFileSync(file, 'utf-8'); break; }
+        catch (e) {
+          if (e.code === 'ENOENT') break;
+          if (i >= 4) { const err = new Error('讀不到設定檔：' + e.message); err.code = 'CONFIG_UNREADABLE'; throw err; }
+          const until = Date.now() + 150 * (i + 1); while (Date.now() < until) { /* 短暫等待後重試 */ }
         }
       }
       if (text != null) {

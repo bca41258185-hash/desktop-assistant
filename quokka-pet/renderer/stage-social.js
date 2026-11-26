@@ -55,13 +55,25 @@
       // 發起的走過去；螢幕邊放不下時，對方也挪一下
       if (ix < 44) { ix = 44; ox = ix + side * gap; } else if (ix > W - 44) { ix = W - 44; ox = ix + side * gap; }
       if (ox < 40 || ox > W - 40) return false;
-      // 任何走位都不穿過第三隻：兩隻要走的路上（含站位）有別隻 → 這一輪取消
+      // 任何走位都不穿過第三隻：兩隻要走的路上（含站位）有別隻 → 先請待機的那隻讓路（跳到這一段的外側；
+      // 要越過這兩隻其中一隻時走靠鏡頭那一道、畫在前面繞過去）；正在忙的就等牠；等太久（7 秒）才取消
       const lo = Math.min(I.x, O.x, ix, ox) - 70, hi = Math.max(I.x, O.x, ix, ox) + 70;
-      for (const o of S.actors.values()) {
-        if (o === I || o === O || o.inPouch || Math.abs(o.y - I.y) > 40 || o === laneFor) continue;
+      const all = [...S.actors.values()].filter((o) => !o.inPouch && Math.abs(o.y - I.y) <= 40);
+      let blocked = false, n = 0;
+      for (const o of all) {
+        if (o === I || o === O || o === laneFor) continue;
         if (o.isFollow && (momOf(o) === I || momOf(o) === O)) continue;                  // 自己的小袋鼠會跟著讓開
-        if (o.x > lo && o.x < hi) return false;
+        if (!(o.x > lo && o.x < hi)) continue;
+        blocked = true;
+        if (o.job || o.mode !== 'awake' || o.isFollow) continue;
+        const cands = [];
+        for (let i = 0; i < 4; i++) cands.push(lo - 36 - 100 * (n + i), hi + 36 + 100 * (n + i));
+        cands.sort((p, q) => Math.abs(p - o.x) - Math.abs(q - o.x));
+        const tx = cands.find((c) => c > 44 && c < W - 44 && all.every((q) => q === o || Math.abs((q.sideTo != null ? q.sideTo : q.x) - c) >= 92));
+        n++;
+        if (tx != null) o.requestActivity(6, sideStepJob(o, tx, I, [I, O]));
       }
+      if (blocked) return 'wait';
       if (laneFor && (laneFor.x - I.x) * (laneFor.x - ix) <= 0) return false;            // 爸爸的路上還是會碰到媽媽：取消
       if (ox < 40 || ox > W - 40) return false;
       this.gap = gap; this.t0 = now;
@@ -79,7 +91,14 @@
     step2(now) {
       const I = this.I, O = this.O;
       if (this.phase === 'approach') {
-        if (this.t0 == null && !this.begin(now)) { this.cancel(I, 'busy'); return; }
+        if (this.t0 == null) {
+          if (this.clearT0 == null) this.clearT0 = now;
+          if (now - (this.lastBegin || 0) < 240) return;                               // 等別隻讓路時，每 0.24 秒再看一次
+          this.lastBegin = now;
+          const r = this.begin(now);
+          if (r === 'wait') { if (now - this.clearT0 > 7000) this.cancel(I, 'busy'); return; }
+          if (!r) { this.cancel(I, 'busy'); return; }
+        }
         if (Math.abs(I.y - O.y) > 40) { this.cancel(I, 'user'); return; }                 // 地面高度不同了：取消
         const a = this.mI && this.mI.tick(now), b = this.mO && this.mO.tick(now);
         if (this.waitTurn && !this.waitTurn.tick(now)) this.waitTurn = null;              // 對方：轉向走過來的那隻，等著
@@ -273,21 +292,55 @@
     }
     return clear;
   };
-  function sideStepJob(o, tx, mover) {
-    const m = o.mover(tx, { gait: 'hop', speed: 1.2, turnMs: 200 });
+  function sideStepJob(o, tx, mover, lane) {
+    const m = o.mover(tx, { gait: 'hop', speed: 1.2, turnMs: 200, lane: lane || null });
     let sub = null, p0 = 0;
     const job = { name: 'sideStep', ticks: true };
     job.start = (now) => { p0 = now; o.sideTo = tx; o.lookBucket = mover.x < o.x ? 'L' : 'R'; o.showRest(); o.lookBucket = null; };      // 先看一眼衝過來的那隻
     job.tick = (now) => {
       if (now - p0 < 220) return true;
       if (!sub && m.tick(now)) return true;
-      if (!sub) sub = o.turner((mover.x < o.x ? -1 : 1) * 30, 220);                         // 讓開後回頭看
+      if (!sub) { o.depth = 0; o.zBoost = 0; o.place(); sub = o.turner((mover.x < o.x ? -1 : 1) * 30, 220); }   // 讓開後回頭看
       return sub.tick(now);
     };
-    job.interrupt = () => { o.sideTo = null; };
-    job.end = () => { o.sideTo = null; o.th = Math.round(o.th / 15) * 15; };
+    job.interrupt = () => { o.sideTo = null; o.depth = 0; o.zBoost = 0; };
+    job.end = () => { o.sideTo = null; o.depth = 0; o.zBoost = 0; o.th = Math.round(o.th / 15) * 15; };
     job.endOpts = { rest: true };
     return job;
+  }
+
+  // =====================================================================================
+  // 通則：任何兩隻（非情侶、非跟隨期的母子）靜止時身體不得重疊。
+  // 偵測到重疊超過 2 秒 → 比較閒的那隻自己跳到空位。只在有活動結束、放下、名單變動之後檢查（平常不跑計時器）
+  // =====================================================================================
+  let ovT = 0;
+  const ovSince = new Map();
+  const OVERLAP = 60;                                           // 腳底相距小於這麼多 px（乘體型）＝身體重疊
+  S.checkOverlapSoon = function (ms = 1100) { if (!ovT) ovT = setTimeout(checkOverlap, ms); };
+  function checkOverlap() {
+    ovT = 0;
+    if (S.paused || S.mode !== 'awake') return;
+    const now = performance.now(), list = [...S.actors.values()].filter((a) => !a.inPouch && a.mode === 'awake' && !a.dragging);
+    const seen = new Set();
+    let again = false;
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j];
+      if (Math.abs(a.y - b.y) > 40 || F.close(a, b)) continue;
+      if (Math.abs(a.x - b.x) >= OVERLAP * (a.k + b.k) / 2 / S.SCALE) continue;
+      if (a.job && b.job && a.job.duet && a.job.duet === b.job.duet) continue;             // 正在一起互動：由劇本決定距離
+      const key = a.id + '|' + b.id;
+      seen.add(key); again = true;
+      if (!ovSince.has(key)) { ovSince.set(key, now); continue; }
+      if (now - ovSince.get(key) < 2000) continue;
+      const free = [a, b].filter((x) => !x.job && !x.isFollow);
+      if (!free.length) continue;                                                          // 兩隻都在忙：等牠們忙完
+      // 兩隻都閒：讓離空位比較近的那隻走
+      const dist = (x) => { const sp = x.freeSpot(100); return sp ? Math.abs(sp.x - x.x) + (sp.cross ? 200 : 0) : 1e9; };
+      free.sort((p, q) => dist(p) - dist(q));
+      if (free[0].stepAway(OVERLAP * 1.2)) ovSince.delete(key);
+    }
+    for (const k of [...ovSince.keys()]) if (!seen.has(k)) ovSince.delete(k);
+    if (again) ovT = setTimeout(checkOverlap, 700);
   }
 
   // =====================================================================================
@@ -515,7 +568,11 @@
       return false;
     }
     if (d > 700 || P.job || Math.random() > .65 || S.settings.walk === 'off') return false;
-    const side = Math.sign(a.x - P.x) || 1, tx = S.clamp(P.x + side * near, 40, innerWidth - 40);
+    // 站在伴侶旁邊有空位的那一側（那邊已經站著別隻就換另一側；兩側都沒位置就不過去）
+    const spotOk = (x) => x > 44 && x < innerWidth - 44 && [...S.actors.values()].every((o) => o === a || o === P || o.inPouch || Math.abs(o.y - a.y) > 40 || Math.abs(o.x - x) >= 96);
+    const s0 = Math.sign(a.x - P.x) || 1, side = spotOk(P.x + s0 * near) ? s0 : spotOk(P.x - s0 * near) ? null : 0;
+    if (side === 0 || side === null) return false;                                           // 另一側要越過伴侶才到得了：這一輪先不過去
+    const tx = P.x + side * near;
     const job = a.walkJob(tx, { ignore: new Set([P]), noPause: true, name: 'walk', onArrive: (ok) => { if (ok && Math.abs(P.x - a.x) < near + 30) { const p = { x: (a.x + P.x) / 2, y: a.y - 170 * a.k }; S.burst(p.x, p.y, 'heart1'); } } });
     return !!a.requestActivity(7, job);
   };

@@ -256,6 +256,7 @@
       if (line) this.say(line, { tone });
       if (rest) S.api.rest(this.id, Math.round(this.x), Math.round(this.y));
       this.breathe();
+      if (S.checkOverlapSoon) S.checkOverlapSoon();
       this.afterJob();
     }
     // 做完一件事之後：還在響鈴 → 回 L1；佇列有東西 → 間隔 1.2 秒再報；撿球；否則待機
@@ -924,34 +925,37 @@
       return job;
     }
 
-    // 附近找一個空位（離所有非家人 ≥ gap px、在螢幕內），從最近的開始找；找不到回傳 null
+    // 附近找一個空位（離所有非家人 ≥ gap px、在螢幕內），從最近的開始找 → { x, cross }；找不到回傳 null
+    // cross＝要越過別隻才到得了（兩側都被擋住時）：那就走靠鏡頭的那一道、畫在前面繞過去
     freeSpot(gap = 100) {
       const others = [...S.actors.values()].filter((o) => o !== this && !o.inPouch && Math.abs(o.y - this.y) <= 40 && !(S.family && S.family.close(this, o)));
-      const okAt = (x) => x > 44 && x < innerWidth - 44 && others.every((o) => Math.abs(o.x - x) >= gap);
-      if (okAt(this.x)) return this.x;
+      const okAt = (x) => x > 44 && x < innerWidth - 44 && others.every((o) => Math.abs((o.sideTo != null ? o.sideTo : o.x) - x) >= gap);
+      if (okAt(this.x)) return { x: this.x, cross: false, others };
       const cands = [];
       for (const o of others) cands.push(o.x - gap - 2, o.x + gap + 2);
       cands.sort((p, q) => Math.abs(p - this.x) - Math.abs(q - this.x));
-      // 不能越過別隻去找空位（那樣會穿過牠）
       const crosses = (x) => others.some((o) => (o.x - this.x) * (o.x - x) < 0);
-      for (const x of cands) if (okAt(x) && !crosses(x)) return x;
-      for (const x of cands) if (okAt(x)) return x;
+      for (const x of cands) if (okAt(x) && !crosses(x)) return { x, cross: false, others };
+      for (const x of cands) if (okAt(x)) return { x, cross: true, others };
       return null;
     }
-    // 放下時（或剛長大時）和非伴侶的距離 < 60 px：往空的方向跳開（規格 6.1）
+    // 和非伴侶的距離 < minGap px（放下時、剛長大時、或靜止重疊超過 2 秒）：自己跳到空位（規格 6.1）
     stepAway(minGap = 60) {
-      if (this.job || this.mode !== 'awake' || this.isFollow) return;
+      if (this.job || this.mode !== 'awake' || this.isFollow || this.inPouch) return false;
       let near = false;
       for (const o of S.actors.values()) {
         if (o === this || o.inPouch || Math.abs(o.y - this.y) > 40 || (S.family && S.family.close(this, o))) continue;
         if (Math.abs(o.x - this.x) < minGap) near = true;
       }
-      if (!near) return;
-      const tx = this.freeSpot(100);
-      if (tx == null || Math.abs(tx - this.x) < 3) return;
-      const a = this, m = this.mover(tx, { gait: 'hop' });
+      if (!near) return false;
+      const spot = this.freeSpot(100);
+      if (!spot || Math.abs(spot.x - this.x) < 3) return false;
+      const a = this, m = this.mover(spot.x, { gait: 'hop', lane: spot.cross ? spot.others : null });
       let sub = null;
-      this.requestActivity(6, { name: 'stepAway', ticks: true, tick(now) { if (!sub && m.tick(now)) return true; if (!sub) sub = a.turner(m.dir * 30, 220); return sub.tick(now); }, end() { a.home = a.x; S.api.savePos(a.id, { x: Math.round(a.x), y: Math.round(a.y) }); } });
+      const clean = () => { a.depth = 0; a.zBoost = 0; a.sideTo = null; };
+      a.sideTo = spot.x;
+      return !!this.requestActivity(6, { name: 'stepAway', ticks: true, tick(now) { if (!sub && m.tick(now)) return true; if (!sub) { clean(); a.place(); sub = a.turner(m.dir * 30, 220); } return sub.tick(now); },
+        interrupt: clean, end() { clean(); a.home = a.x; S.api.savePos(a.id, { x: Math.round(a.x), y: Math.round(a.y) }); } });
     }
 
     // ---- 游標：靠近時眼睛看游標；停很久湊過去聞（膽小的害羞轉開） ----------------------
