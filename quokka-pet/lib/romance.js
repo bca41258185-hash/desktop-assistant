@@ -16,8 +16,11 @@
     passGain: 1,                 // 散步經過 +1，每對每天一次
     interruptedGain: 1,          // 播放中被工作反應打斷 +1（第 5.4 節）
     togetherMin: 4, togetherMax: 10,
-    decayAfterDays: 7,           // 連續 7 天沒互動
-    decayPerDay: 2,              // 之後每天 −2
+    // 感情的時間單位是「半小時」（periodMs），不是一天：每半小時最多 +20、散步經過每半小時一次、
+    // 連續 7 個半小時（3.5 小時）沒互動之後每半小時 −2、情侶每半小時第一次互動擲一次懷孕、生完 7 個半小時內不再懷孕
+    periodMs: 30 * MIN_MS,
+    decayAfterDays: 7,           // 連續 7 個半小時沒互動（欄位名稱沿用舊的）
+    decayPerDay: 2,              // 之後每半小時 −2
     friendAt: 80,
     crushAt: 20,                 // 愛情達 20 才會「偷偷喜歡」（有伴侶就是伴侶；好朋友不算）
     flirtAt: 60,                 // 愛情達 60（互相有感覺、兩隻都單身）＝曖昧：公開（面板粉紅心）、常走在一起、不會分開太遠
@@ -30,7 +33,7 @@
     juvenileUntilMonths: 18,     // 未滿 18 個月是亞成體
     seniorFromMonths: 96,        // 滿 96 個月是年長
     conceptionP: 0.3,
-    rebreedCooldownMs: 7 * DAY_MS,
+    rebreedCooldownMs: 7 * 30 * MIN_MS,                 // 生完 3.5 小時內不再懷孕
     gestationMs: 27 * MIN_MS,
     pouchMs: 10 * MIN_MS,
     followMs: 50 * MIN_MS,
@@ -171,7 +174,17 @@
     }
 
     const nowISO = () => new Date(now()).toISOString();
-    const today = () => dayStr(now());
+    // 「這一段」＝第幾個半小時（'p' + 編號）。舊資料存的是日期字串 'YYYY-MM-DD'：當成那天 0 點的那一段
+    const slotOf = (ms) => 'p' + Math.floor(ms / C.periodMs);
+    const slotIndex = (s) => {
+      if (s == null) return NaN;
+      const str = String(s);
+      if (str[0] === 'p') return Number(str.slice(1));
+      const [y, m, d] = str.split('-').map(Number);
+      return Math.floor(new Date(y, m - 1, d).getTime() / C.periodMs);
+    };
+    const today = () => slotOf(now());
+    const slotDiff = (a, b) => slotIndex(b) - slotIndex(a);
     const byId = (id) => data.quokkas.find((q) => q.id === id) || null;
     const S = () => data.settings;
     const romanceOn = () => S().romance !== false;
@@ -386,7 +399,9 @@
       const d = today(), changed = [];
       for (const [k, r] of Object.entries(data.relations)) {
         if (!r || !r.lastTogetherDay) continue;
-        const target = Math.max(0, dayDiff(r.lastTogetherDay, d) - C.decayAfterDays);
+        const gap = slotDiff(r.lastTogetherDay, d);
+        if (!Number.isFinite(gap)) continue;
+        const target = Math.max(0, gap - C.decayAfterDays);
         const done = r.decayDays || 0;
         if (target > done) {
           const before = r.affinity;

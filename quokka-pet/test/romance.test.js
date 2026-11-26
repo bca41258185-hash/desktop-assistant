@@ -48,14 +48,14 @@ function couple(opts = {}) {
   return w;
 }
 
-test('好感度：一次互動 +4～+10，每對每天最多 +20，隔天再加', () => {
+test('好感度：一次互動 +4～+10，每對每半小時最多 +20，下一個半小時再加', () => {
   const w = world([(n) => mk(n, 'a', 'male'), (n) => mk(n, 'b', 'male')]);
   const g = w.R.onTogether('a', 'b').gained;
   assert.ok(g >= 4 && g <= 10, `gained ${g}`);
   for (let i = 0; i < 10; i++) w.R.onTogether('a', 'b');
   assert.equal(w.R.relation('a', 'b').affinity, 20);
   assert.equal(w.R.onTogether('a', 'b').gained, 0);
-  w.now.days(1);
+  w.now.add(30 * MIN);
   assert.ok(w.R.onTogether('a', 'b').gained > 0);
   assert.ok(w.R.relation('a', 'b').affinity <= 40);
 });
@@ -66,29 +66,34 @@ test('好感度最高 100', () => {
   assert.equal(w.R.relation('a', 'b').affinity, 100);
 });
 
-test('散步經過 +1，每對每天一次', () => {
+test('散步經過 +1，每對每半小時一次', () => {
   const w = world([(n) => mk(n, 'a', 'male'), (n) => mk(n, 'b', 'female')]);
   assert.equal(w.R.onPass('a', 'b').gained, 1);
   assert.equal(w.R.onPass('b', 'a').gained, 0);
-  w.now.days(1);
+  w.now.add(30 * MIN);
   assert.equal(w.R.onPass('a', 'b').gained, 1);
   assert.equal(w.R.relation('a', 'b').affinity, 2);
 });
 
-test('衰退：連續 7 天沒互動後每天 −2，補扣不重複，最低 0', () => {
+test('變淡：連續 7 個半小時沒互動後每半小時 −2（友情和愛情都是），補扣不重複，最低 0；舊資料的日期也看得懂', () => {
   const w = world([(n) => mk(n, 'a', 'male'), (n) => mk(n, 'b', 'female')]);
+  const P = 30 * MIN;
   w.R.onTogether('a', 'b');
-  const r = w.R.relation('a', 'b'); r.affinity = 50;
-  w.now.days(7); w.R.dailyDecay();
+  const r = w.R.relation('a', 'b'); r.affinity = 50; r.love = 40;
+  w.now.add(7 * P); w.R.dailyDecay();
   assert.equal(r.affinity, 50);
-  w.now.days(3); w.R.dailyDecay(); w.R.dailyDecay();
-  assert.equal(r.affinity, 44);
-  w.now.days(100); w.R.dailyDecay();
-  assert.equal(r.affinity, 0);
+  w.now.add(3 * P); w.R.dailyDecay(); w.R.dailyDecay();
+  assert.equal(r.affinity, 44); assert.equal(r.love, 34);
+  w.now.add(100 * P); w.R.dailyDecay();
+  assert.equal(r.affinity, 0); assert.equal(r.love, 0);
   // 互動後重新起算
   w.R.onTogether('a', 'b'); const v = r.affinity;
-  w.now.days(5); w.R.dailyDecay();
+  w.now.add(5 * P); w.R.dailyDecay();
   assert.equal(r.affinity, v);
+  // 舊資料：lastTogetherDay 是日期字串（那天 0 點），一樣會算
+  r.lastTogetherDay = '2026-01-09'; r.decayDays = 0; r.affinity = 60;
+  w.R.dailyDecay();
+  assert.ok(r.affinity < 60);
 });
 
 test('好朋友：不分性別，好感 ≥ 80 就是好朋友（性別不影響社交主動性）', () => {
@@ -236,7 +241,7 @@ test('近親：父母子女、兄弟姊妹、同父異母、祖孫（含已刪�
   assert.ok(R.isKin('dad', 'gs'));
 });
 
-test('懷孕：成為一對之後，每天第一次一起互動擲一次 30%', () => {
+test('懷孕：成為一對之後，每半小時第一次一起互動擲一次 30%', () => {
   const w = couple();
   assert.equal(w.q('f').pregnancy, null);    // 成為一對的那次不擲
   w.setRandom(0.5);
@@ -280,12 +285,12 @@ test('懷孕：寶寶出生或戀愛設定關閉時不懷孕；已經懷孕的�
   assert.equal(w.R.partnerOf('m'), 'f');
 });
 
-test('懷孕冷卻：同一位媽媽生完 7 天內不再懷孕', () => {
+test('懷孕冷卻：同一位媽媽生完 7 個半小時（3.5 小時）內不再懷孕', () => {
   const w = couple({ rv: 0 });
-  w.q('f').lastBirthAt = new Date(w.now() - 3 * DAY_MS).toISOString();
-  w.now.days(1); w.R.onTogether('m', 'f');
+  w.q('f').lastBirthAt = new Date(w.now() - 3 * 30 * MIN).toISOString();
+  w.now.add(30 * MIN); w.R.onTogether('m', 'f');               // 生完 2 小時
   assert.equal(w.q('f').pregnancy, null);
-  w.now.days(3); w.R.onTogether('m', 'f');     // 生完第 7 天
+  w.now.add(3 * 30 * MIN); w.R.onTogether('m', 'f');           // 生完 3.5 小時
   assert.ok(w.q('f').pregnancy);
 });
 

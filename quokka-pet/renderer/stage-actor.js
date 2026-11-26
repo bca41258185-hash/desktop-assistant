@@ -757,7 +757,7 @@
     restGap() { return (12 + (1 - this.act) * 48) * 1000 * (1 + Math.random()); }   // 活潑的每 12–24 秒、慵懶的每 1–2 分鐘走一次
     // 散步經過別隻（腳底水平 < 120 px、高度差 < 40 px）：同一對每天只報一次
     checkPass() {
-      const day = new Date().toDateString();
+      const day = 'p' + Math.floor(Date.now() / 1800000);          // 同一對每半小時只報一次（感情以半小時為單位）
       for (const o of S.actors.values()) {
         if (o === this || Math.abs(o.x - this.x) >= 120 || Math.abs(o.y - this.y) >= 40) continue;
         const key = [this.id, o.id].sort().join('|') + '|' + day;

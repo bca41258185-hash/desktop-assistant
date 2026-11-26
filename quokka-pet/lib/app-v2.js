@@ -146,7 +146,7 @@ function start() {
     data.reminders = data.reminders.filter((r) => !(spent(r) && !r.missedAt && new Date(r.lastFiredAt).getTime() < cut));
     if (data.reminders.length !== n) changed();
   }
-  setInterval(() => { try { romance.dailyDecay(); sweepReminders(); syncCrush(); } catch (e) {} }, 3600000);
+  setInterval(() => { try { romance.dailyDecay(); sweepReminders(); syncCrush(); } catch (e) {} }, 5 * 60000);   // 感情以半小時為單位：每 5 分鐘檢查一次變淡
 
   let panel = null;
   function createPanel() {
