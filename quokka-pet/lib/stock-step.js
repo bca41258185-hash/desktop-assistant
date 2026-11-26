@@ -40,7 +40,8 @@
       s.reported = step; s.lastReactAt = t; s.maxAbs = Math.max(s.maxAbs, Math.abs(step));
       return { dir, step, pct, limit };
     }
-    return { update, setStep(p) { stepPct = p; }, _state: st };
+    // 換門檻：以下一筆報價重新當基準，不會一改就反應
+    return { update, setStep(p) { if (p !== stepPct) { stepPct = p; st.clear(); } }, _state: st };
   }
   const api = { createStepTracker, levelOf, COOLDOWN_MS, HYSTERESIS_PCT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

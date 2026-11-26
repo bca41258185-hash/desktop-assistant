@@ -57,7 +57,7 @@ function start() {
     let out = n; while (taken(out)) out = `${n}${i++}`;
     return out;
   }
-  const ownerOf = (o) => (qById(o) ? o : data.settings.defaultOwner);
+  const ownerOf = (o) => { const q = qById(o); return q && romance.canOwnTasks(q) ? o : data.settings.defaultOwner; };   // 小袋鼠不能接任務
   const nowISO = () => new Date().toISOString();
 
   // ---- 舞台與面板 ---------------------------------------------------------------
@@ -315,7 +315,8 @@ function start() {
   const str = (v, n = LIMITS.text) => String(v == null ? '' : v).trim().slice(0, n);
   const nameTooLong = (v) => String(v == null ? '' : v).trim().length > LIMITS.name;   // 名字上限 12 字：超過就擋下，不偷偷截斷
   const findItem = (kind, id) => (KINDS[kind] ? data[KINDS[kind]].find((x) => x.id === id) : null);
-  const countOf = (kind, owner) => data[KINDS[kind]].filter((x) => x.owner === owner).length;
+  const countOf = (kind, owner) => data[KINDS[kind]].filter((x) => x.owner === owner && !(kind === 'task' && x.done)).length;   // 已完成的待辦不佔名額
+  const normName = (n) => String(n).normalize('NFKC').toLowerCase().replace(/\s+/g, '');
   const LIM = { task: LIMITS.tasksPerQuokka, reminder: LIMITS.remindersPerQuokka, stock: LIMITS.stocksPerQuokka, folder: 50 };
   const undoBox = new Map();
 
@@ -425,8 +426,10 @@ function start() {
     if (!romance.canOwnTasks(qById(owner))) return { ok: false, message: '小袋鼠還不能接任務' };
     if (it.owner === owner) return { ok: true };
     if (LIM[kind] && countOf(kind, owner) >= LIM[kind]) return { ok: false, message: '牠手上的事已經滿了' };
-    if (it.ringing) clearAlert(it);
+    const wasRinging = !!it.ringing;
+    if (wasRinging) clearAlert(it);
     it.owner = owner;
+    if (wasRinging) { it.ringing = true; toStage('q:alert', { qid: owner, reminderId: it.id, text: it.text }); }   // 響到一半換人：新負責人接著響
     if (kind === 'stock') syncWatchlist();
     changed();
     event(owner, 'task-added', { text: it.text || it.name || path.basename(it.path || '') });
@@ -439,7 +442,7 @@ function start() {
     if (!nm) return { ok: false, message: '幫牠取個名字吧' };
     if (nameTooLong(name)) return { ok: false, message: `名字最多 ${LIMITS.name} 個字` };
     romance.resolveNameClash(nm, null);                       // 小袋鼠的暫名讓位
-    if (data.quokkas.some((q) => q.name === nm)) return { ok: false, message: '已經有同名的庫卡了' };
+    if (data.quokkas.some((q) => normName(q.name) === normName(nm))) return { ok: false, message: '已經有同名的庫卡了' };
     // 不直接信任面板傳來的特徵：用同一個 seed 在主行程重新生成（保證格式正確）
     const seed = traits && Number.isFinite(traits.seed) ? traits.seed : undefined;
     const t = TR.generate(seed); TR.ensurePersonality(t); TR.ensureAccessory(t);
@@ -452,7 +455,7 @@ function start() {
     if (!q || !nm) return { ok: false, message: '名字不能空白' };
     if (nameTooLong(name)) return { ok: false, message: `名字最多 ${LIMITS.name} 個字` };
     romance.resolveNameClash(nm, qid);
-    if (data.quokkas.some((x) => x !== q && x.name === nm)) return { ok: false, message: '已經有同名的庫卡了' };
+    if (data.quokkas.some((x) => x !== q && normName(x.name) === normName(nm))) return { ok: false, message: '已經有同名的庫卡了' };
     q.name = nm; q.nameTemp = false; changed({ quokkas: true });
     return { ok: true };
   });
@@ -527,7 +530,7 @@ function start() {
   ipcMain.handle('baby:name', (e, { qid, name } = {}) => {
     const q = qById(qid), nm = str(name, LIMITS.name);
     if (q && nameTooLong(name)) return { ok: false, message: `名字最多 ${LIMITS.name} 個字` };
-    if (!q || !nm || data.quokkas.some((x) => x !== q && x.name === nm)) return { ok: false, message: '名字不能空白或重複' };
+    if (!q || !nm || data.quokkas.some((x) => x !== q && normName(x.name) === normName(nm))) return { ok: false, message: '名字不能空白或重複' };
     q.name = nm; q.namedAt = nowISO(); changed({ quokkas: true });
     return { ok: true };
   });
