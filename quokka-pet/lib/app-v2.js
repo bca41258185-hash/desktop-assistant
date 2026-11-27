@@ -75,7 +75,7 @@ function start() {
   let stageReady = false; const stageBacklog = [];
   const toStage = (ch, payload) => { if (!stageReady && (ch === 'q:event' || ch === 'presence')) { if (stageBacklog.length < 50) stageBacklog.push([ch, payload]); return; } stage.send(ch, payload); };
   const stageQ = (q) => ({ id: q.id, name: q.name, traits: q.traits, pos: q.home || null, stage: q.stage || 'adult', mom: q.mom || null, dad: q.dad || null,
-    growScale: (q.traits && q.traits.growScale) || null, pregnant: !!q.pregnancy, hasJoey: q.joey ? q.joey.id : null, partner: partnerId(q.id), crush: crushId(q.id), flirt: flirtId(q.id) });
+    growScale: (q.traits && q.traits.growScale) || null, pregnant: !!q.pregnancy, hasJoey: q.joey ? q.joey.id : null, partner: partnerId(q.id), crush: crushId(q.id), flirt: flirtId(q.id), holding: (data.holding && data.holding[q.id]) || null });
   function partnerId(qid) { try { return romance.partnerOf(qid) || null; } catch (e) { return null; } }
   function crushId(qid) { try { return romance.crushOf(qid) || null; } catch (e) { return null; } }
   function crushesOf(qid) { try { return romance.crushesOf ? romance.crushesOf(qid) : [romance.crushOf(qid)].filter(Boolean); } catch (e) { return []; } }
@@ -684,6 +684,7 @@ function start() {
   ipcMain.handle('quokka:delete', (e, { qid, transferTo, release } = {}) => removeQuokka(qid, transferTo, !!release));
   function removeQuokka(qid, transferTo, release) {
     const q = qById(qid); if (!q) return { ok: false };
+    if (data.holding && data.holding[qid]) { const h = data.holding[qid]; delete data.holding[qid]; if (GIFTS[h]) { const it = items()[h]; it.n = Math.min(GIFTS[h].max, it.n + 1); } }   // 手上的禮物退回道具包
     const owners = data.quokkas.filter((x) => romance.canOwnTasks(x));
     if (owners.length <= 1 && romance.canOwnTasks(q)) return { ok: false, message: release ? '最後一隻不能放生' : '最後一隻不能刪除' };
     const to = transferTo === 'delete' ? null : qById(transferTo) && transferTo !== qid && romance.canOwnTasks(qById(transferTo)) ? transferTo : (owners.find((x) => x.id !== qid) || {}).id;
@@ -934,6 +935,40 @@ function start() {
     return { ok: true, self: true, busy: true };
   }
   ipcMain.handle('item:decide', (e, { qid, item } = {}) => decideGift(qid, item));
+  // 你給牠的禮物先拿在手上（扣掉道具包的一個）；之後要自己用、留著還是送誰，牠自己挑時間決定
+  ipcMain.handle('item:hold', (e, { qid, item } = {}) => {
+    const q = qById(qid);
+    if (!q || BAG[item] !== 'gift') return { ok: false };
+    if (!romance.canOwnTasks(q)) return { ok: false, message: '小袋鼠還太小了' };
+    if (!data.holding || typeof data.holding !== 'object') data.holding = {};
+    if (data.holding[qid]) return { ok: false, message: `我手上已經有${GIFTS[data.holding[qid]] ? GIFTS[data.holding[qid]].name : '東西'}了` };
+    const it = items()[item];
+    if (it.n <= 0) return { ok: false, message: `${GIFTS[item].name}用完了，等一下會補` };
+    it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now();
+    data.holding[qid] = item; changed();
+    return { ok: true };
+  });
+  // 手上的禮物：牠決定好了 → 自己用（拿掉）／送給誰（照個性和感情挑，沒空就換下一個）／再拿一下（之後再說）
+  ipcMain.handle('item:held-decide', (e, { qid } = {}) => {
+    const q = qById(qid), item = data.holding && data.holding[qid];
+    if (!q || !GIFTS[item]) return { ok: false };
+    const ar = (q.traits && q.traits.personality && q.traits.personality.archetype) || 'easy';
+    const others = data.quokkas.filter((o) => o.id !== qid && romance.canOwnTasks(o));
+    const r = Math.random(), keep = (KEEP[ar] || .2) + (item === 'snack' ? .1 : 0);
+    if (!others.length || r < keep) { delete data.holding[qid]; changed(); return { ok: true, self: true, item }; }
+    if (r < keep + .15) return { ok: true, wait: true, item };                       // 再拿一下、捨不得
+    const crush = new Set(crushesOf(qid));
+    const pool = others.map((o) => { const rr = data.relations[[qid, o.id].sort().join('|')] || {};
+      return [o, 1 + (rr.affinity || 0) / 20 + (item === 'rose' ? (rr.love || 0) / 8 + (rr.couple ? 8 : 0) + (crush.has(o.id) ? 5 : 0) : (rr.friend ? 3 : 0)) + Math.random() * 2]; });
+    while (pool.length) {
+      let x = Math.random() * pool.reduce((a, b) => a + b[1], 0), i = 0;
+      for (; i < pool.length - 1; i++) { x -= pool[i][1]; if (x <= 0) break; }
+      const [to] = pool.splice(i, 1);
+      const g = giveGift0(qid, item, { prepaid: true, to: to.id });
+      if (g.ok) { delete data.holding[qid]; changed(); return { ...g, item }; }
+    }
+    return { ok: true, wait: true, item };                                          // 大家都沒空：先拿著
+  });
   ipcMain.on('item:offer', (e, { qid, item } = {}) => { if (BAG[item] === 'gift' && qById(qid)) toStage('item:offer', { qid, item }); });
   // 禮物掉在地上：先扣掉（不能同時丟好幾朵最後一朵玫瑰）；沒人撿、消失了就退回
   ipcMain.handle('item:ground', (e, { item } = {}) => {

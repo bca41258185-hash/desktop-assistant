@@ -60,19 +60,65 @@
     else a.say(`我拿${NAME[item]}去給${r.to}！`, { ms: 2000 });
   }
 
-  // ---- 你給牠的禮物：要自己用還是送人、送給誰，牠自己決定（主行程看個性和感情決定） ----
-  async function choose(a, item) {
-    const r = await S.api.decideItem({ qid: a.id, item }).catch(() => null);
-    if (!r || !r.ok) { a.say((r && r.message) || `${NAME[item]}送不出去`, { ms: 2400 }); return; }
-    if (r.self) {
-      if (r.busy) { a.play(item === 'snack' ? 'eat' : 'hop'); a.say(item === 'snack' ? '大家都在忙，那我自己吃！' : '大家都在忙……那這朵我先留著 ♥'); return; }
-      if (item === 'snack') { a.play('eat'); a.say(pickOne(['我自己吃！', '嘿嘿，這個我要自己吃～', '好好吃！'])); }
-      else { a.play('hop'); a.say(pickOne(['好香～我要自己留著！', '這朵是我的！', '送給我自己 ♥'])); }
-      return;
-    }
-    a.say(`我拿${NAME[item]}去給${r.to}！`, { ms: 2000 });
-  }
+  // ---- 你給牠的禮物：先拿在手上；過一陣子（看個性 20 秒～1 分半）牠自己決定要自己吃、留著，還是拿去送誰 ----
   const pickOne = (l) => l[Math.floor(Math.random() * l.length)];
+  const holdEls = new Map();                                            // qid → 手上那個道具的元素
+  const PATIENCE = { athlete: [15, 40], clingy: [15, 45], explorer: [20, 60], easy: [30, 80], shy: [40, 100], sleepy: [50, 120], cool: [40, 100] };
+  function setHolding(a, item) {
+    a.holding = item || null;
+    let el = holdEls.get(a.id);
+    if (!item) { if (el) { el.remove(); holdEls.delete(a.id); } return; }
+    if (!el) { el = document.createElement('div'); el.className = 'item-hand'; S.fxEl.appendChild(el); holdEls.set(a.id, el); }
+    el.textContent = ICON[item];
+    const [lo, hi] = PATIENCE[(a.traits && a.traits.personality && a.traits.personality.archetype) || 'easy'] || [30, 80];
+    a.holdDecideAt = performance.now() + (lo + Math.random() * (hi - lo)) * 1000;
+    follow();
+  }
+  // 手上的道具跟著牠（抱在胸前、手的位置）；正在送禮物（那段動畫自己會畫禮物）、在育兒袋裡時先藏起來
+  function follow() {
+    for (const [id, el] of holdEls) {
+      const a = S.actors.get(id);
+      if (!a) { el.remove(); holdEls.delete(id); continue; }
+      const hide = a.inPouch || (a.job && a.job.name === 'social') || S.mode === 'hidden';
+      el.hidden = !!hide;
+      if (hide) continue;
+      const p = a.toStage(88, 112), sz = Math.round(26 * a.k / .8);
+      el.style.fontSize = sz + 'px';
+      el.style.transform = `translate(${(p.x - sz / 2).toFixed(1)}px, ${(p.y - sz / 2).toFixed(1)}px) rotate(-10deg)`;
+      el.style.zIndex = (a.z || 0) + 1;
+    }
+    if (holdEls.size) requestAnimationFrame(follow);
+  }
+  const hearts = (a) => { if (S.burst) { const p = a.toStage(80, 40); S.burst(p.x, p.y, 'hearts'); } };
+  async function choose(a, item) {
+    if (a.holding) { a.say(`我手上已經有${NAME[a.holding]}了～`, { ms: 2000 }); return; }
+    const r = await S.api.holdItem({ qid: a.id, item }).catch(() => null);
+    if (!r || !r.ok) { a.say((r && r.message) || `${NAME[item]}拿不到`, { ms: 2400 }); return; }
+    if (!holdEls.size) setTimeout(() => requestAnimationFrame(follow), 0);
+    setHolding(a, item);
+    hearts(a);
+    a.say(pickOne(item === 'rose' ? ['哇，玫瑰！謝謝你！', '好香～我先拿著！', '給我的？嘿嘿 ♥'] : ['點心！謝謝！', '先拿著，等一下再想要怎麼吃～', '好香喔！']), { ms: 2200 });
+  }
+  // 每 3 秒看一下：手上有禮物、時間到了、醒著、沒在忙 → 問主行程牠決定怎麼做
+  setInterval(async () => {
+    const now = performance.now();
+    for (const a of S.actors.values()) {
+      if (!a.holding || now < (a.holdDecideAt || 0) || a.mode !== 'awake' || a.dragging || a.inPouch || (a.job && a.job.layer <= 5) || a.deciding) continue;
+      a.deciding = true;
+      const item = a.holding;
+      const r = await S.api.heldDecide(a.id).catch(() => null);
+      a.deciding = false;
+      if (!r || !r.ok) { a.holdDecideAt = now + 30000; continue; }
+      if (r.wait) { a.holdDecideAt = performance.now() + (20 + Math.random() * 40) * 1000; if (Math.random() < .4) a.say(pickOne(['這個要給誰好呢……', '再拿一下下～', '捨不得用掉耶。']), { ms: 2000 }); continue; }
+      setHolding(a, null);
+      if (r.self) {
+        if (item === 'snack') { a.play('eat'); a.say(pickOne(['我決定自己吃！', '嘿嘿，這個我要自己吃～', '好好吃！'])); }
+        else { hearts(a); a.say(pickOne(['這朵我要自己留著！', '送給我自己 ♥', '好香～放在家裡。'])); }
+      } else a.say(`我要把${NAME[item]}拿去給${r.to}！`, { ms: 2200 });
+    }
+  }, 3000);
+  // 重開程式：手上的東西還在
+  S.api.onQuokkas && S.api.onQuokkas((list) => setTimeout(() => { for (const q of list || []) { const a = q && S.actors.get(q.id); if (a && (q.holding || null) !== (a.holding || null)) setHolding(a, ICON[q.holding] ? q.holding : null); } }, 0));
   S.api.onItemOffer && S.api.onItemOffer((p) => { const a = p && S.actors.get(p.qid); if (a && ICON[p.item]) { if (a.mode !== 'awake') a.say('Zzz……', { ms: 1600 }); else choose(a, p.item); } });
 
   // 最近、醒著、有空的那一隻

@@ -1011,7 +1011,7 @@
     const q = qById(ui.sel) && !isJoey(qById(ui.sel)) ? qById(ui.sel) : workers()[0];
     if (!q) return;
     api.itemOffer({ qid: q.id, item });
-    showToast(`${GIFT_UI.find((g) => g[0] === item)[2]}交給${q.name}了，牠會自己決定要自己用還是送給誰`);
+    showToast(`${GIFT_UI.find((g) => g[0] === item)[2]}交給${q.name}了，牠會先拿在手上，之後自己決定要怎麼用`);
   }
   const relBtn = () => (S.quokkas.length < 2 ? '' : `<button type="button" class="pill-btn rel-btn${ui.relOpen ? ' on' : ''}" data-act="relToggle" data-fk="relbtn" aria-expanded="${!!ui.relOpen}" title="大家之間的關係和想法"><span aria-hidden="true">💞</span>關係圖</button>`);
   function renderFooter() {
