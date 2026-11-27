@@ -299,7 +299,7 @@ function start() {
       (by[s.owner] = by[s.owner] || []).push({ symbol: s.symbol, name: q.name || s.name || s.symbol, pct: q.pct, price: q.price, dir: q.pct < 0 ? 'down' : 'up', tick: true });
     }
     let i = 0;
-    for (const [qid, list] of Object.entries(by)) setTimeout(() => { for (const p of list) event(qid, 'stock', p); }, 1500 * i++);
+    for (const [qid, list] of Object.entries(by)) setTimeout(() => { if (!away) event(qid, 'stock', { ticks: list }); }, 1500 * i++);   // 一隻的好幾檔一起講
   }, 60000);
   ipcMain.handle('stock:report', async (e, { id, symbol } = {}) => {
     const st = data.stocks.find((x) => x.id === id) || data.stocks.find((x) => x.symbol === symbol);

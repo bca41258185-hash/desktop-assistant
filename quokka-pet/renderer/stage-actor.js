@@ -42,6 +42,10 @@
         if (L.some((x) => x.allDone)) return { anim: 'bigCheer', text: '全部完成了！太棒了！', burst: 'big', big: true };
         return { anim: 'hopJoy', text: n > 1 ? `完成 ${n} 件事了！` : '完成' + (p.text ? `「${short(p.text)}」` : '') + '！', burst: 'stars' };
       case 'stock': {
+        if (L.some((x) => x.ticks)) {                            // 每分鐘報價：一隻的好幾檔一次送來，攤開來一起講
+          const all = L.flatMap((x) => (Array.isArray(x.ticks) ? x.ticks : [x]));
+          return describe({ kind: 'stock', list: all }, beh);
+        }
         if (L.every((x) => x.tick)) {                            // 每分鐘報價：平常說話的樣子，不跳不垂頭
           const segs = [];
           L.forEach((x, i) => { if (i) segs.push({ t: '、' }); segs.push(stockSeg(x)); });

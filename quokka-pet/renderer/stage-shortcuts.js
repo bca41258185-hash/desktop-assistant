@@ -22,13 +22,14 @@
   // 排位置：頭頂上方一道平緩的弧（左右兩端稍微低一點），間距固定不會重疊；超過 6 個再往上排一排
   const GAP = 86, LIFT = 92, BEND = .0013;
   function layout(a, n) {
-    const hx = a.x, top = a.y - a.h * .9 - 48, out = [];          // 名稱的底不能蓋到臉
+    const top = a.y - a.h * .9 - 48, out = [];                     // 名稱的底不能蓋到臉
     for (let i = 0; i < n; i++) {
       const row = i < ROW ? 0 : 1, k = row ? n - ROW : Math.min(n, ROW), j = row ? i - ROW : i;
-      const dx = (j - (k - 1) / 2) * GAP;
-      let x = hx + dx, y = top - LIFT * row + BEND * dx * dx;
-      x = S.clamp(x, CELL / 2 + 2, innerWidth - CELL / 2 - 2); y = S.clamp(y, ICON / 2 + 4, innerHeight - 40);
-      out.push({ x, y });
+      // 靠近螢幕邊緣：整排一起往內移（一個一個夾會疊在一起），移過的那排改成平的（彎下來的一端會蓋到臉）
+      const half = (k - 1) / 2 * GAP, cx = S.clamp(a.x, half + CELL / 2 + 2, innerWidth - half - CELL / 2 - 2);
+      const dx = (j - (k - 1) / 2) * GAP, bend = Math.abs(cx - a.x) < 1 ? BEND * dx * dx : 0;
+      const y = S.clamp(top - LIFT * row + bend, ICON / 2 + 4 + LIFT * (1 - row) * (n > ROW ? 1 : 0), innerHeight - 40);
+      out.push({ x: cx + dx, y });
     }
     return out;
   }
@@ -69,7 +70,7 @@
     mx = x; my = y;
     const a = actorAt(x, y);
     const overFan = fan && fan.rects.some((r) => inRect(r, x, y, 6));
-    if (a && !a.dragging && a.mode === 'awake' || overFan) {
+    if (a && !a.dragging && !pressed && a.mode === 'awake' || overFan) {
       clearTimeout(hideTimer); hideTimer = 0;
       if (a && !overFan && (!fan || fan.qid !== a.id)) show(a);
       return;
@@ -81,7 +82,11 @@
   document.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY), { passive: true });
   // 主行程送來的游標位置（舞台穿透時 mousemove 不一定到得了）
   if (S.api.onCursor) S.api.onCursor((p) => { if (p && (fan || hideTimer)) onMove(p.x, p.y); });
-  document.addEventListener('mousedown', (e) => { if (fan && !e.target.closest('.shortcuts')) hide(); }, true);
+  // 按住（準備拖曳矮袋鼠）的時候不浮出；按下去就收起來
+  let pressed = false;
+  document.addEventListener('mousedown', (e) => { if (e.target.closest('.shortcuts')) return; pressed = true; loading = ''; hide(); }, true);
+  window.addEventListener('mouseup', () => { pressed = false; }, true);
+  window.addEventListener('blur', () => { pressed = false; });
 
   // 把檔案／資料夾拖到矮袋鼠身上 → 加進牠的捷徑；拖到別的地方什麼都不做（也不能讓舞台去開那個檔案）
   document.addEventListener('dragover', (e) => {
