@@ -532,7 +532,7 @@
     const q = qById(ui.sel);
     if (q && isJoey(q)) { slot.innerHTML = joeyCardHTML(q); return; }
     if (q && ui.gear) { slot.innerHTML = gearCardHTML(q); return; }
-    if (q) { slot.innerHTML = postcardsHTML((S.postcards || []).filter((c) => c.to === q.id).slice(-1)) + infoCardHTML(q) + (ui.relOpen ? relGraphHTML(ui.relSel || q.id) : ''); markRead(); return; }
+    if (q) { slot.innerHTML = postcardsHTML((S.postcards || []).filter((c) => c.to === q.id).slice(-1)) + (ui.infoShown ? infoCardHTML(q) : '') + (ui.relOpen ? relGraphHTML(ui.relSel || q.id) : ''); markRead(); return; }
     slot.innerHTML = ui.sel === 'all' ? postcardsCardHTML() + (ui.relOpen ? relGraphHTML(ui.relSel) : '') : '';
     markRead();
   }
@@ -710,7 +710,8 @@
     const open = !!ui.infoOpen;
     return `<div class="card info" role="group" aria-label="${esc(q.name)}的資訊">
       <div class="card-h">${avatar(q, 'md')}<h2>${esc(q.name)} <span class="sex ${sexCls(t)}" aria-label="${TR.sexName(t)}">${sexSym(t)}</span>${genderTag(q)}</h2>
-        <button type="button" class="link-btn" data-act="infoToggle" data-fk="i:toggle" aria-expanded="${open}" aria-controls="infoMore">${open ? '收起' : '更多資訊'}</button></div>
+        <button type="button" class="link-btn" data-act="infoToggle" data-fk="i:toggle" aria-expanded="${open}" aria-controls="infoMore">${open ? '收起' : '更多資訊'}</button>
+        <button type="button" class="pill-btn gear-btn" data-act="gear" data-fk="gear" aria-label="${esc(q.name)}的設定：改名、飾品、重新生成、放生"><span aria-hidden="true">⚙</span>設定</button></div>
       <p class="info-line">${esc(traitLine(t, ageMonths(q)))}${genderShown(q) ? `・${TR.GENDER_SPECIAL.sym} ${TR.GENDER_SPECIAL.name}` : ''}</p>
       <p class="info-line">💕 ${likeLine}${!partner && likedBy.length ? `・${likedBy.map((o) => esc(o.name)).join('、')}喜歡牠` : ''}</p>
       ${open ? `<div id="infoMore">
@@ -865,9 +866,8 @@
       : `${name} ${fmtPrice(q.price)}，${q.stale ? '暫停更新' : `${dirName} ${pct != null && isFinite(pct) ? Math.abs(pct).toFixed(2) + '%' : ''}`}`;
     return {
       cls: `stock ${q.stale ? 'is-stale' : noQuote ? 'is-wait' : dir}`,
-      html: `<div class="s-top">${ownerAv(s)}<span class="s-name" title="${esc(name)}">${esc(name)}</span>${delBtn('stock', s, name)}</div>
-        <div class="s-sym">${esc(s.symbol)}${s.market === 'us' ? '・美股' : ''}</div>
-        <div class="s-price"${noQuote ? ' aria-hidden="true"' : ''}>${esc(fmtPrice(q.price))}</div>${status}
+      html: `${ownerAv(s)}<span class="s-name" title="${esc(name)}（${esc(s.symbol)}${s.market === 'us' ? '・美股' : ''}）">${esc(name)}</span>
+        <span class="s-price"${noQuote ? ' aria-hidden="true"' : ''}>${noQuote ? '' : esc(fmtPrice(q.price))}</span>${status}${delBtn('stock', s, name)}
         <span class="sr-only">${esc(sr)}</span>`
     };
   }
@@ -905,17 +905,27 @@
     const files = batch.filter((x) => !/Dir$/.test(x.kind)).length, dirs = batch.length - files;
     return `${hm(at)} ${[files && `${files} 個檔案`, dirs && `${dirs} 個資料夾`].filter(Boolean).join('、')}變了`;
   }
+  // 捷徑：像桌面一樣的圖示格子（圖示由主行程給：.lnk 用指向的程式圖示），路徑放在滑過去的提示；點一下打開
+  const FOLDER_SVG = '<svg width="34" height="28" viewBox="0 0 36 30" aria-hidden="true"><path d="M2 5.5a2 2 0 0 1 2-2h9.5l3 3H32a2 2 0 0 1 2 2V26a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z" fill="#e9a92e"/><path d="M2 11a2 2 0 0 1 2-2h28a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z" fill="#ffcf5a"/></svg>';
+  let iconAsk = 0;
+  function loadIcons() {
+    const need = (S.folders || []).some((f) => !(ui.icons || {})[f.id]);
+    if (!need || Date.now() - iconAsk < 3000 || !api.shortcutIcons) return;
+    iconAsk = Date.now();
+    api.shortcutIcons().then((m) => { ui.icons = { ...(ui.icons || {}), ...(m || {}) }; renderLists(); }).catch(() => {});
+  }
   function folderRow(f) {
-    const base = String(f.path).split(/[\\/]/).filter(Boolean).pop() || f.path;
-    const ico = f.file ? '📄' : '📁';
-    return `<li class="row folder" ${rowAttrs('folder', f)}>${ownerAv(f)}
-      <span class="f-ico" aria-hidden="true">${ico}</span>
-      <span class="f-text"><span class="f-name">${esc(base)}</span><span class="f-path" title="${esc(f.path)}"><bdi>${esc(f.path)}</bdi></span></span>
-      ${delBtn('folder', f, f.path)}</li>`;
+    const info = (ui.icons || {})[f.id] || {};
+    const base = info.name || (String(f.path).split(/[\\/]/).filter(Boolean).pop() || f.path).replace(/\.lnk$/i, '');
+    const dir = info.dir != null ? info.dir : !f.file;
+    const ico = dir ? FOLDER_SVG : info.icon ? `<img src="${esc(info.icon)}" alt="">` : '<span class="f-doc">📄</span>';
+    return `<li class="tile folder${info.missing ? ' missing' : ''}" ${rowAttrs('folder', f)} title="${esc(f.path)}${info.missing ? '（找不到）' : ''}">
+      <button type="button" class="tile-b" data-act="openSc" data-id="${esc(f.id)}" data-fk="folder:${esc(f.id)}:open" aria-label="打開「${esc(base)}」"><span class="tile-ic">${ico}</span><span class="tile-n">${esc(base)}</span></button>
+      ${ownerAv(f)}${delBtn('folder', f, f.path)}</li>`;
   }
   function section(kind, title, count, inner, extra) {
     return `<section class="sec sec-${kind}" aria-label="${title}">
-      <div class="sec-h"><h2>${title}<span class="count">${count}</span></h2>${extra || ''}</div>${inner}</section>`;
+      <div class="sec-h"><h2>${title}</h2>${extra || ''}</div>${inner}</section>`;
   }
   function renderLists() {
     const el = $('lists');
@@ -941,16 +951,14 @@
     }
     // 股票
     const stocks = itemsOf('stock', owner);
-    if (stocks.length) out.push(section('stock', '股票', stocks.length, `<ul class="stocks">${stocks.map(stockCard).join('')}</ul><p class="tip">點一檔股票，負責的庫卡會用技術指標說說今天發生了什麼</p>${reportBox()}`));
+    if (stocks.length) out.push(section('stock', '股票', stocks.length, `<ul class="stocks">${stocks.map(stockCard).join('')}</ul><p class="tip">僅供參考，不是投資建議</p>${reportBox()}`));
     // 資料夾
     const folders = itemsOf('folder', owner);
     const addFolder = `<button type="button" class="link-btn" data-act="pickFolder" data-fk="pickFolder" aria-label="把資料夾放進捷徑">＋ 資料夾</button><button type="button" class="link-btn" data-act="pickFile" data-fk="pickFile" aria-label="把檔案放進捷徑">＋ 檔案</button>`;
-    if (folders.length) out.push(section('folder', '捷徑', folders.length, `<ul class="list">${folders.map(folderRow).join('')}</ul>`, addFolder));
+    if (folders.length) { loadIcons(); out.push(section('folder', '捷徑', folders.length, `<ul class="tiles">${folders.map(folderRow).join('')}</ul>`, `<span class="sec-acts">${addFolder}</span>`)); }
     if (!out.length) {
       const who = qName(targetOwner());
-      out.push(`<div class="empty"><p>${owner === 'all' ? '還沒有交辦任何事。' : `${esc(who)}現在沒事做。`}</p>
-        <p class="note">在上面的框打一件事，例如「回覆業主信件」「15:30 開會」「2330」，按 Enter 就交給${esc(who)}。</p>
-        <p>${addFolder}</p></div>`);
+      out.push(`<div class="empty"><p>${owner === 'all' ? '還沒有事情' : `${esc(who)}還沒有事`}，在上面打一件交給${esc(who)}</p><p>${addFolder}</p></div>`);
     } else if (!folders.length) {
       out.push(`<div class="more-row">${addFolder}</div>`);
     }
@@ -1031,12 +1039,12 @@
     } else line.innerHTML = '';
     const target = q || workers()[0];
     const tName = target ? target.name : '庫卡';
+    line.innerHTML = ''; line.hidden = true;                                       // 「○○盯著…」那一行拿掉（簡化）
     $('playRow').hidden = !!ui.globalOpen || !!ui.adding || !target;
-    if (!bagDrag) $('playRow').innerHTML = `<div class="bag-h"><span class="bag-t">道具包</span><span class="bag-hint">拖到桌面上的庫卡身上，或點一下給<b>${esc(tName)}</b></span></div>
-      <div class="bag">${PLAYS.map((p) =>
-      `<button type="button" class="bag-it" data-act="play" data-a="${p.id}" data-item="${p.id}" data-fk="play:${p.id}" aria-label="${p.name}：點一下叫${esc(tName)}${p.name === '吃葉子' ? '吃葉子' : '打' + p.name}；也可以拖到桌面上的庫卡身上" title="${p.name}：拖到桌面上的庫卡身上，或放在空地讓牠們去撿"><span aria-hidden="true">${p.icon}</span></button>`).join('')}${giftsHTML(target, tName)}</div>`;
+    if (!bagDrag) $('playRow').innerHTML = `<div class="bag" role="group" aria-label="道具包：拖到桌面上的庫卡身上，或點一下給${esc(tName)}">${PLAYS.map((p) =>
+      `<button type="button" class="bag-it" data-act="play" data-a="${p.id}" data-item="${p.id}" data-fk="play:${p.id}" aria-label="${p.name}：點一下叫${esc(tName)}${p.name === '吃葉子' ? '吃葉子' : '打' + p.name}；也可以拖到桌面上的庫卡身上" title="${p.name}：拖到桌面上的庫卡身上，或放在空地讓牠們去撿"><span aria-hidden="true">${p.icon}</span></button>`).join('')}${giftsHTML(target, tName)}</div>${relBtn()}`;
     const hasStocks = !ui.adding && !ui.globalOpen && itemsOf('stock', ui.sel).length > 0 && !(q && isJoey(q));
-    $('disclaimer').hidden = !hasStocks;
+    $('disclaimer').hidden = true;                                                    // 改成股票區塊底下的一小行
     $('footer').hidden = !!ui.globalOpen || !!ui.adding;
   }
 
@@ -1049,7 +1057,8 @@
     ui.sel = qid; ui.adding = null; ui.globalOpen = false; ui.editing = null;
     if (qid !== 'all') ui.recent = [qid].concat(ui.recent.filter((x) => x !== qid)).slice(0, 100);
     const fromMore = ui.moreOpen; ui.moreOpen = false;
-    if (changed) { ui.gear = false; ui.gearMode = null; ui.gearMsg = null; ui.forceType = null; ui.msg = null; }
+    if (changed) { ui.gear = false; ui.gearMode = null; ui.gearMsg = null; ui.forceType = null; ui.msg = null; ui.infoShown = false; }
+    else if (qid !== 'all') { ui.infoShown = !ui.infoShown; ui.gear = false; }       // 再點一次已選的頭像：打開／收起牠的資訊卡
     render();
     if (fromMore) { const c = document.querySelector(`[data-fk="chip:${CSS.escape(qid)}"]`); if (c) { c.focus({ preventScroll: true }); c.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } }
     if (changed && api.setSettings) api.setSettings({ panelOwner: qid }).catch(() => {});
@@ -1290,6 +1299,7 @@
       case 'infoToggle': ui.infoOpen = !ui.infoOpen; render(); break;
       case 'relToggle': ui.relOpen = !ui.relOpen; ui.relSel = null; render(); if (ui.relOpen) { const c = document.querySelector('.card.relg'); if (c) c.scrollIntoView({ block: 'nearest' }); } break;
       case 'relSel': ui.relSel = b.dataset.q; render(); break;
+      case 'openSc': if (api.openShortcut) api.openShortcut(b.dataset.id); break;
       case 'pcMore': ui.pcMore = !ui.pcMore; render(); break;
       case 'gift': giveGift(b.dataset.i); break;
       case 'pcOpen': (ui.pcOpen || (ui.pcOpen = new Set())).add(b.dataset.pc); render(); break;

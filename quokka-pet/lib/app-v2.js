@@ -151,8 +151,10 @@ function start() {
 
   let panel = null;
   function createPanel() {
+    // 預設開大一點：寬 720、高度幾乎整個工作區，靠螢幕左邊
+    const wa = screen.getPrimaryDisplay().workArea, pw = Math.min(720, wa.width - 40), ph = Math.min(1000, wa.height);
     panel = new BrowserWindow({
-      width: 400, height: 720, show: false, title: '庫卡助理', backgroundColor: '#f6efe3', autoHideMenuBar: true,
+      width: pw, height: ph, x: wa.x + 40, y: wa.y + Math.max(0, Math.round((wa.height - ph) / 2)), minWidth: 360, minHeight: 480, show: false, title: '庫卡助理', backgroundColor: '#f6efe3', autoHideMenuBar: true,
       webPreferences: { preload: path.join(ROOT, 'panel-preload.js'), contextIsolation: true, nodeIntegration: false }
     });
     panel.loadFile(path.join(ROOT, 'renderer', 'panel.html'));
@@ -362,9 +364,11 @@ function start() {
     iconCache.set('img:' + p, url);
     return url;
   }
-  ipcMain.handle('shortcuts:list', async (e, { qid } = {}) => {
-    const mine = data.folders.filter((f) => f.owner === qid).slice(0, 12);
-    return Promise.all(mine.map(async (f) => {
+  ipcMain.handle('shortcuts:list', async (e, { qid } = {}) => Promise.all(data.folders.filter((f) => f.owner === qid).slice(0, 12).map(shortcutInfo)));
+  // 面板的捷徑格子也要圖示：全部一次給（id → {name, dir, missing, icon}）
+  ipcMain.handle('shortcuts:icons', async () => Object.fromEntries((await Promise.all(data.folders.slice(0, 200).map(shortcutInfo))).map((x) => [x.id, x])));
+  async function shortcutInfo(f) {
+    {
       let st = null; try { st = await fs.promises.stat(f.path); } catch (err) { /* 找不到 */ }
       let name = path.basename(f.path) || f.path, dir = st ? st.isDirectory() : !f.file, icon = '';
       // Windows 捷徑（.lnk）：用它指向的程式／資料夾的圖示（直接拿 .lnk 的圖示只會是一張白紙），名稱去掉 .lnk
@@ -377,8 +381,8 @@ function start() {
       }
       if (!dir && !icon && st && st.isFile()) icon = await iconOf(f.path);
       return { id: f.id, path: f.path, name, dir, missing: !st, icon };
-    }));
-  });
+    }
+  }
   ipcMain.on('shortcut:open', async (e, { id } = {}) => {
     const f = data.folders.find((x) => x.id === id); if (!f) return;      // 只開清單裡的路徑
     const err = await shell.openPath(f.path).catch((x) => String(x));

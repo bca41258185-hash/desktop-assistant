@@ -33,6 +33,8 @@ contextBridge.exposeInMainWorld('api', {
   readPostcard: call('postcard:read'),
   replyPostcard: call('postcard:reply'),
   giveGift: call('gift:give'),
+  shortcutIcons: () => ipcRenderer.invoke('shortcuts:icons'),
+  openShortcut: (id) => ipcRenderer.send('shortcut:open', { id: String(id || '').slice(0, 80) }),
   itemGrab: (item) => ipcRenderer.send('item:grab', { item: String(item || '').slice(0, 20) }),   // 道具包：開始拖出面板
   itemRelease: (cancel) => ipcRenderer.send('item:release', { cancel: !!cancel }),
   itemOffer: (p) => ipcRenderer.send('item:offer', { qid: String((p && p.qid) || '').slice(0, 80), item: String((p && p.item) || '').slice(0, 20) }),

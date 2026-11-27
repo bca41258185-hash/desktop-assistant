@@ -547,3 +547,46 @@ body.bag-dragging, body.bag-dragging * { cursor: grabbing !important; }
 /* 文字連結式的按鈕（更多資訊、＋資料夾…）：改成淡底的小膠囊 */
 .link-btn { text-decoration: none; background: var(--accent-soft); border: 1px solid #ecd3b6; padding: 3px 10px; }
 .link-btn:hover { background: #f0d9bf; }
+
+/* ---- 簡化版（2026-11）：少字、少框，一眼看完 ---- */
+.sec { margin-top: 18px; }
+.sec-h { padding: 0 2px 6px; }
+.sec-h h2 { letter-spacing: 0; }
+.sec-acts { display: inline-flex; gap: 6px; }
+.sec-acts .link-btn { font-size: 12px; padding: 2px 9px; }
+.tip { font-size: 11px; color: #9a8f80; margin: 4px 2px 0; }
+/* 股票：一檔一顆小膠囊 */
+.stocks { display: flex; flex-wrap: wrap; gap: 8px; }
+.stock { display: inline-flex; align-items: baseline; gap: 8px; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); border-top: 1px solid var(--line); background: var(--surface); cursor: pointer; box-shadow: none; min-height: 0; position: relative; }
+.stock:hover { border-color: var(--accent); }
+.stock .s-name { font-weight: 700; font-size: 14px; max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stock .s-price { font-size: 14px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.stock .s-pct, .stock .s-stale, .stock .s-wait { font-size: 13px; font-variant-numeric: tabular-nums; }
+.stock .av.own { width: 20px; height: 20px; align-self: center; }
+.stock .del, .tile .del { position: absolute; right: -6px; top: -6px; width: 20px; height: 20px; font-size: 11px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); opacity: 0; transition: opacity .12s; }
+.stock:hover .del, .stock:focus-within .del, .tile:hover .del, .tile:focus-within .del { opacity: 1; }
+/* 捷徑：圖示格子 */
+.tiles { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 10px 6px; }
+.tile { position: relative; display: flex; flex-direction: column; align-items: center; }
+.tile-b { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%; padding: 2px; border-radius: 12px; }
+.tile-ic { width: 54px; height: 54px; border-radius: 15px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 2px 0 var(--line); display: grid; place-items: center; transition: transform .12s; }
+.tile-ic img { width: 34px; height: 34px; }
+.tile-ic .f-doc { font-size: 26px; }
+.tile-b:hover .tile-ic { transform: translateY(-2px); border-color: var(--accent); }
+.tile-n { font-size: 12px; max-width: 86px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile.missing { opacity: .5; }
+.tile .av.own { position: absolute; left: 6px; top: -4px; width: 20px; height: 20px; }
+.tile .del { right: 8px; }
+/* 提醒：一行就好 */
+.row.rem .tags .tag { font-size: 11px; }
+.empty { padding: 18px 4px; color: var(--muted); }
+.empty p + p { margin-top: 8px; }
+/* 底部：道具包＋關係圖同一行 */
+.footer .owner-line { display: none; }
+.play-row { display: flex !important; align-items: center; gap: 8px; }
+.play-row[hidden] { display: none !important; }
+.play-row .bag { display: flex; gap: 7px; flex: 0 1 auto; }
+.play-row .bag-it { width: 42px; height: 42px; aspect-ratio: auto; font-size: 20px; }
+.play-row .rel-btn { margin-left: auto; }
+@media (prefers-reduced-motion: reduce) { .tile-ic, .stock .del, .tile .del { transition: none; } }
+.stock.up, .stock.down, .stock.is-stale, .stock.is-wait, .stock.flat { border-top-color: var(--line); }
