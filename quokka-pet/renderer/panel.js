@@ -1227,7 +1227,7 @@
     // 捷徑：上面先放常用動作
     const acts = kind === 'folder' ? `<div class="menu-acts">${[['open', '📂', '打開'], ['reveal', '🔍', '在檔案總管中顯示'], ['copy', '📋', '複製路徑'], ['remove', '🗑', '從捷徑移除']].map(([a, i, t]) =>
       `<button type="button" role="menuitem" class="menu-act${a === 'remove' ? ' danger' : ''}" data-fa="${a}"><span aria-hidden="true">${i}</span>${t}</button>`).join('')}</div>` : '';
-    m.innerHTML = `${acts}${list.length ? `<p class="menu-h">把「${esc(kind === 'folder' ? (String(it.path).split(/[\/]/).filter(Boolean).pop() || it.path).replace(/\.lnk$/i, '') : itemLabel(kind, it))}」交給…</p>${search}<div class="menu-items">${list.map((q) =>
+    m.innerHTML = `${acts}${list.length ? `<p class="menu-h">把「${esc(kind === 'folder' ? (String(it.path).split(/[\\/]/).filter(Boolean).pop() || it.path).replace(/\.lnk$/i, '') : itemLabel(kind, it))}」交給…</p>${search}<div class="menu-items">${list.map((q) =>
       `<button type="button" role="menuitem" class="menu-item" data-owner="${esc(q.id)}" data-name="${esc(normName(q.name))}">${avatar(q, 'sm')}<span>${esc(q.name)}</span></button>`).join('')}</div>` : ''}`;
     m.hidden = false;
     const r = m.getBoundingClientRect();
