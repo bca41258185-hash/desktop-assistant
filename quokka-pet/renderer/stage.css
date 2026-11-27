@@ -154,3 +154,7 @@ body.hidden .leaf-fall { display: none; }
 .sc-ghost { position: absolute; left: 0; top: 0; width: 52px; height: 52px; border-radius: 14px; background: #fffaf0; box-shadow: 0 8px 14px rgba(0, 0, 0, .3); display: grid; place-items: center; pointer-events: none; z-index: 70; }
 .sc-ghost img { width: 34px; height: 34px; }
 .actor.sc-target, .sc-target { filter: drop-shadow(0 0 6px #ffd86b) drop-shadow(0 0 2px #ffb020); }
+/* 傳球接力：傳之前看對方一眼的視線 */
+.relay-sight { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 55; animation: relaySight .85s ease forwards; }
+@keyframes relaySight { 0% { opacity: 0; } 20%, 80% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .relay-sight { animation: none; } }

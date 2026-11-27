@@ -1043,6 +1043,15 @@ function start() {
     }
     return { ok: false, why };
   });
+  // 傳球接力結束：一起傳過球的兩兩加一點好感（照一起互動算，有每天上限）
+  ipcMain.on('relay:done', (e, pairs) => {
+    if (!Array.isArray(pairs)) return;
+    for (const [a, b] of pairs.slice(0, 20)) {
+      if (!qById(a) || !qById(b) || a === b) continue;
+      try { const r = romance.onTogether(a, b, 'basketball'); if (r && r.events && r.events.length) onRomanceEvents(r.events); } catch (err) { /* 算不出來就算了 */ }
+    }
+    saveAffinitySoon(); changed();
+  });
   ipcMain.on('item:offer', (e, { qid, item } = {}) => { if (BAG[item] === 'gift' && qById(qid)) toStage('item:offer', { qid, item }); });
   // 禮物掉在地上：先扣掉（不能同時丟好幾朵最後一朵玫瑰）；沒人撿、消失了就退回
   ipcMain.handle('item:ground', (e, { item } = {}) => {
