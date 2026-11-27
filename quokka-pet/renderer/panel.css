@@ -500,3 +500,33 @@ body.dragging .chip[data-drop] { background: var(--surface-2); border-style: das
 .bag-it .gift-n { right: -5px; bottom: -5px; }
 body.bag-dragging, body.bag-dragging * { cursor: grabbing !important; }
 @media (prefers-reduced-motion: reduce) { .bag-it { transition: none; } .bag-it.lift { transform: none; } }
+
+/* 關係圖 */
+.rel-btn { width: 30px; height: 30px; font-size: 15px; }
+.rel-btn.on, .gear-btn.on { background: var(--accent-soft); }
+.card.relg .card-h { gap: 8px; }
+.rg-sub { font-size: 12px; color: var(--muted); margin-left: auto; }
+.rg-map { position: relative; width: 100%; aspect-ratio: 352 / 250; margin-top: 4px; }
+.rg-map > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.rg-node { position: absolute; transform: translate(-50%, -32%); display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 0; }
+.rg-node .av { width: 44px; height: 44px; border-radius: 50%; background: var(--surface-2); box-shadow: 0 0 0 2px var(--surface), 0 1px 4px rgba(80, 60, 30, .18); transition: transform .12s; }
+.rg-node.small .av { width: 32px; height: 32px; }
+.rg-node.on .av { background: var(--ring); box-shadow: 0 0 0 3px var(--ring-line), 0 2px 6px rgba(80, 60, 30, .2); }
+.rg-node:hover .av { transform: scale(1.08); }
+.rg-name { font-size: 12px; background: rgba(255, 253, 248, .9); border-radius: 6px; padding: 0 4px; white-space: nowrap; max-width: 70px; overflow: hidden; text-overflow: ellipsis; }
+.rg-node.on .rg-name { font-weight: 700; }
+.rg-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--muted); margin: 4px 0 2px; }
+.rg-legend i { display: inline-block; width: 16px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: 4px; }
+.rg-legend .c { border-color: #e0739a; border-top-width: 4px; } .rg-legend .f { border-color: #e7b93a; } .rg-legend .k { border-color: #c9b9a0; border-top-width: 2px; }
+.rg-legend .s { border-color: #e0739a; border-top-style: dashed; border-top-width: 2px; } .rg-legend .d { border-color: #8a6a4a; border-top-style: dotted; }
+.rg-h { font-size: 13px; margin: 8px 0 6px; }
+.rg-list { list-style: none; display: grid; gap: 6px; }
+.rg-list li { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; background: var(--surface-2); border-radius: 10px; padding: 7px 9px; }
+.rg-list .av { width: 26px; height: 26px; }
+.rg-body { min-width: 0; }
+.rg-who { font-weight: 700; margin-right: 4px; }
+.rg-meter { display: inline-block; width: 54px; height: 6px; background: #eadfcd; border-radius: 3px; vertical-align: middle; margin-left: 6px; overflow: hidden; }
+.rg-meter i { display: block; height: 100%; background: #e7b93a; }
+.rg-meter.love i { background: #e0739a; }
+.rg-say { color: #4a4238; margin-top: 2px; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .rg-node .av { transition: none; } }

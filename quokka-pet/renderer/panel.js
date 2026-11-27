@@ -532,9 +532,74 @@
     const q = qById(ui.sel);
     if (q && isJoey(q)) { slot.innerHTML = joeyCardHTML(q); return; }
     if (q && ui.gear) { slot.innerHTML = gearCardHTML(q); return; }
-    if (q) { slot.innerHTML = postcardsHTML((S.postcards || []).filter((c) => c.to === q.id).slice(-1)) + infoCardHTML(q); markRead(); return; }
-    slot.innerHTML = ui.sel === 'all' ? postcardsCardHTML() : '';
+    if (q) { slot.innerHTML = postcardsHTML((S.postcards || []).filter((c) => c.to === q.id).slice(-1)) + infoCardHTML(q) + (ui.relOpen ? relGraphHTML(ui.relSel || q.id) : ''); markRead(); return; }
+    slot.innerHTML = ui.sel === 'all' ? postcardsCardHTML() + (ui.relOpen ? relGraphHTML(ui.relSel) : '') : '';
     markRead();
+  }
+
+  // ---- 關係圖：每隻一個頭像，線＝關係（伴侶、好朋友、認識、家人、偷偷喜歡）；點一隻看牠對大家的想法 ----
+  const ACT_NAME = { badminton: '打羽球', volleyball: '打排球', basketball: '打籃球', eat: '吃葉子', hop: '跳跳', selfie: '自拍', nap: '打盹' };
+  const hashStr = (t) => { let h = 2166136261; for (const c of t) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
+  const pickBy = (arr, key) => arr[hashStr(key) % arr.length];
+  const isKin = (a, b) => a.mom === b.id || a.dad === b.id || b.mom === a.id || b.dad === a.id || (!!a.mom && a.mom === b.mom) || (!!a.dad && a.dad === b.dad);
+  const parentWord = (o) => (o.traits && o.traits.sex === 'male' ? '爸爸' : '媽媽');
+  // A 對 B 的想法（兩隻對彼此的想法可以不一樣：看自己的個性、喜好，還有有沒有偷偷喜歡對方）
+  function thoughtOf(A, B, r) {
+    const P = (A.traits && A.traits.personality) || {}, Q = (B.traits && B.traits.personality) || {};
+    const ar = P.archetype || 'easy', aff = r.affinity || 0, key = A.id + '>' + B.id + ':' + Math.floor(aff / 20);
+    const both = (P.likes || []).filter((x) => (Q.likes || []).includes(x));
+    const fun = both.length ? ACT_NAME[both[0]] : ACT_NAME[(P.likes || [])[0]] || '玩';
+    const hobby = (P.hobbies || [])[0] || '曬太陽';
+    const crush = (S.crushes || {})[A.id] === B.id;
+    const by = (m, d) => m[ar] || d;
+    let t;
+    if (B.mom === A.id || B.dad === A.id) t = pickBy(isJoey(B) ? ['好小一隻，整天黏著我，好可愛。', '要快快長大喔。', '睡著的樣子最可愛了。'] : ['長這麼大了，好欣慰。', '有時候還是會擔心牠。'], key);
+    else if (A.mom === B.id || A.dad === B.id) t = pickBy([`最喜歡${parentWord(B)}了！`, '跟在後面就很安心。', '想快點跟牠一樣厲害。'], key);
+    else if (r.couple) t = pickBy(by({ athlete: [`每天都想跟牠一起${fun}。`, '牠是我最好的隊友，也是最喜歡的人。'], clingy: ['一天沒黏到牠就渾身不對勁。', '牠走去哪我就跟去哪 ♥'], shy: ['到現在跟牠說話還是會臉紅……', '有牠在就不害怕了。'], explorer: [`想跟牠一起去${hobby}，去更遠的地方。`, '跟牠在一起，每天都有新發現。'], sleepy: ['靠著牠打盹是世界上最舒服的事。', '牠的毛好暖。'], cool: ['……嗯，牠還不錯啦。（其實很喜歡）', '不用多說，牠懂我。'] }, [`想跟牠一起${hobby}，就這樣慢慢過。`, '跟牠在一起很自在。']), key);
+    else if (crush) t = pickBy(by({ shy: ['每次牠經過，我都偷偷看牠……', '要是能跟牠說上話就好了。'], cool: ['……才沒有一直看牠。', '牠今天毛好像特別亮。'], clingy: ['好想一直待在牠旁邊！', '牠會不會也喜歡我呢？'] }, [`想約牠一起${fun}，可是不敢開口。`, '牠笑起來好好看。', '牠會不會也喜歡我呢？']), key);
+    else if (r.friend) t = both.length ? pickBy([`${fun}的好搭檔！`, `跟牠${fun}最開心了。`, '好朋友就是牠了。'], key) : pickBy(['好朋友！雖然喜歡的東西不太一樣。', '跟牠在一起什麼都好玩。'], key);
+    else if (aff >= 40) t = both.length ? pickBy([`牠也喜歡${fun}，下次再約。`, '越來越熟了。'], key) : pickBy(['人不錯，想多認識牠。', '相處起來很舒服。'], key);
+    else if (aff >= 10) t = pickBy(by({ shy: ['還不太熟，有點緊張。'], cool: ['還好。'], clingy: ['好想跟牠變熟！'], explorer: ['牠在想什麼呢？好想知道。'], sleepy: ['……牠是誰來著？（打哈欠）'] }, ['打過招呼，人好像不錯。']), key);
+    else t = pickBy(by({ shy: ['還沒說過話……'], cool: ['不熟。'], clingy: ['想去找牠玩！'], explorer: ['新面孔！好奇。'], sleepy: ['Zzz……'] }, ['還不認識。']), key);
+    if (!r.couple && P.dislike && (Q.likes || []).includes(P.dislike) && aff >= 10 && hashStr(key + 'd') % 3 === 0) t += `不過牠老是找我${ACT_NAME[P.dislike] || '做我不愛的事'}……`;
+    return t;
+  }
+  function relGraphHTML(selId) {
+    const qs = S.quokkas.slice(0, 12);
+    if (qs.length < 2) return `<div class="card relg"><div class="card-h"><h2>💞 關係圖</h2></div><p class="note">只有一隻，還沒有關係可以畫。再新增一隻吧！</p></div>`;
+    const sel = qById(selId) || workers()[0] || qs[0];
+    const W = 352, H = 250, cx = W / 2, cy = H / 2 + 2, R = Math.min(96, 44 + qs.length * 10);
+    const pos = new Map(qs.map((q, i) => { const a = -Math.PI / 2 + i * 2 * Math.PI / qs.length; return [q.id, { x: +(cx + R * 1.45 * Math.cos(a)).toFixed(1), y: +(cy + R * Math.sin(a)).toFixed(1) }]; }));
+    const rel = (a, b) => (S.relations || {})[[a, b].sort().join('|')] || null;
+    const crushes = S.crushes || {};
+    let lines = '';
+    const L = (A, B, attrs) => `<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" ${attrs}/>`;
+    for (let i = 0; i < qs.length; i++) for (let j = i + 1; j < qs.length; j++) {
+      const a = qs[i], b = qs[j], r = rel(a.id, b.id) || {}, A = pos.get(a.id), B = pos.get(b.id);
+      const op = a.id === sel.id || b.id === sel.id ? 1 : .3;
+      if (r.couple) lines += L(A, B, `stroke="#e0739a" stroke-width="5" opacity="${op}"`) + `<text x="${(A.x + B.x) / 2}" y="${(A.y + B.y) / 2 - 5}" text-anchor="middle" font-size="13" opacity="${op}">💞</text>`;
+      else if (isKin(a, b)) lines += L(A, B, `stroke="#8a6a4a" stroke-width="2.5" stroke-dasharray="1 5" stroke-linecap="round" opacity="${op}"`);
+      else if (r.friend) lines += L(A, B, `stroke="#e7b93a" stroke-width="4" opacity="${op}"`);
+      else if ((r.affinity || 0) >= 10) lines += L(A, B, `stroke="#c9b9a0" stroke-width="${(1 + (r.affinity || 0) / 40).toFixed(1)}" opacity="${op}"`);
+      // 偷偷喜歡：單向的虛線箭頭（兩隻互相喜歡就兩條，各偏一邊）
+      for (const [x, y] of [[a, b], [b, a]]) if (!r.couple && crushes[x.id] === y.id) {
+        const P1 = pos.get(x.id), P2 = pos.get(y.id), dx = P2.x - P1.x, dy = P2.y - P1.y, d = Math.hypot(dx, dy) || 1, nx = -dy / d * 7, ny = dx / d * 7;
+        lines += `<line x1="${(P1.x + dx / d * 24 + nx).toFixed(1)}" y1="${(P1.y + dy / d * 24 + ny).toFixed(1)}" x2="${(P2.x - dx / d * 28 + nx).toFixed(1)}" y2="${(P2.y - dy / d * 28 + ny).toFixed(1)}" stroke="#e0739a" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#rgArrow)" opacity="${x.id === sel.id || y.id === sel.id ? 1 : .35}"/>`;
+      }
+    }
+    const nodes = qs.map((q) => { const p = pos.get(q.id);
+      return `<button type="button" class="rg-node${q.id === sel.id ? ' on' : ''}${isJoey(q) ? ' small' : ''}" data-act="relSel" data-q="${esc(q.id)}" data-fk="rg:${esc(q.id)}" style="left:${(p.x / W * 100).toFixed(2)}%;top:${(p.y / H * 100).toFixed(2)}%" aria-pressed="${q.id === sel.id}" aria-label="看${esc(q.name)}的想法">${avatar(q, 'md')}<span class="rg-name">${esc(q.name)}</span></button>`; }).join('');
+    const others = qs.filter((o) => o.id !== sel.id).map((o) => ({ o, r: rel(sel.id, o.id) || { affinity: 0, love: 0 } }))
+      .sort((x, y) => ((y.r.couple ? 1 : 0) - (x.r.couple ? 1 : 0)) || ((y.r.love || 0) + (y.r.affinity || 0)) - ((x.r.love || 0) + (x.r.affinity || 0)));
+    const tag = (o, r) => r.couple ? '<span class="itag heart">♥ 伴侶</span>' : (o.mom === sel.id || o.dad === sel.id) ? '<span class="itag">牠的寶寶</span>' : (sel.mom === o.id || sel.dad === o.id) ? `<span class="itag">${parentWord(o)}</span>` : isKin(o, sel) ? '<span class="itag">家人</span>' : crushes[sel.id] === o.id ? '<span class="itag crush">偷偷喜歡</span>' : r.friend ? '<span class="itag star">★ 好朋友</span>' : '';
+    const meter = (r) => { const f = Math.max(0, Math.min(100, Math.round(r.affinity || 0))); return `<span class="rg-meter${r.couple ? ' love' : ''}" role="img" aria-label="友情 ${f}／100"><i style="width:${f}%"></i></span>`; };
+    return `<div class="card relg" role="group" aria-label="關係圖">
+      <div class="card-h"><h2>💞 關係圖</h2><span class="rg-sub">點頭像看牠的想法</span><button type="button" class="icon-btn" data-act="relToggle" data-fk="rg:close" aria-label="收起關係圖">✕</button></div>
+      <div class="rg-map"><svg viewBox="0 0 ${W} ${H}" aria-hidden="true"><defs><marker id="rgArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#e0739a"/></marker></defs>${lines}</svg>${nodes}</div>
+      <div class="rg-legend" aria-hidden="true"><span><i class="c"></i>伴侶</span><span><i class="f"></i>好朋友</span><span><i class="k"></i>認識</span><span><i class="s"></i>偷偷喜歡</span><span><i class="d"></i>家人</span></div>
+      <h3 class="rg-h">${esc(sel.name)}在想…</h3>
+      <ul class="rg-list">${others.map(({ o, r }) => `<li>${avatar(o, 'sm')}<div class="rg-body"><span class="rg-who">${esc(o.name)}</span>${tag(o, r)}${meter(r)}<p class="rg-say">「${esc(thoughtOf(sel, o, r))}」</p></div></li>`).join('')}</ul>
+    </div>`;
   }
   // ---- 明信片：放生的庫卡約 10 分鐘後寄回來（lib/postcard.js）----
   // 極簡：預設只有一行「📮 〇〇寄來一張明信片」，點開才看四格漫畫、內文、回信
@@ -947,6 +1012,7 @@
     const r = await api.giveGift({ qid: q.id, item }).catch(() => ({ ok: false }));
     showToast(r && r.ok ? `${q.name}拿著${r.item}去找${r.to}了` : (r && r.message) || '沒有送出去');
   }
+  const relBtn = () => (S.quokkas.length < 2 ? '' : `<button type="button" class="icon-btn rel-btn${ui.relOpen ? ' on' : ''}" data-act="relToggle" data-fk="relbtn" aria-expanded="${!!ui.relOpen}" aria-label="關係圖：大家之間的關係和想法" title="關係圖">💞</button>`);
   function renderFooter() {
     const q = qById(ui.sel);
     const line = $('ownerLine');
@@ -957,10 +1023,10 @@
       const arch = archetypeName(q.traits);
       const preg = q.pregnancy ? `｜懷孕中，約 ${Math.max(1, Math.ceil((PREGNANCY_MS - (q.pregnancy.gestationMs || 0)) / 60000))} 分鐘後出生` : '';
       line.innerHTML = `<span class="ol-text">${esc(q.name)}盯著：${parts.length ? esc(parts.join('、')) : '還沒有事'}${arch ? `<span class="sep">｜</span><span class="nowrap">個性：${esc(arch)}</span>` : ''}${esc(preg)}</span>
-        <button type="button" class="icon-btn gear-btn${ui.gear ? ' on' : ''}" data-act="gear" data-fk="gear" aria-expanded="${ui.gear}" aria-label="${esc(q.name)}的設定：改名、飾品、重新生成、刪除">⚙</button>`;
+        ${relBtn()}<button type="button" class="icon-btn gear-btn${ui.gear ? ' on' : ''}" data-act="gear" data-fk="gear" aria-expanded="${ui.gear}" aria-label="${esc(q.name)}的設定：改名、飾品、重新生成、刪除">⚙</button>`;
     } else if (!q) {
       const n = S.tasks.filter((t) => !t.archivedAt && !t.done).length + S.reminders.length + S.stocks.length + S.folders.length;
-      line.innerHTML = `<span class="ol-text">${workers().length} 隻庫卡・一共盯著 ${n} 件事<span class="sep">｜</span>交給：${esc(qName(targetOwnerForAll()))}</span>`;
+      line.innerHTML = `<span class="ol-text">${workers().length} 隻庫卡・一共盯著 ${n} 件事<span class="sep">｜</span>交給：${esc(qName(targetOwnerForAll()))}</span>${relBtn()}`;
     } else line.innerHTML = '';
     const target = q || workers()[0];
     const tName = target ? target.name : '庫卡';
@@ -1221,6 +1287,8 @@
         break;
       case 'gearCancel': ui.gearMode = null; render(); break;
       case 'infoToggle': ui.infoOpen = !ui.infoOpen; render(); break;
+      case 'relToggle': ui.relOpen = !ui.relOpen; ui.relSel = null; render(); if (ui.relOpen) { const c = document.querySelector('.card.relg'); if (c) c.scrollIntoView({ block: 'nearest' }); } break;
+      case 'relSel': ui.relSel = b.dataset.q; render(); break;
       case 'pcMore': ui.pcMore = !ui.pcMore; render(); break;
       case 'gift': giveGift(b.dataset.i); break;
       case 'pcOpen': (ui.pcOpen || (ui.pcOpen = new Set())).add(b.dataset.pc); render(); break;
