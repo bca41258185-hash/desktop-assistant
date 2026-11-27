@@ -1,5 +1,5 @@
 // 舞台圖層的 preload：只開放舞台需要的通道（規格 1.5 節）
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 const on = (ch) => (cb) => ipcRenderer.on(ch, (_e, p) => cb(p));
 const str = (v, n = 80) => String(v == null ? '' : v).slice(0, n);
 const num = (v) => (Number.isFinite(Number(v)) ? Math.round(Number(v)) : 0);
@@ -37,5 +37,9 @@ contextBridge.exposeInMainWorld('stageApi', {
   pass: (a, b) => ipcRenderer.send('q:pass', { a: str(a), b: str(b) }),
   socialDone: (pairId, ok, type) => ipcRenderer.send('social:done', { pairId: str(pairId), ok: !!ok, type: str(type, 30) }),
   socialAbort: (pairId, by, reason) => ipcRenderer.send('social:abort', { pairId: str(pairId), by: str(by), reason: str(reason, 20) }),
+  shortcuts: (qid) => ipcRenderer.invoke('shortcuts:list', { qid: str(qid) }),          // [{ id, name, path, dir, missing, icon }]
+  openShortcut: (id) => ipcRenderer.send('shortcut:open', { id: str(id) }),
+  // 拖進來的檔案：在這裡換成路徑（網頁那邊拿不到路徑）
+  dropShortcuts: (qid, files) => ipcRenderer.send('shortcut:drop', { qid: str(qid), paths: (Array.isArray(files) ? files : []).slice(0, 20).map((f) => { try { return webUtils.getPathForFile(f); } catch (e) { return ''; } }).filter(Boolean).map((p) => str(p, 1024)) }),
   snooze: (reminderId) => ipcRenderer.send('alert:snooze', { reminderId: str(reminderId) })
 });

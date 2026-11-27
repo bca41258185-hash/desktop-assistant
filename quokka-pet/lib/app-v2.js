@@ -2,7 +2,7 @@
 //   Store、Router（事件交給負責的那隻）、ReminderClock、StockService、FolderWatch、PresenceWatch、
 //   StageManager（舞台圖層）、面板、右鍵選單、系統通知
 // 面板與舞台之間不直接溝通；所有修改經這裡驗證後寫入，再廣播完整快照給面板、必要的事件給舞台。
-const { app, BrowserWindow, ipcMain, dialog, screen, Menu, Notification, powerMonitor, net } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, Menu, Notification, powerMonitor, net, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
@@ -339,8 +339,39 @@ function start() {
     const add = items.filter((x) => x.kind === 'addDir').length, del = items.filter((x) => x.kind === 'unlinkDir').length;
     return [add && `新增了 ${add} 個資料夾`, del && `少了 ${del} 個資料夾`].filter(Boolean).join('、');
   }
-  const watchFolder = (f) => folderWatch.watch(f);
-  const unwatchFolder = (id) => folderWatch.unwatch(id);
+  // 資料夾項目現在是「捷徑」（資料夾或檔案），只負責打開，不再監看變動（省電腦資源）；監看的程式留著，之後要再開可以用
+  const watchFolder = () => {};
+  const unwatchFolder = () => {};
+
+  // ---- 捷徑：游標碰到矮袋鼠時浮出來的資料夾／檔案 ----------------------------------------
+  const iconCache = new Map();                               // 路徑 → 圖示（data URL）
+  async function iconOf(p) {
+    if (iconCache.has(p)) return iconCache.get(p);
+    let url = '';
+    try { const im = await app.getFileIcon(p, { size: 'large' }); url = im && !im.isEmpty() ? im.toDataURL() : ''; } catch (e) { url = ''; }
+    if (iconCache.size > 300) iconCache.clear();
+    iconCache.set(p, url);
+    return url;
+  }
+  ipcMain.handle('shortcuts:list', async (e, { qid } = {}) => {
+    const mine = data.folders.filter((f) => f.owner === qid).slice(0, 12);
+    return Promise.all(mine.map(async (f) => {
+      let st = null; try { st = await fs.promises.stat(f.path); } catch (err) { /* 找不到 */ }
+      return { id: f.id, path: f.path, name: path.basename(f.path) || f.path, dir: st ? st.isDirectory() : !f.file, missing: !st, icon: st && st.isFile() ? await iconOf(f.path) : '' };
+    }));
+  });
+  ipcMain.on('shortcut:open', async (e, { id } = {}) => {
+    const f = data.folders.find((x) => x.id === id); if (!f) return;      // 只開清單裡的路徑
+    const err = await shell.openPath(f.path).catch((x) => String(x));
+    if (err) event(f.owner, 'note', { text: `打不開「${path.basename(f.path) || f.path}」，可能被移走或刪掉了` });
+  });
+  ipcMain.on('shortcut:drop', (e, { qid, paths } = {}) => {
+    if (!qById(qid) || !Array.isArray(paths)) return;
+    let added = 0, last = null;
+    for (const p of paths.slice(0, 20)) { if (typeof p !== 'string' || !p) continue; last = addFolder(p, qid, { quiet: true }); if (last.ok) added++; }
+    if (added) event(qid, 'note', { text: added > 1 ? `好，${added} 個捷徑放好了！` : `好，「${path.basename(last.item.path)}」放進捷徑了！` });
+    else if (last && last.message) event(qid, 'note', { text: last.message });
+  });
 
   // ---- 離開偵測（PresenceWatch） --------------------------------------------------
   // 離開（一段時間沒動電腦）的前 20 分鐘：庫卡不睡，反而玩得更兇（互動加倍）；離開超過 20 分鐘才睡；鎖定螢幕一律睡
@@ -452,13 +483,8 @@ function start() {
     if (!p.forceType && /[\\/]/.test(text)) {
       const full = expandHome(text);                          // 「~/專案」→ 家目錄底下
       let st = null; try { st = fs.statSync(full); } catch (err) { /* 不是路徑就當一般文字 */ }
-      if (st && st.isDirectory()) return addFolder(full, owner);
-      // 貼的是檔案：說清楚，並提供「監看它所在的資料夾」
-      if (st && st.isFile()) {
-        const parent = path.dirname(path.resolve(full));
-        return { ok: false, type: 'folder', message: `這是檔案，不是資料夾。要監看它所在的資料夾「${path.basename(parent) || parent}」嗎？`, askParent: parent, askTask: true };
-      }
-      if (/^(?:[A-Za-z]:[\\/]|\\\\|\/|~[\\/])/.test(text)) return { ok: false, type: 'folder', message: '找不到這個資料夾，請確認路徑。要當成待辦嗎？', askTask: true };
+      if (st && (st.isDirectory() || st.isFile())) return addFolder(full, owner);     // 資料夾或檔案 → 捷徑
+      if (/^(?:[A-Za-z]:[\\/]|\\\\|\/|~[\\/])/.test(text)) return { ok: false, type: 'folder', message: '找不到這個資料夾或檔案，請確認路徑。要當成待辦嗎？', askTask: true };
     }
     let r = parseInput(text);
     if (p.forceType === 'task') r = { type: 'task', text };
@@ -514,16 +540,16 @@ function start() {
   });
   // 「~」開頭的路徑展開成家目錄（fs 不會自己展開）
   function expandHome(t) { return /^~(?=[\\/]|$)/.test(t) ? path.join(app.getPath('home'), t.slice(1)) : t; }
-  function addFolder(p, owner) {
+  function addFolder(p, owner, { quiet = false } = {}) {
     p = path.resolve(p);
-    if (countOf('folder', owner) >= LIM.folder) return { ok: false, message: '這隻看的資料夾太多了，先移掉幾個吧' };
-    // 整顆硬碟或整個家目錄太大，會拖慢電腦
-    if (p === path.parse(p).root || p === app.getPath('home')) return { ok: false, message: '這個範圍太大了，請選裡面的專案資料夾' };
-    const dup = data.folders.find((f) => f.path === p);
-    if (dup) return { ok: false, message: `這個資料夾已經由「${(qById(dup.owner) || {}).name || '別隻'}」負責了` };
-    const f = { id: newId('f'), owner, path: p, status: 'ok', createdAt: nowISO() };
-    data.folders.push(f); watchFolder(f); changed();
-    event(owner, 'note', { text: `我會幫你看著「${path.basename(p)}」` });
+    let st = null; try { st = fs.statSync(p); } catch (err) { /* 下面處理 */ }
+    if (!st) return { ok: false, message: '找不到這個資料夾或檔案' };
+    if (countOf('folder', owner) >= LIM.folder) return { ok: false, message: '這隻的捷徑太多了，先移掉幾個吧' };
+    const dup = data.folders.find((f) => f.path.toLowerCase() === p.toLowerCase());
+    if (dup) return { ok: false, message: dup.owner === owner ? `「${path.basename(p) || p}」已經在我的捷徑裡了` : `「${path.basename(p) || p}」已經是「${(qById(dup.owner) || {}).name || '別隻'}」的捷徑了` };
+    const f = { id: newId('f'), owner, path: p, file: st.isFile(), status: 'ok', createdAt: nowISO() };
+    data.folders.push(f); changed();
+    if (!quiet) event(owner, 'note', { text: `好，「${path.basename(p) || p}」放進捷徑了！` });
     return { ok: true, type: 'folder', item: f };
   }
   ipcMain.handle('item:update', (e, { kind, id, patch } = {}) => {
@@ -708,8 +734,8 @@ function start() {
     sendPerf();
     return { ok: true };
   });
-  ipcMain.handle('folders:pick', async (e, { owner } = {}) => {
-    const r = await dialog.showOpenDialog(panel, { title: '選擇要監看的資料夾（唯讀，不會改動檔案）', properties: ['openDirectory', 'multiSelections'] });
+  ipcMain.handle('folders:pick', async (e, { owner, files } = {}) => {
+    const r = await dialog.showOpenDialog(panel, files ? { title: '選擇要放進捷徑的檔案', properties: ['openFile', 'multiSelections'] } : { title: '選擇要放進捷徑的資料夾', properties: ['openDirectory', 'multiSelections'] });
     if (r.canceled) return { ok: false };
     let last = { ok: false };
     for (const p of r.filePaths) last = addFolder(p, ownerOf(owner));
@@ -876,7 +902,6 @@ function start() {
   const boot = (name, fn) => { try { fn(); } catch (e) { console.error(`啟動 ${name} 失敗:`, e); } };
   boot('舞台', () => stage.start());              // 面板等使用者第一次打開才建立
   boot('提醒', () => clock.check());              // 先處理錯過的提醒，再排下一個
-  boot('資料夾', () => { data.folders.forEach((f) => boot('資料夾 ' + f.path, () => watchFolder(f))); folderWatch.startLoop(); });
   boot('股價', () => { syncWatchlist(); stocks.start(); });
   try { romance.refreshAges(); romance.dailyDecay(); sweepReminders(); } catch (e) {}
   scheduleSocial(15000);               // 開機 15 秒後開始安排互動

@@ -319,6 +319,7 @@
       if (a.dragging && a.pressing && !a.pressing()) { try { a.job.release(0, 0); } catch (e) { S.failJob(a); } }
       if (a.dragging) drag = true;
     }
+    if (S.Shortcuts && S.mode !== 'hidden') for (const r of S.Shortcuts.rects()) rects.push(r);   // 浮出來的捷徑也要能點
     S.api.reportRects(rects, drag);
     S.reportPos();
   };

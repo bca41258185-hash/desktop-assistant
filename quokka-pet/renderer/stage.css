@@ -104,3 +104,20 @@ body.hidden .leaf-fall { display: none; }
 @keyframes flap-b { 0% { opacity: 0; } 50% { opacity: 1; } }
 .vulture .drool { animation: drool 1.4s ease-in infinite; transform-origin: 19px 67px; }
 @keyframes drool { 0% { transform: scaleY(.4); opacity: .9; } 70% { transform: scaleY(1.25); opacity: .9; } 85% { transform: scaleY(1.25) translateY(6px); opacity: 0; } 100% { transform: scaleY(.4); opacity: 0; } }
+
+/* 捷徑：游標碰到矮袋鼠時頭上浮出的資料夾／檔案 */
+.shortcuts { position: absolute; inset: 0; pointer-events: none; }
+.shortcuts .sc { position: absolute; width: 78px; padding: 0; border: 0; background: none; pointer-events: auto; cursor: pointer; text-align: center;
+  font: 12px/1.3 "Microsoft JhengHei", "Noto Sans TC", sans-serif; color: #fff;
+  opacity: 0; transform: translateY(10px) scale(.85); transition: opacity .16s ease, transform .16s ease; }
+.shortcuts.on .sc { opacity: 1; transform: none; }
+.shortcuts .ic { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; margin: 0 auto 4px; border-radius: 14px;
+  background: rgba(255,250,240,.93); box-shadow: 0 3px 10px rgba(0,0,0,.28); transition: transform .12s ease, box-shadow .12s ease; }
+.shortcuts .ic img { width: 34px; height: 34px; image-rendering: auto; }
+.shortcuts .ic b { font-size: 28px; font-weight: 400; }
+.shortcuts .lab { display: inline-block; max-width: 76px; padding: 1px 6px 2px; border-radius: 8px; background: rgba(40,34,28,.72); word-break: break-all; }   /* 深色小底：什麼顏色的桌布都看得清楚 */
+.shortcuts .sc:hover .ic, .shortcuts .sc:focus-visible .ic { transform: scale(1.15); box-shadow: 0 0 0 3px #ffd36b, 0 3px 12px rgba(0,0,0,.32); }
+.shortcuts .sc:focus { outline: none; }
+.shortcuts .sc.missing .ic { opacity: .5; }
+.shortcuts .sc.opened .ic { transform: scale(.92); }
+@media (prefers-reduced-motion: reduce) { .shortcuts .sc, .shortcuts .ic { transition: none; } }

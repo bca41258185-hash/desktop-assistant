@@ -65,7 +65,7 @@
   const hm = (t) => { if (t == null) return ''; const d = new Date(t); return isNaN(d) ? String(t) : `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
   const safeId = (s) => String(s).replace(/[^A-Za-z0-9_-]/g, '_');
   const keyOf = (kind, id) => kind + ':' + id;
-  const KIND_NAME = { task: '待辦', reminder: '提醒', stock: '股票', folder: '資料夾' };
+  const KIND_NAME = { task: '待辦', reminder: '提醒', stock: '股票', folder: '捷徑' };
   const LIST_OF = { task: 'tasks', reminder: 'reminders', stock: 'stocks', folder: 'folders' };
 
   // 名字比對用的正規化：去前後空白、全形轉半形、NFC、英文不分大小寫（規格 7.2）
@@ -400,7 +400,7 @@
   // 依目前的文字算出「判斷結果」與可以切換的類型
   function hintFor(text) {
     if (!text.trim()) return null;
-    if (looksLikePath(text)) return { line: '→ 監看這個資料夾（送出後確認路徑）', parsed: 'folder' };
+    if (looksLikePath(text)) return { line: '→ 放進捷徑（送出後確認路徑）', parsed: 'folder' };
     const r = PARSE.parseInput(text, new Date());
     if (r.type === 'none') return null;
     if (ui.forceType === 'task' && r.type !== 'task') {
@@ -840,27 +840,12 @@
     return `${hm(at)} ${[files && `${files} 個檔案`, dirs && `${dirs} 個資料夾`].filter(Boolean).join('、')}變了`;
   }
   function folderRow(f) {
-    const changes = (S.folderChanges || {})[f.id] || [];
     const base = String(f.path).split(/[\\/]/).filter(Boolean).pop() || f.path;
-    let pill, below = '', sum = '';
-    if (f.status === 'missing') {
-      pill = ['找不到', 'bad'];
-      below = '<p class="f-missing">找不到這個資料夾（改名、刪掉或隨身碟拔掉了？）。每 5 分鐘會再找一次，找回來就繼續看著。</p>';
-    } else if (f.status === 'error') {
-      pill = ['讀不到', 'bad'];
-      below = '<p class="f-missing">這個資料夾讀不到（權限不夠），先暫停監看。每 5 分鐘會再試一次，讀得到就繼續看著。</p>';
-    }
-    else if (changes.length) { pill = ['有變動', 'good']; sum = changeSummary(changes); }
-    else pill = ['看著中', 'calm'];
-    if (changes.length && f.status === 'ok') {
-      const open = ui.folderOpen.has(f.id);
-      below = `<details class="f-changes" data-fid="${esc(f.id)}"${open ? ' open' : ''}><summary data-fk="folder:${esc(f.id)}:chg">最近的變動（${changes.length}）</summary>
-        <ul>${changes.map((c) => `<li title="${esc(c.path)}"><span class="fc-k">${esc(FC_KIND[c.kind] || c.kind)}</span> ${esc(hm(c.at))}　<bdi>${esc(c.path)}</bdi></li>`).join('')}</ul></details>`;
-    }
+    const ico = f.file ? '📄' : '📁';
     return `<li class="row folder" ${rowAttrs('folder', f)}>${ownerAv(f)}
-      <span class="f-ico" aria-hidden="true">📁</span>
-      <span class="f-text"><span class="f-name">${esc(base)}</span><span class="f-path" title="${esc(f.path)}"><bdi>${esc(f.path)}</bdi></span>${sum ? `<span class="f-sum">${esc(sum)}</span>` : ''}</span>
-      <span class="pill ${pill[1]}">${esc(pill[0])}</span>${delBtn('folder', f, f.path)}${below}</li>`;
+      <span class="f-ico" aria-hidden="true">${ico}</span>
+      <span class="f-text"><span class="f-name">${esc(base)}</span><span class="f-path" title="${esc(f.path)}"><bdi>${esc(f.path)}</bdi></span></span>
+      ${delBtn('folder', f, f.path)}</li>`;
   }
   function section(kind, title, count, inner, extra) {
     return `<section class="sec sec-${kind}" aria-label="${title}">
@@ -893,8 +878,8 @@
     if (stocks.length) out.push(section('stock', '股票', stocks.length, `<ul class="stocks">${stocks.map(stockCard).join('')}</ul><p class="tip">點一檔股票，負責的庫卡會用技術指標說說今天發生了什麼</p>${reportBox()}`));
     // 資料夾
     const folders = itemsOf('folder', owner);
-    const addFolder = `<button type="button" class="link-btn" data-act="pickFolder" data-fk="pickFolder" aria-label="加入要監看的資料夾">＋ 資料夾</button>`;
-    if (folders.length) out.push(section('folder', '資料夾', folders.length, `<ul class="list">${folders.map(folderRow).join('')}</ul>`, addFolder));
+    const addFolder = `<button type="button" class="link-btn" data-act="pickFolder" data-fk="pickFolder" aria-label="把資料夾放進捷徑">＋ 資料夾</button><button type="button" class="link-btn" data-act="pickFile" data-fk="pickFile" aria-label="把檔案放進捷徑">＋ 檔案</button>`;
+    if (folders.length) out.push(section('folder', '捷徑', folders.length, `<ul class="list">${folders.map(folderRow).join('')}</ul>`, addFolder));
     if (!out.length) {
       const who = qName(targetOwner());
       out.push(`<div class="empty"><p>${owner === 'all' ? '還沒有交辦任何事。' : `${esc(who)}現在沒事做。`}</p>
@@ -948,7 +933,7 @@
     if (ui.globalOpen || ui.adding) line.innerHTML = '';
     else if (q && !isJoey(q)) {
       const c = counts(q.id);
-      const parts = [['待辦', c.task], ['提醒', c.reminder], ['股票', c.stock], ['資料夾', c.folder]].filter((x) => x[1]).map((x) => `${x[0]} ${x[1]}`);
+      const parts = [['待辦', c.task], ['提醒', c.reminder], ['股票', c.stock], ['捷徑', c.folder]].filter((x) => x[1]).map((x) => `${x[0]} ${x[1]}`);
       const arch = archetypeName(q.traits);
       const preg = q.pregnancy ? `｜懷孕中，約 ${Math.max(1, Math.ceil((PREGNANCY_MS - (q.pregnancy.gestationMs || 0)) / 60000))} 分鐘後出生` : '';
       line.innerHTML = `<span class="ol-text">${esc(q.name)}盯著：${parts.length ? esc(parts.join('、')) : '還沒有事'}${arch ? `<span class="sep">｜</span><span class="nowrap">個性：${esc(arch)}</span>` : ''}${esc(preg)}</span>
@@ -1205,9 +1190,9 @@
         break;
       }
       case 'snooze': api.snoozeAlert({ reminderId: id }); break;
-      case 'pickFolder': {
+      case 'pickFolder': case 'pickFile': {
         const owner = targetOwner(); if (!owner) break;
-        api.pickFolder({ owner }).then((res) => { if (res && res.message) showMsg(res.message, res.ok === false ? 'err' : 'ok'); }).catch(() => {});
+        api.pickFolder({ owner, files: b.dataset.act === 'pickFile' }).then((res) => { if (res && res.message) showMsg(res.message, res.ok === false ? 'err' : 'ok'); }).catch(() => {});
         break;
       }
       case 'gear': ui.gear = !ui.gear; ui.gearMode = null; ui.gearMsg = null; render();
