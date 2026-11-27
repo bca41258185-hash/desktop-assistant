@@ -131,3 +131,22 @@ body.hidden .leaf-fall { display: none; }
 .item-ring { position: absolute; border: 3px dashed #ffd86b; border-radius: 50%; pointer-events: none; box-shadow: 0 0 12px rgba(255, 216, 107, .55); z-index: 59; }
 .bubble .tone-muse { display: block; margin-top: 2px; font-weight: 400; font-size: .88em; color: #6b5a48; }   /* 報股價時牠自己的感想（第二行） */
 .item-hand { position: absolute; left: 0; top: 0; line-height: 1; pointer-events: none; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .25)); will-change: transform; }   /* 拿在手上的禮物 */
+
+/* 桌面道具籃 */
+.basket { position: absolute; left: 0; top: 0; width: 74px; height: 60px; cursor: grab; pointer-events: auto; filter: drop-shadow(0 4px 5px rgba(0, 0, 0, .3)); z-index: 40; }
+.basket[hidden] { display: none; }
+.basket svg { width: 100%; height: 100%; display: block; }
+.basket:hover { filter: drop-shadow(0 4px 5px rgba(0, 0, 0, .3)) brightness(1.06); }
+.basket.wiggle { animation: bkWiggle .6s ease; }
+@keyframes bkWiggle { 0%, 100% { rotate: 0deg; } 25% { rotate: -6deg; } 50% { rotate: 5deg; } 75% { rotate: -3deg; } }
+.basket-fan { position: absolute; inset: 0; pointer-events: none; z-index: 41; }
+.bk-it { position: absolute; width: 48px; height: 48px; border-radius: 50%; border: 0; background: #fffaf0; box-shadow: 0 3px 8px rgba(0, 0, 0, .28);
+  font-size: 24px; display: grid; place-items: center; cursor: grab; pointer-events: auto; opacity: 0; transform: scale(.4); transition: opacity .14s, transform .16s cubic-bezier(.3, 1.6, .5, 1); }
+.basket-fan.on .bk-it { opacity: 1; transform: none; }
+.bk-it:hover { transform: scale(1.15) !important; box-shadow: 0 0 0 3px #ffd86b, 0 3px 8px rgba(0, 0, 0, .28); }
+.bk-it i { position: absolute; right: -4px; bottom: -4px; font-style: normal; font-size: 11px; line-height: 16px; min-width: 16px; padding: 0 4px; border-radius: 8px; background: #9a5420; color: #fff; }
+.bk-it i:empty { display: none; }
+.bk-it.empty { opacity: .4 !important; cursor: not-allowed; }
+.bk-it.shake { animation: bkShake .35s; }
+@keyframes bkShake { 0%, 100% { translate: 0; } 25% { translate: -4px; } 75% { translate: 4px; } }
+@media (prefers-reduced-motion: reduce) { .bk-it { transition: none; } .basket.wiggle, .bk-it.shake { animation: none; } }

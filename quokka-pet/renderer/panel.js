@@ -655,9 +655,7 @@
   function postcardsCardHTML() {
     const all = (S.postcards || []).slice().reverse();
     if (!all.length) return '';
-    const shown = ui.pcMore ? all : all.slice(0, 2);
-    return `<div class="postcards" role="group" aria-label="明信片">${postcardsHTML(shown)}
-      ${all.length > 2 ? `<button type="button" class="link-btn" data-act="pcMore" data-fk="pc:more" aria-expanded="${!!ui.pcMore}">${ui.pcMore ? '收起' : `更多明信片（${all.length - 2}）`}</button>` : ''}</div>`;
+    return `<div class="postcards" role="group" aria-label="明信片">${postcardsHTML(all.slice(0, 1))}</div>`;       // 「全部」只留最新一張（簡化）
   }
   // 畫出來的明信片＝讀過了（每張只送一次）
   const readSent = new Set();
@@ -955,11 +953,11 @@
     // 資料夾
     const folders = itemsOf('folder', owner);
     const addFolder = `<button type="button" class="link-btn" data-act="pickFolder" data-fk="pickFolder" aria-label="把資料夾放進捷徑">＋ 資料夾</button><button type="button" class="link-btn" data-act="pickFile" data-fk="pickFile" aria-label="把檔案放進捷徑">＋ 檔案</button>`;
-    if (folders.length) { loadIcons(); out.push(section('folder', '捷徑', folders.length, `<ul class="tiles">${folders.map(folderRow).join('')}</ul>`, `<span class="sec-acts">${addFolder}</span>`)); }
+    if (folders.length && owner !== 'all') { loadIcons(); out.push(section('folder', '捷徑', folders.length, `<ul class="tiles">${folders.map(folderRow).join('')}</ul>`, `<span class="sec-acts">${addFolder}</span>`)); }
     if (!out.length) {
       const who = qName(targetOwner());
       out.push(`<div class="empty"><p>${owner === 'all' ? '還沒有事情' : `${esc(who)}還沒有事`}，在上面打一件交給${esc(who)}</p><p>${addFolder}</p></div>`);
-    } else if (!folders.length) {
+    } else if (!folders.length && owner !== 'all') {
       out.push(`<div class="more-row">${addFolder}</div>`);
     }
     el.innerHTML = out.join('');
@@ -1040,7 +1038,7 @@
     const target = q || workers()[0];
     const tName = target ? target.name : '庫卡';
     line.innerHTML = ''; line.hidden = true;                                       // 「○○盯著…」那一行拿掉（簡化）
-    $('playRow').hidden = !!ui.globalOpen || !!ui.adding || !target;
+    $('playRow').hidden = true;                                                      // 道具搬到桌面上的道具籃了
     if (!bagDrag) $('playRow').innerHTML = `<div class="bag" role="group" aria-label="道具包：拖到桌面上的庫卡身上，或點一下給${esc(tName)}">${PLAYS.map((p) =>
       `<button type="button" class="bag-it" data-act="play" data-a="${p.id}" data-item="${p.id}" data-fk="play:${p.id}" aria-label="${p.name}：點一下叫${esc(tName)}${p.name === '吃葉子' ? '吃葉子' : '打' + p.name}；也可以拖到桌面上的庫卡身上" title="${p.name}：拖到桌面上的庫卡身上，或放在空地讓牠們去撿"><span aria-hidden="true">${p.icon}</span></button>`).join('')}${giftsHTML(target, tName)}</div>`;
     const hasStocks = !ui.adding && !ui.globalOpen && itemsOf('stock', ui.sel).length > 0 && !(q && isJoey(q));

@@ -930,6 +930,21 @@ function start() {
     it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now();
     changed(); return { ok: true };
   });
+  // ---- 桌面道具籃：數量、位置（螢幕比例）、右鍵選單 ----
+  ipcMain.handle('items:counts', () => itemsView());
+  ipcMain.handle('basket:get', () => ({ pos: (data.settings.basket && data.settings.basket.pos) || null, hiddenUntil: (data.settings.basket && data.settings.basket.hiddenUntil) || 0 }));
+  ipcMain.on('basket:pos', (e, { fx, fy } = {}) => {
+    if (!isNum(fx) || !isNum(fy)) return;
+    data.settings.basket = { ...(data.settings.basket || {}), pos: { fx: Math.max(0, Math.min(1, fx)), fy: Math.max(0, Math.min(1, fy)) } };
+    changed();
+  });
+  ipcMain.on('basket:menu', (e) => {
+    const set = (patch) => { data.settings.basket = { ...(data.settings.basket || {}), ...patch }; changed(); toStage('basket:cmd', patch); };
+    stage.popupMenu(Menu.buildFromTemplate([
+      { label: '道具籃收起來 30 分鐘', click: () => set({ hiddenUntil: Date.now() + 30 * 60000 }) },
+      { label: '放回右下角', click: () => set({ pos: null }) }
+    ]), e.sender);
+  });
   // 給某隻禮物：要自己用還是送人、送給誰，都由牠自己決定（看個性和跟大家的感情，每次不一定一樣）
   const STRANGER = { snack: 2.5, rose: .5 };                 // 還不熟的同伴：點心常常拿去送（交朋友），玫瑰偶爾
   const KEEP = { sleepy: .4, cool: .4, shy: .3, athlete: .25, explorer: .25, easy: .2, clingy: .1 };

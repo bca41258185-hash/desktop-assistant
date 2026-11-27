@@ -320,7 +320,8 @@
       if (a.dragging) drag = true;
     }
     if (S.Shortcuts && S.mode !== 'hidden') for (const r of S.Shortcuts.rects()) rects.push(r);
-    if (S.Items && S.mode !== 'hidden') for (const r of S.Items.rects()) rects.push(r);           // 禮物「自己用／送給誰」的選單也要能點   // 浮出來的捷徑也要能點
+    if (S.Items && S.mode !== 'hidden') for (const r of S.Items.rects()) rects.push(r);
+    if (S.Basket && S.mode !== 'hidden') { for (const r of S.Basket.rects()) rects.push(r); if (S.Basket.dragging()) drag = true; }   // 道具籃（和彈出來的道具）；拿著道具或搬籃子時整個舞台可點           // 禮物「自己用／送給誰」的選單也要能點   // 浮出來的捷徑也要能點
     S.api.reportRects(rects, drag);
     S.reportPos();
   };

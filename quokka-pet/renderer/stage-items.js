@@ -134,17 +134,19 @@
   }
   const floorNear = (x) => { const a = finder(x) || [...S.actors.values()][0]; return a ? a.y : innerHeight - 4; };
 
-  async function drop(item, x, y) {
+  async function drop(item, x, y, vx = 0, vy = 0) {
+    const cap = (v, m) => Math.max(-m, Math.min(m, v));
+    vx = cap(vx, 1600); vy = cap(vy, 1400);
     // 排球、籃球：變成真的球，交給最近的那隻（球停下來牠就會去撿，抱回自己站的地方）
     if (BALL[item]) {
       const a = finder(x);
-      if (a) { a.throwX = a.x; new S.Ball(a, BALL[item], x, Math.min(y, a.y - 20), 0, 0, null); a.say('咦，有球！', { ms: 1600 }); return; }
+      if (a) { a.throwX = a.x; new S.Ball(a, BALL[item], x, Math.min(y, a.y - 20), vx * a.k, vy * a.k, null); a.say(Math.hypot(vx, vy) > 500 ? '球飛出去了！我去撿！' : '咦，有球！', { ms: 1600 }); return; }
     }
     if (!PLAY.has(item)) {
       const r = await S.api.groundItem(item).catch(() => null);
       if (!r || !r.ok) return;
     }
-    const g = { item, x, y, vy: 0, el: mk('item-ground', item), floor: floorNear(x), born: performance.now(), tries: new Set(), who: null };
+    const g = { item, x, y, vx: vx * .6, vy: Math.min(vy, 0) * .6, el: mk('item-ground', item), floor: floorNear(x), born: performance.now(), tries: new Set(), who: null };
     ground.add(g);
     place(g);
     fall(g);
@@ -155,8 +157,13 @@
     const step = (now) => {
       if (!ground.has(g)) return;
       const dt = Math.min(.05, (now - last) / 1000); last = now;
-      g.vy += 2200 * dt; g.y += g.vy * dt;
-      if (g.y >= g.floor) { g.y = g.floor; if (g.vy > 300) g.vy = -g.vy * .35; else { place(g); g.landed = true; fetchSoon(g, 400); return; } }
+      g.vy += 2200 * dt; g.y += g.vy * dt; g.x += g.vx * dt;
+      if (g.x < 20 || g.x > innerWidth - 20) { g.x = S.clamp(g.x, 20, innerWidth - 20); g.vx = -g.vx * .5; }      // 碰到螢幕邊彈回來
+      if (g.y >= g.floor) {
+        g.y = g.floor; g.vx *= .8;
+        if (g.vy > 300) g.vy = -g.vy * .35;
+        else { g.vy = 0; if (Math.abs(g.vx) > 30) { g.vx *= Math.pow(.05, dt); } else { place(g); g.landed = true; fetchSoon(g, 300); return; } }   // 甩出去的在地上滑一下才停
+      }
       place(g); requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
@@ -175,7 +182,7 @@
     const a = finder(g.x, g.tries);
     if (!a) { g.tries.clear(); fetchSoon(g, 2500); return; }
     if (Math.abs(a.x - g.x) < 110 * a.k) { pick(a, g); return; }
-    const job = a.walkJob(g.x, { name: 'pickup', noPause: true, gait: 'hop', cursorOk: true, onArrive: () => { if (Math.abs(a.x - g.x) < 140 * a.k) pick(a, g); } });
+    const job = a.walkJob(g.x, { name: 'pickup', noPause: true, gait: 'hop', cursorOk: true, y: Math.abs(g.y - a.y) > 30 ? g.y : null, onArrive: () => { if (Math.abs(a.x - g.x) < 140 * a.k) pick(a, g); } });
     const int0 = job.interrupt;
     job.interrupt = (...x) => { if (int0) int0(...x); if (g.who === a) { g.who = null; g.tries.add(a.id); fetchSoon(g, 1500); } };
     const end0 = job.end;
@@ -190,5 +197,29 @@
     use(a, g.item, !PLAY.has(g.item));
   }
 
-  S.Items = { rects: () => [], ground: () => [...ground].map((g) => ({ item: g.item, x: g.x, y: g.y, landed: !!g.landed })), held: () => (held ? held.item : null) };
+  // 道具籃用：在舞台上直接拿著道具（不經過面板）；放開時看放在哪、甩多快
+  const hold = {
+    begin(item) { clear(); held = { item, el: mk('item-held', item) }; },
+    move(x, y) {
+      if (!held) return;
+      held.el.style.transform = `translate(${x - 18}px, ${y - 30}px) rotate(-12deg)`;
+      setOver(actorAt(x, y));
+      // 拿著道具經過：附近醒著、沒事做的抬頭說一句（每隻 4 秒最多一次）
+      const now = performance.now();
+      for (const a of S.actors.values()) {
+        if (a === over || !canUse(a) || a.mode !== 'awake' || a.job || Math.hypot(a.x - x, (a.y - a.h * .5) - y) > 260 || now - (a.itemSeeAt || 0) < 4000) continue;
+        a.itemSeeAt = now; a.say(SEE[held.item] || '那是什麼？', { ms: 1300 });
+      }
+    },
+    end(x, y, vx, vy) {
+      const item = held && held.item; clear();
+      if (!item) return;
+      const a = actorAt(x, y);
+      if (a && Math.hypot(vx, vy) < 900) use(a, item, false);
+      else drop(item, x, y, vx, vy);
+    },
+    cancel() { clear(); },
+    get item() { return held ? held.item : null; }
+  };
+  S.Items = { hold, rects: () => [], ground: () => [...ground].map((g) => ({ item: g.item, x: g.x, y: g.y, landed: !!g.landed })), held: () => (held ? held.item : null) };
 })();
