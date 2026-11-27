@@ -906,6 +906,7 @@ function start() {
     changed(); return { ok: true };
   });
   // 給某隻禮物：要自己用還是送人、送給誰，都由牠自己決定（看個性和跟大家的感情，每次不一定一樣）
+  const STRANGER = { snack: 2.5, rose: .5 };                 // 還不熟的同伴：點心常常拿去送（交朋友），玫瑰偶爾
   const KEEP = { sleepy: .4, cool: .4, shy: .3, athlete: .25, explorer: .25, easy: .2, clingy: .1 };
   function decideGift(qid, item) {
     const q = qById(qid); if (!q || BAG[item] !== 'gift') return { ok: false };
@@ -920,7 +921,7 @@ function start() {
     }
     const crush = new Set(crushesOf(qid));
     const w = others.map((o) => { const r = data.relations[[qid, o.id].sort().join('|')] || {};
-      return 1 + (r.affinity || 0) / 20 + (item === 'rose' ? (r.love || 0) / 8 + (r.couple ? 8 : 0) + (crush.has(o.id) ? 5 : 0) : (r.friend ? 3 : 0)) + Math.random() * 2; });
+      return 1 + (r.affinity || 0) / 20 + (item === 'rose' ? (r.love || 0) / 8 + (r.couple ? 8 : 0) + (crush.has(o.id) ? 5 : 0) : (r.friend ? 3 : 0)) + ((r.affinity || 0) < 10 ? STRANGER[item] : 0) + Math.random() * 2; });
     // 依權重排順序（每次抽一個，抽過的拿掉）；第一個沒空（正在忙、剛收過禮物）就換下一個
     const pool = others.map((o, i) => [o, w[i]]); let last = null;
     while (pool.length) {
@@ -941,9 +942,11 @@ function start() {
     if (!q || BAG[item] !== 'gift') return { ok: false };
     if (!romance.canOwnTasks(q)) return { ok: false, message: '小袋鼠還太小了' };
     if (!data.holding || typeof data.holding !== 'object') data.holding = {};
-    if (data.holding[qid]) return { ok: false, message: `我手上已經有${GIFTS[data.holding[qid]] ? GIFTS[data.holding[qid]].name : '東西'}了` };
     const it = items()[item];
     if (it.n <= 0) return { ok: false, message: `${GIFTS[item].name}用完了，等一下會補` };
+    // 點心一定收：手上已經有東西就直接吃掉
+    if (data.holding[qid] && item === 'snack') { it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now(); changed(); return { ok: true, eatNow: true }; }
+    if (data.holding[qid]) return { ok: false, message: `我手上已經有${GIFTS[data.holding[qid]] ? GIFTS[data.holding[qid]].name : '東西'}了` };
     it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now();
     data.holding[qid] = item; changed();
     return { ok: true };
@@ -959,7 +962,7 @@ function start() {
     if (r < keep + .15) return { ok: true, wait: true, item };                       // 再拿一下、捨不得
     const crush = new Set(crushesOf(qid));
     const pool = others.map((o) => { const rr = data.relations[[qid, o.id].sort().join('|')] || {};
-      return [o, 1 + (rr.affinity || 0) / 20 + (item === 'rose' ? (rr.love || 0) / 8 + (rr.couple ? 8 : 0) + (crush.has(o.id) ? 5 : 0) : (rr.friend ? 3 : 0)) + Math.random() * 2]; });
+      return [o, 1 + (rr.affinity || 0) / 20 + (item === 'rose' ? (rr.love || 0) / 8 + (rr.couple ? 8 : 0) + (crush.has(o.id) ? 5 : 0) : (rr.friend ? 3 : 0)) + ((rr.affinity || 0) < 10 ? STRANGER[item] : 0) + Math.random() * 2]; });
     while (pool.length) {
       let x = Math.random() * pool.reduce((a, b) => a + b[1], 0), i = 0;
       for (; i < pool.length - 1; i++) { x -= pool[i][1]; if (x <= 0) break; }

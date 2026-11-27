@@ -91,9 +91,10 @@
   }
   const hearts = (a) => { if (S.burst) { const p = a.toStage(80, 40); S.burst(p.x, p.y, 'hearts'); } };
   async function choose(a, item) {
-    if (a.holding) { a.say(`我手上已經有${NAME[a.holding]}了～`, { ms: 2000 }); return; }
+    if (a.holding && item !== 'snack') { a.say(`我手上已經有${NAME[a.holding]}了～`, { ms: 2000 }); return; }
     const r = await S.api.holdItem({ qid: a.id, item }).catch(() => null);
     if (!r || !r.ok) { a.say((r && r.message) || `${NAME[item]}拿不到`, { ms: 2400 }); return; }
+    if (r.eatNow) { a.play('eat'); a.say(pickOne(['點心！謝謝！我直接吃掉～', '手上拿不下了，那就馬上吃！', '好好吃！']), { ms: 2200 }); return; }
     if (!holdEls.size) setTimeout(() => requestAnimationFrame(follow), 0);
     setHolding(a, item);
     hearts(a);
