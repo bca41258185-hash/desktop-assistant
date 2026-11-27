@@ -151,7 +151,11 @@ test('真的 chokidar：監看的資料夾被刪掉／改名後 stop()，不會�
       const fw = createFolderWatch({ chokidar, fs: realFs, path, getFolders: () => [f], mergeMs: 100, onStatus: (x, st) => statuses.push(st), log: () => {} });
       fw.watch(f);
       await sleep(400);
-      if (mode === 'rm') realFs.rmSync(P, { recursive: true }); else realFs.renameSync(P, P + '_old');
+      if (mode === 'rm') realFs.rmSync(P, { recursive: true });
+      else {
+        // Windows 不讓改名「正在被監看」的資料夾（EPERM）：這是系統限制，不是程式的問題 → 這一段在 Windows 上跳過
+        try { realFs.renameSync(P, P + '_old'); } catch (e) { if (process.platform === 'win32' && e.code === 'EPERM') { fw.stop(); continue; } throw e; }
+      }
       await sleep(1200);
       fw.checkAll();
       assert.equal(f.status, 'missing', mode);

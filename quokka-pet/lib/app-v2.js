@@ -897,6 +897,7 @@ function start() {
     if (!to) return { ok: false, message: `${q.name}還沒有可以送的對象` };
     if (lastGiftTo[to] && Date.now() - lastGiftTo[to] < 60000) return { ok: false, reason: 'recent', message: `${qById(to).name}剛收過禮物，等一下再送吧` };
     const r = social.gift(qid, to, item);
+    if (r.ok && r.job && o.fromHold) r.job.fromHold = true;              // 從手上拿去送的：被打斷要回到手上
     if (!r.ok) return { ok: false, reason: r.reason || 'busy', message: r.reason === 'busy' ? `${q.name}或${qById(to).name}正在忙，等一下再試` : `${qById(to).name}離得太遠了` };
     if (!o.prepaid) { it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now(); }
     lastGiftTo[to] = Date.now();
@@ -1021,7 +1022,7 @@ function start() {
       to = pool[i][0];
     }
     const stranger = (relOf(to).affinity || 0) < 10;
-    const g = giveGift0(qid, item, { prepaid: true, to: to.id });
+    const g = giveGift0(qid, item, { prepaid: true, to: to.id, fromHold: true });
     if (g.ok) { delete data.holding[qid]; changed(); return { ...g, item, stranger }; }
     if (g.reason === 'busy' || g.reason === 'recent') return { ok: true, pending: true, item, toId: to.id, to: to.name, stranger };   // 對方在忙：走過去問、等一下
     return { ok: true, wait: true, item };
@@ -1065,6 +1066,11 @@ function start() {
   // 送禮物的途中被打斷（拖曳、響鈴、太久）：道具退回去
   function refundGift(j) {
     if (!j || !j.gift || !GIFTS[j.type]) return;
+    // 本來拿在手上、走去送的路上被打斷（傳球、拖曳…）：回到牠手上，之後再送（不要默默消失）
+    if (j.fromHold && qById(j.a)) {
+      if (!data.holding || typeof data.holding !== 'object') data.holding = {};
+      if (!data.holding[j.a]) { data.holding[j.a] = j.type; delete lastGiftTo[j.b]; changed(); toStage('stage:quokkas', data.quokkas.map(stageQ)); return; }
+    }
     const it = items()[j.type]; it.n = Math.min(GIFTS[j.type].max, it.n + 1); delete lastGiftTo[j.b]; changed();
   }
   ipcMain.on('social:abort', (e, { pairId, by, reason } = {}) => { try {

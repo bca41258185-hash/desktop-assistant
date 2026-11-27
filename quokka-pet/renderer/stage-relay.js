@@ -6,8 +6,11 @@
   const LINES = { call: ['來！', '這邊！', '傳我！', '我準備好了！'], miss: ['啊，漏了！', '欸欸欸——', '對不起！'], end: ['好球！大家好棒！', '傳得好順！', '下次再來！', '默契越來越好了～'], start: ['大家來傳球！', '要傳囉～', '接好喔！'] };
   const pick = (l) => l[Math.floor(Math.random() * l.length)];
   const relays = new Set();
+  let lastEnd = -1e9;
+  // 有誰正拿著禮物要送給牠、或牠正要去送禮：先不拉進接力（不然禮物永遠送不出去）
+  const giftBusy = (a) => !!a.giftFor || [...S.actors.values()].some((o) => o.giftFor === a.id);
 
-  const free = (a) => a && a.mode === 'awake' && !a.inPouch && !a.isFollow && !a.dragging && !a.relay && (!a.job || (a.job.layer || 9) >= 6) && !(a.job && a.job.name === 'fetch');
+  const free = (a) => a && a.mode === 'awake' && !a.inPouch && !a.isFollow && !a.dragging && !a.relay && (!a.job || (a.job.layer || 9) >= 6) && !(a.job && a.job.name === 'fetch') && !giftBusy(a);
   // 手的位置（舞台座標）：抱在胸前
   const handOf = (a) => a.toStage(84, 104);
 
@@ -25,7 +28,10 @@
     const mates = [...S.actors.values()].filter((a) => free(a) || a === owner || (r && r.team.has(a.id)));
     if (!r && mates.filter((a) => a !== owner).length < 1) return false;          // 沒有同伴：照舊自己撿
     if (!r && Math.random() < .15) return false;                                  // 偶爾還是自己撿回來
-    const getter = mates.filter((a) => free(a) || a === owner).sort((x, y) => Math.abs(x.x - ball.x) - Math.abs(y.x - ball.x))[0];
+    if (!r && performance.now() - lastEnd < 45000) return false;                   // 剛傳完：先休息一下
+    if (!r && relays.size) return false;                                            // 已經有一場在傳：這顆球照舊自己撿
+    const near = mates.filter((a) => free(a) || a === owner).sort((x, y) => Math.abs(x.x - ball.x) - Math.abs(y.x - ball.x));
+    const getter = !r && owner && Math.abs(owner.x - ball.x) < 500 && near.includes(owner) ? owner : near[0];
     if (!getter) return false;
     ball.picked = true; ball.relayLock = true;
     const run = r || { ball, team: new Set(), passes: 0, max: 3 + Math.floor(Math.random() * 5), pairs: new Set(), last: null };
@@ -96,7 +102,7 @@
     const x0 = Math.min(p.x, q.x) - 10, y0 = Math.min(p.y, q.y) - 40, w = Math.abs(p.x - q.x) + 20, h = Math.abs(p.y - q.y) + 50;
     const el = document.createElement('div'); el.className = 'relay-sight';
     const mx = (p.x + q.x) / 2 - x0, my = Math.min(p.y, q.y) - 30 - y0;
-    el.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><path d="M${p.x - x0} ${p.y - y0} Q${mx} ${my} ${q.x - x0} ${q.y - y0}" fill="none" stroke="#ffd86b" stroke-width="3" stroke-dasharray="6 6" stroke-linecap="round"/><circle cx="${q.x - x0}" cy="${q.y - y0}" r="6" fill="#ffd86b"/></svg>`;
+    el.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><path d="M${p.x - x0} ${p.y - y0} Q${mx} ${my} ${q.x - x0} ${q.y - y0}" fill="none" stroke="rgba(90,60,10,.55)" stroke-width="6" stroke-dasharray="7 6" stroke-linecap="round"/><path d="M${p.x - x0} ${p.y - y0} Q${mx} ${my} ${q.x - x0} ${q.y - y0}" fill="none" stroke="#ffc928" stroke-width="3.2" stroke-dasharray="7 6" stroke-linecap="round"/><circle cx="${q.x - x0}" cy="${q.y - y0}" r="7" fill="#ffc928" stroke="rgba(90,60,10,.6)" stroke-width="2"/></svg>`;
     el.style.transform = `translate(${x0}px, ${y0}px)`;
     S.fxEl.appendChild(el);
     return el;
@@ -107,6 +113,7 @@
     const d = Math.hypot(to.x - a.x, to.y - a.y), T = 450 + d * .55, H = Math.max(70, Math.min(260, d * .35));
     const catchOk = Math.random() < ({ shy: .78, sleepy: .8, athlete: .96 }[((to.traits || {}).personality || {}).archetype] || .9);
     run.holder = null; run.last = a; release(run, a);
+    if (window.__L) window.__L({ id: a.id, ev: '傳球', with: to.id, ok: catchOk });   // 記錄器（測試用，平常沒有）
     const t0 = performance.now();
     const step = (now) => {
       if (ball.gone) return;
@@ -115,7 +122,12 @@
       ball.rot += 9; ball.place();
       if (u < 1) { requestAnimationFrame(step); return; }
       if (to.relay !== run || !S.actors.has(to.id)) { dropBall(run, to, false); return; }
-      if (!catchOk) { to.say(pick(LINES.miss), { ms: 1300 }); run.missed = to.id; run.missBy = a.id; dropBall(run, to, false); return; }
+      if (!catchOk) {
+        to.say(pick(LINES.miss), { ms: 1300 }); dropBall(run, to, false);
+        setTimeout(() => { if (S.actors.has(a.id) && !(a.job && (a.job.layer || 9) < 3)) a.say(pick(['沒關係啦，你很接近了！', '是我傳太高了～', '下次我傳慢一點！']), { ms: 1800 }); }, 700);
+        setTimeout(() => { if (S.actors.has(to.id)) to.say(pick(['下次我一定接到！', '嗚，謝謝……我會練的！', '再來一次！']), { ms: 1800 }); }, 1900);
+        return;
+      }
       run.passes++; run.pairs.add([a.id, to.id].sort().join('|'));
       take(run, to);
     };
@@ -141,19 +153,19 @@
   }
   function endRun(run, a) {
     if (!relays.has(run)) return;
-    relays.delete(run);
+    relays.delete(run); lastEnd = performance.now();
     const ball = run.ball;
     for (const id of run.team) { const o = S.actors.get(id); if (o && o.relay === run) release(run, o); }
     if (!ball.gone) { ball.relayRun = null; ball.relayLock = false; if (ball.held) { ball.held = false; ball.fade(); } }
     if (run.pairs.size && S.api.relayDone) S.api.relayDone([...run.pairs].map((k) => k.split('|')));
     // 賽後互相說一句：漏接的那隻跟傳球的那隻說「下次一定接到」；不然隨便挑一對互相誇
     setTimeout(() => {
-      let [x, y] = run.missed && run.missBy ? [run.missBy, run.missed] : (([...run.pairs][Math.floor(Math.random() * run.pairs.size)] || '').split('|'));
+      let [x, y] = ([...run.pairs][Math.floor(Math.random() * run.pairs.size)] || '').split('|');
       const A = S.actors.get(x), B = S.actors.get(y);
       const busy = (q) => q.job && (q.job.layer || 9) < 6;                // 只在做事（不是待機小動作）時才不說
       if (!A || !B || busy(A) || busy(B) || A.mode !== 'awake' || B.mode !== 'awake') return;
-      const praise = run.missed ? ['沒關係啦，你很接近了！', '是我傳太高了～', '下次我傳慢一點！'] : ['你剛剛那球太猛了！', '你傳得好準！', '接得好帥！', '跟你傳球好開心～'];
-      const reply = run.missed ? ['下次我一定接到！', '嗚，謝謝……我會練的！', '再來一次！這次我接得到！'] : ['嘿嘿，你也很厲害！', '再來一場？', '下次換我傳你！', '我們很有默契耶～'];
+      const praise = ['你剛剛那球太猛了！', '你傳得好準！', '接得好帥！', '跟你傳球好開心～', '你今天手感好好！', '那一球接得超穩！', '越傳越順了耶！'];
+      const reply = ['嘿嘿，你也很厲害！', '再來一場？', '下次換我傳你！', '我們很有默契耶～', '是你傳得好啦！', '明天再練！', '下次傳快一點也可以喔！'];
       A.showLook(B.x < A.x ? 'L' : 'R'); A.say(pick(praise), { ms: 2200 });
       setTimeout(() => { if (!busy(B)) { B.showLook(A.x < B.x ? 'L' : 'R'); B.say(pick(reply), { ms: 2200 }); } }, 1500);
       setTimeout(() => { for (const q of [A, B]) if (!q.job) { q.lookBucket = null; q.showRest(); } }, 3800);

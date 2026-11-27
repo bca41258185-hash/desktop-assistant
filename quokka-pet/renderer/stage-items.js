@@ -164,7 +164,7 @@
     // 排球、籃球：變成真的球，交給最近的那隻（球停下來牠就會去撿，抱回自己站的地方）
     if (BALL[item]) {
       const a = finder(x);
-      if (a) { a.throwX = a.x; new S.Ball(a, BALL[item], x, Math.min(y, a.y - 20), vx * a.k, vy * a.k, null); a.say(Math.hypot(vx, vy) > 500 ? '球飛出去了！我去撿！' : '咦，有球！', { ms: 1600 }); return; }
+      if (a) { a.throwX = a.x; new S.Ball(a, BALL[item], x, Math.min(y, a.y - 20), vx * a.k, vy * a.k, null); a.say(Math.hypot(vx, vy) > 500 ? '球飛出去了！' : '咦，有球！', { ms: 1600 }); return; }
     }
     if (!PLAY.has(item)) {
       const r = await S.api.groundItem(item).catch(() => null);

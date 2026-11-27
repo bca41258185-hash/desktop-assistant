@@ -25,7 +25,7 @@
   const short = (t, n = 18) => { t = S.str(t); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
   const pctTxt = (p) => (Math.abs(Number(p) || 0)).toFixed(1) + '%';
   const stockSeg = (p) => {
-    const nm = short(p.name || p.symbol || '股票', 8);
+    const full = S.str(p.name || p.symbol || '股票'), nm = full.length > 8 && p.symbol && String(p.symbol).length <= 6 ? String(p.symbol) : short(full, 8);
     if (p.limit === 'up') return { t: `${nm} 漲停！▲${pctTxt(p.pct)}`, tone: 'up' };
     if (p.limit === 'down') return { t: `${nm} 跌停……▼${pctTxt(p.pct)}`, tone: 'down' };
     if (p.tick) { const px = Number(p.price), pt = Number.isFinite(px) ? ' ' + px.toLocaleString('zh-TW', { maximumFractionDigits: px < 10 ? 3 : 2 }) : '';
@@ -34,13 +34,13 @@
   };
   // 報股價時順便說牠自己的感想（看個性；只是心情，不是建議）
   const MUSE = {
-    athlete: { up2: ['衝啊！像投進三分球！', '狀態超好，再來一球！'], up: ['小跑步前進～', '穩穩往前推進。'], flat: ['原地踏步，當作暖身。'], down: ['小失誤，下一球再來！', '沒關係，調整一下。'], down2: ['被蓋火鍋了……', '今天手感不好。'] },
-    clingy: { up2: ['漲好多！快來一起開心！', '想跟你擊掌！'], up: ['漲了耶～開心！'], flat: ['沒什麼動，陪你等等。'], down: ['有點跌……要抱抱嗎？'], down2: ['嗚，跌好多，好想討抱抱……'] },
-    shy: { up2: ['（小聲）漲、漲好多……好開心。'], up: ['（小聲）漲了一點。'], flat: ['靜靜的……'], down: ['有點不安……'], down2: ['我、我不敢看了……'] },
-    explorer: { up2: ['一路往上爬！上面的風景一定很棒！'], up: ['咦，往上走了！'], flat: ['今天好安靜，在找方向吧。'], down: ['往下探探路～'], down2: ['掉進山谷了！要怎麼爬出來呢？'] },
-    sleepy: { up2: ['漲好多……那我安心睡了。'], up: ['漲了……呼啊～'], flat: ['Zzz……沒動靜。'], down: ['跌一點……先睡一下再說。'], down2: ['跌好多……睡醒會不會就好了。'] },
-    cool: { up2: ['嗯，還不錯。'], up: ['還行。'], flat: ['沒動。'], down: ['跌了，沒什麼。'], down2: ['……跌滿多的。'] },
-    easy: { up2: ['今天運氣不錯喔～'], up: ['小漲，開心一下。'], flat: ['平平的，也很好。'], down: ['跌一點點，沒關係啦。'], down2: ['今天比較慘，明天再說吧。'] }
+    athlete: { up2: ['衝啊！像投進三分球！', '狀態超好，再來一球！', '這波進攻漂亮！', '今天手感發燙！'], up: ['小跑步前進～', '穩穩往前推進。', '步伐不錯，繼續跑。'], flat: ['原地踏步，當作暖身。', '在等開球吧。'], down: ['小失誤，下一球再來！', '沒關係，調整一下。', '先防守再說。'], down2: ['被蓋火鍋了……', '今天手感不好。', '輸一場而已，下一場！'] },
+    clingy: { up2: ['漲好多！快來一起開心！', '想跟你擊掌！', '今天好幸福～'], up: ['漲了耶～開心！', '小小的好消息送你～'], flat: ['沒什麼動，陪你等等。', '平平的，我陪你看。'], down: ['有點跌……要抱抱嗎？', '別擔心，我在這。'], down2: ['嗚，跌好多，好想討抱抱……', '今天要多陪陪你。'] },
+    shy: { up2: ['（小聲）漲、漲好多……好開心。', '（偷偷開心）'], up: ['（小聲）漲了一點。', '（小小聲）是好消息。'], flat: ['靜靜的……', '沒什麼變化……'], down: ['有點不安……', '（縮一下）'], down2: ['我、我不敢看了……', '（躲到草帽下面）'] },
+    explorer: { up2: ['一路往上爬！上面的風景一定很棒！', '發現新高點！'], up: ['咦，往上走了！', '往上探探看～'], flat: ['今天好安靜，在找方向吧。', '先看看雲。'], down: ['往下探探路～', '走錯路了嗎？'], down2: ['掉進山谷了！要怎麼爬出來呢？', '好深的谷……'] },
+    sleepy: { up2: ['漲好多……那我安心睡了。', '好消息……呼～'], up: ['漲了……呼啊～', '嗯……不錯……'], flat: ['Zzz……沒動靜。', '跟我一樣在休息。'], down: ['跌一點……先睡一下再說。', '睡醒再看……'], down2: ['跌好多……睡醒會不會就好了。', '（翻身繼續睡）'] },
+    cool: { up2: ['嗯，還不錯。', '意料之中。'], up: ['還行。', '小漲。'], flat: ['沒動。', '平。'], down: ['跌了，沒什麼。', '正常波動。'], down2: ['……跌滿多的。', '冷靜。'] },
+    easy: { up2: ['今天運氣不錯喔～', '漲了不少，開心一下～', '好天氣好心情！'], up: ['小漲，開心一下。', '慢慢來比較快～'], flat: ['平平的，也很好。', '沒動靜，喝杯茶吧。'], down: ['跌一點點，沒關係啦。', '小跌而已～'], down2: ['今天比較慘，明天再說吧。', '先去曬個太陽～'] }
   };
   function museOf(who, p) {
     const ar = (who && who.traits && who.traits.personality && who.traits.personality.archetype) || 'easy';
@@ -385,7 +385,7 @@
       if (this.ball && this.ball.stopped && !this.ball.picked) { this.startFetch(); return !!(this.job && this.job.ticks); }
       // 伴侶或曖昧對象離自己超過 300 px：2.5 秒內就走回牠身邊（不等平常的散步間隔）
       const mate = S.family && (S.family.partnerOf(this) || (S.family.flirtOf && S.family.flirtOf(this)));
-      if (mate && !mate.inPouch && Math.abs(mate.y - this.y) <= 40 && Math.abs(mate.x - this.x) > 300 && this.nextAt - now > 2500) this.nextAt = now + 2500;
+      if (mate && !mate.inPouch && Math.abs(mate.y - this.y) <= 40 && Math.abs(mate.x - this.x) > 300 && this.nextAt - now > 2500 && now - (this.mateTryAt || 0) > 20000) { this.nextAt = now + 2500; this.mateTryAt = now; }
       if (now >= this.nextAt) {
         if (this.queue.length || this.alerts.length) { if (this.queue.length && !this.alerts.length && !this.drainTimer) this.scheduleDrain(); this.nextAt = now + 3000; return false; }
         const nearCursor = Math.abs(S.cursor.x - this.x) < 200 && Math.abs(S.cursor.y - (this.y - this.h / 2)) < 260;
@@ -401,7 +401,7 @@
         const calm = !S.reduceMotion && !this.queue.length && !this.alerts.length && !this.bubble.kind;
         // 偷偷看喜歡的那一隻（游標不在旁邊時）
         const C = calm && !nearCursor && this.crushActor();
-        if (C && Math.random() < .4 && this.glanceAt(C)) return false;
+        if (C && now - (this.glancedAt || 0) > 40000 && Math.random() < .25 && this.glanceAt(C)) { this.glancedAt = now; return false; }
         if (calm && !(nearCursor && Math.random() < .7) && ANIM.IDLE && this.idleAct()) return true;
       }
       return false;
