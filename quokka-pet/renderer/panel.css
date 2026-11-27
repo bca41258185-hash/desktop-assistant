@@ -591,3 +591,8 @@ body.bag-dragging, body.bag-dragging * { cursor: grabbing !important; }
 @media (prefers-reduced-motion: reduce) { .tile-ic, .stock .del, .tile .del { transition: none; } }
 .stock.up, .stock.down, .stock.is-stale, .stock.is-wait, .stock.flat { border-top-color: var(--line); }
 .rg-map { max-width: 520px; margin-left: auto; margin-right: auto; }   /* 面板很寬時不要把圖撐得太大 */
+/* 捷徑右鍵：常用動作 */
+.menu-acts { display: flex; flex-direction: column; padding: 4px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.menu-act { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; text-align: left; font-size: 13.5px; }
+.menu-act:hover, .menu-act:focus-visible { background: var(--accent-soft); }
+.menu-act.danger { color: var(--bad); }

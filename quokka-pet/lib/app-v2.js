@@ -383,6 +383,9 @@ function start() {
       return { id: f.id, path: f.path, name, dir, missing: !st, icon };
     }
   }
+  // 捷徑的右鍵選單：在檔案總管中顯示、複製路徑（只對清單裡的 id）
+  ipcMain.on('shortcut:reveal', (e, { id } = {}) => { const f = data.folders.find((x) => x.id === id); if (f) { try { shell.showItemInFolder(f.path); } catch (err) { /* 找不到就算了 */ } } });
+  ipcMain.on('shortcut:copy', (e, { id } = {}) => { const f = data.folders.find((x) => x.id === id); if (f) require('electron').clipboard.writeText(f.path); });
   ipcMain.on('shortcut:open', async (e, { id } = {}) => {
     const f = data.folders.find((x) => x.id === id); if (!f) return;      // 只開清單裡的路徑
     const err = await shell.openPath(f.path).catch((x) => String(x));

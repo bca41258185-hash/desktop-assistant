@@ -1220,17 +1220,20 @@
   function openMenu(kind, id, x, y) {
     const it = findItem(kind, id); if (!it) return;
     const list = workers().filter((q) => q.id !== it.owner);
-    if (!list.length) return;
+    if (!list.length && kind !== 'folder') return;
     ui.menu = { kind, id, returnFocus: document.activeElement };
     const m = $('menu');
     const search = list.length > 6 ? '<input type="text" class="menu-search" placeholder="找名字…" aria-label="找名字">' : '';
-    m.innerHTML = `<p class="menu-h">把「${esc(itemLabel(kind, it))}」交給…</p>${search}<div class="menu-items">${list.map((q) =>
-      `<button type="button" role="menuitem" class="menu-item" data-owner="${esc(q.id)}" data-name="${esc(normName(q.name))}">${avatar(q, 'sm')}<span>${esc(q.name)}</span></button>`).join('')}</div>`;
+    // 捷徑：上面先放常用動作
+    const acts = kind === 'folder' ? `<div class="menu-acts">${[['open', '📂', '打開'], ['reveal', '🔍', '在檔案總管中顯示'], ['copy', '📋', '複製路徑'], ['remove', '🗑', '從捷徑移除']].map(([a, i, t]) =>
+      `<button type="button" role="menuitem" class="menu-act${a === 'remove' ? ' danger' : ''}" data-fa="${a}"><span aria-hidden="true">${i}</span>${t}</button>`).join('')}</div>` : '';
+    m.innerHTML = `${acts}${list.length ? `<p class="menu-h">把「${esc(kind === 'folder' ? (String(it.path).split(/[\/]/).filter(Boolean).pop() || it.path).replace(/\.lnk$/i, '') : itemLabel(kind, it))}」交給…</p>${search}<div class="menu-items">${list.map((q) =>
+      `<button type="button" role="menuitem" class="menu-item" data-owner="${esc(q.id)}" data-name="${esc(normName(q.name))}">${avatar(q, 'sm')}<span>${esc(q.name)}</span></button>`).join('')}</div>` : ''}`;
     m.hidden = false;
     const r = m.getBoundingClientRect();
     m.style.left = Math.max(8, Math.min(x, window.innerWidth - r.width - 8)) + 'px';
     m.style.top = Math.max(8, Math.min(y, window.innerHeight - r.height - 8)) + 'px';
-    const first = m.querySelector('.menu-search') || m.querySelector('.menu-item');
+    const first = m.querySelector('.menu-act') || m.querySelector('.menu-search') || m.querySelector('.menu-item');
     if (first) first.focus();
   }
   function closeMenu(restore) {
@@ -1246,6 +1249,15 @@
   document.addEventListener('click', (e) => {
     const mi = e.target.closest('.menu-item');
     if (mi && ui.menu) { const { kind, id } = ui.menu; closeMenu(true); reassign(kind, id, mi.dataset.owner); return; }
+    const ma = e.target.closest('.menu-act');
+    if (ma && ui.menu) {
+      const { id } = ui.menu, a = ma.dataset.fa; closeMenu(true);
+      if (a === 'open') api.openShortcut(id);
+      else if (a === 'reveal') api.revealShortcut(id);
+      else if (a === 'copy') { api.copyShortcut(id); showToast('已複製路徑'); }
+      else if (a === 'remove') { const d = document.querySelector(`[data-fk="folder:${CSS.escape(id)}:del"]`); if (d) d.click(); }
+      return;
+    }
     if (ui.menu && !e.target.closest('#menu')) closeMenu(false);
     const b = e.target.closest('[data-act]');
     if (!b || b.disabled) return;
