@@ -160,6 +160,7 @@
       if ('dad' in q) A.dad = q.dad || null;
       if ('partner' in q) A.partner = q.partner || null;
       if ('crush' in q) A.crush = q.crush || null;           // 喜歡的對象（會偷偷看牠）
+      if (Array.isArray(q.crushes)) this.crushIds = q.crushes.filter((x) => typeof x === 'string').slice(0, 5);   // 喜歡的全部（偷偷喜歡好幾隻的會輪流偷看）
       if ('flirt' in q) A.flirt = q.flirt || null;           // 曖昧的對象（愛情 ≥ 60：常走在一起、不分開太遠）
       if ('pregnant' in q) A.pregnant = !!q.pregnant;
       if ('hasJoey' in q) A.hasJoey = q.hasJoey || null;
@@ -769,10 +770,9 @@
     // 兩次散步之間隔多久：活潑的約 30–60 秒、慵懶的 2–4 分鐘
     // 喜歡的那一隻（在同一層地面、看得到的距離內、醒著）
     crushActor() {
-      const C = this.attach.crush && S.actors.get(this.attach.crush);
-      if (!C || C === this || C.inPouch || C.mode !== 'awake') return null;
-      const dx = Math.abs(C.x - this.x);
-      return dx > 60 && dx < 1400 && Math.abs(C.y - this.y) < 200 ? C : null;
+      const ok = (C) => { if (!C || C === this || C.inPouch || C.mode !== 'awake') return false; const dx = Math.abs(C.x - this.x); return dx > 60 && dx < 1400 && Math.abs(C.y - this.y) < 200; };
+      const list = (this.crushIds && this.crushIds.length ? this.crushIds : [this.attach.crush]).map((id) => id && S.actors.get(id)).filter(ok);
+      return list.length ? list[Math.floor(Math.random() * list.length)] : null;
     }
     // 偷偷看：頭轉向牠、看一下，再假裝沒事轉開。對方剛好也在偷看自己＝四目相對 → 冒一顆小愛心，趕快轉開
     glanceAt(C) {
@@ -786,6 +786,7 @@
           t1 = setTimeout(() => {
             const caught = C.job && C.job.name === 'glance' && C.lookBucket === away;   // 對方也正看向這邊
             if (caught) S.burst(a.x, a.y - 170 * a.k, 'heart1');
+            else if (Math.random() < .35) S.burst(a.x + (side === 'L' ? -14 : 14) * a.k, a.y - 165 * a.k, 'heart1');   // 偷看時偶爾冒小愛心
             a.showLook(away);
             t2 = setTimeout(() => { a.lookBucket = null; if (a.job === job) a.finish(job); }, caught ? 500 : 700);
           }, 900 + Math.random() * 900);
@@ -1269,7 +1270,7 @@
       if (this.isFollow || this.inPouch) return;
       const moved = !this.lastC || Math.hypot(c.x - this.lastC.x, c.y - this.lastC.y) > 3;
       this.lastC = { x: c.x, y: c.y };
-      if (moved) { this.stillSince = now; this.sniffed = false; }
+      if (moved) { this.stillSince = now; this.sniffed = false; this.hidAway = false; }
       if (this.job || this.mode !== 'awake' || this.alerts.length) return;
       // 游標在 400 px 內：眼睛和頭小幅轉向游標（量化成 8 個方向的快取畫格；太近＝正中）
       let b = null;
@@ -1284,6 +1285,15 @@
           const a = this, side = dx >= 0 ? -1 : 1;
           this.requestActivity(6, { name: 'shy', ticks: false, start() { a.setFrame('shy' + side, side * 50, ANIM.STILL.shy); a.say('（偷偷看你）', { ms: 1800 }); a.shyT = setTimeout(() => a.finish(a.job && a.job.name === 'shy' ? a.job : null), 1800); }, interrupt() { clearTimeout(a.shyT); } });
         } else this.requestActivity(6, this.animJob('sniff', ANIM.REACT.sniff, { flip: dx > 0 }));
+      }
+      if (this.beh && this.beh.shy && this.sniffed && !this.hidAway && dist < 240 && now - this.stillSince > delay + 3500 && !S.reduceMotion && S.settings.walk !== 'off') {
+        this.hidAway = true;
+        const a = this, friend = [...S.actors.values()].filter((o) => o !== a && !o.inPouch && o.mode === 'awake' && Math.abs(o.y - a.y) < 60 && Math.abs(o.x - a.x) < 450).sort((p, q) => Math.abs(p.x - a.x) - Math.abs(q.x - a.x))[0];
+        const away = Math.sign(a.x - c.x) || 1;
+        const tx = friend ? S.clamp(friend.x + (Math.sign(friend.x - c.x) || 1) * 70 * a.k, 60, innerWidth - 60) : S.clamp(a.x + away * 220, 60, innerWidth - 60);
+        const job = a.walkJob(tx, { name: 'hide', noPause: true, gait: 'hop', cursorOk: true, ignore: friend ? new Set([friend]) : undefined,
+          onArrive: () => a.say(friend ? `（躲到${friend.name}後面）` : '（躲起來）', { ms: 1800 }) });
+        a.requestActivity(6, job);
       }
     }
 

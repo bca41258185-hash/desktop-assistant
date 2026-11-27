@@ -75,7 +75,7 @@ function start() {
   let stageReady = false; const stageBacklog = [];
   const toStage = (ch, payload) => { if (!stageReady && (ch === 'q:event' || ch === 'presence')) { if (stageBacklog.length < 50) stageBacklog.push([ch, payload]); return; } stage.send(ch, payload); };
   const stageQ = (q) => ({ id: q.id, name: q.name, traits: q.traits, pos: q.home || null, stage: q.stage || 'adult', mom: q.mom || null, dad: q.dad || null,
-    growScale: (q.traits && q.traits.growScale) || null, pregnant: !!q.pregnancy, hasJoey: q.joey ? q.joey.id : null, partner: partnerId(q.id), crush: crushId(q.id), flirt: flirtId(q.id), holding: (data.holding && data.holding[q.id]) || null });
+    growScale: (q.traits && q.traits.growScale) || null, pregnant: !!q.pregnancy, hasJoey: q.joey ? q.joey.id : null, partner: partnerId(q.id), crush: crushId(q.id), crushes: crushesOf(q.id), flirt: flirtId(q.id), holding: (data.holding && data.holding[q.id]) || null });
   function partnerId(qid) { try { return romance.partnerOf(qid) || null; } catch (e) { return null; } }
   function crushId(qid) { try { return romance.crushOf(qid) || null; } catch (e) { return null; } }
   function crushesOf(qid) { try { return romance.crushesOf ? romance.crushesOf(qid) : [romance.crushOf(qid)].filter(Boolean); } catch (e) { return []; } }

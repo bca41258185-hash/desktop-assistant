@@ -115,7 +115,7 @@
       ball.rot += 9; ball.place();
       if (u < 1) { requestAnimationFrame(step); return; }
       if (to.relay !== run || !S.actors.has(to.id)) { dropBall(run, to, false); return; }
-      if (!catchOk) { to.say(pick(LINES.miss), { ms: 1300 }); dropBall(run, to, false); return; }
+      if (!catchOk) { to.say(pick(LINES.miss), { ms: 1300 }); run.missed = to.id; run.missBy = a.id; dropBall(run, to, false); return; }
       run.passes++; run.pairs.add([a.id, to.id].sort().join('|'));
       take(run, to);
     };
@@ -146,6 +146,18 @@
     for (const id of run.team) { const o = S.actors.get(id); if (o && o.relay === run) release(run, o); }
     if (!ball.gone) { ball.relayRun = null; ball.relayLock = false; if (ball.held) { ball.held = false; ball.fade(); } }
     if (run.pairs.size && S.api.relayDone) S.api.relayDone([...run.pairs].map((k) => k.split('|')));
+    // 賽後互相說一句：漏接的那隻跟傳球的那隻說「下次一定接到」；不然隨便挑一對互相誇
+    setTimeout(() => {
+      let [x, y] = run.missed && run.missBy ? [run.missBy, run.missed] : (([...run.pairs][Math.floor(Math.random() * run.pairs.size)] || '').split('|'));
+      const A = S.actors.get(x), B = S.actors.get(y);
+      const busy = (q) => q.job && (q.job.layer || 9) < 6;                // 只在做事（不是待機小動作）時才不說
+      if (!A || !B || busy(A) || busy(B) || A.mode !== 'awake' || B.mode !== 'awake') return;
+      const praise = run.missed ? ['沒關係啦，你很接近了！', '是我傳太高了～', '下次我傳慢一點！'] : ['你剛剛那球太猛了！', '你傳得好準！', '接得好帥！', '跟你傳球好開心～'];
+      const reply = run.missed ? ['下次我一定接到！', '嗚，謝謝……我會練的！', '再來一次！這次我接得到！'] : ['嘿嘿，你也很厲害！', '再來一場？', '下次換我傳你！', '我們很有默契耶～'];
+      A.showLook(B.x < A.x ? 'L' : 'R'); A.say(pick(praise), { ms: 2200 });
+      setTimeout(() => { if (!busy(B)) { B.showLook(A.x < B.x ? 'L' : 'R'); B.say(pick(reply), { ms: 2200 }); } }, 1500);
+      setTimeout(() => { for (const q of [A, B]) if (!q.job) { q.lookBucket = null; q.showRest(); } }, 3800);
+    }, 1800);
   }
 
   S.Relay = { active: () => [...relays].map((r) => ({ passes: r.passes, max: r.max, holder: r.holder && r.holder.id, team: [...r.team] })) };
