@@ -976,7 +976,7 @@ function start() {
     while (pool.length) {
       let x = Math.random() * pool.reduce((a, b) => a + b[1], 0), i = 0;
       for (; i < pool.length - 1; i++) { x -= pool[i][1]; if (x <= 0) break; }
-      const [to] = pool.splice(i, 1);
+      const [[to]] = pool.splice(i, 1);
       last = giveGift(qid, item, { to: to.id });
       if (last.ok) return last;
     }
@@ -1025,6 +1025,23 @@ function start() {
     if (g.ok) { delete data.holding[qid]; changed(); return { ...g, item, stranger }; }
     if (g.reason === 'busy' || g.reason === 'recent') return { ok: true, pending: true, item, toId: to.id, to: to.name, stranger };   // 對方在忙：走過去問、等一下
     return { ok: true, wait: true, item };
+  });
+  // 拿到球：找一個同伴一起玩（熟的、不熟的都會找；有空的才行）。找不到就回 ok:false，讓牠自己玩
+  ipcMain.handle('item:play-with', (e, { qid, item } = {}) => {
+    const q = qById(qid);
+    if (!q || !['badminton', 'volleyball', 'basketball'].includes(item) || !romance.canOwnTasks(q)) return { ok: false };
+    const others = data.quokkas.filter((o) => o.id !== qid && romance.canOwnTasks(o));
+    const why = [];
+    const pool = others.map((o) => { const r = data.relations[[qid, o.id].sort().join('|')] || {}; return [o, 1 + (r.affinity || 0) / 30 + (r.friend ? 1.5 : 0) + (r.couple ? 2 : 0) + ((r.affinity || 0) < 10 ? 1.5 : 0) + Math.random() * 2]; });
+    while (pool.length) {
+      let x = Math.random() * pool.reduce((a, b) => a + b[1], 0), i = 0;
+      for (; i < pool.length - 1; i++) { x -= pool[i][1]; if (x <= 0) break; }
+      const [[o]] = pool.splice(i, 1);
+      let r = null; try { r = social.invite(qid, o.id, item); } catch (err) { r = { ok: false, reason: 'error: ' + err.message }; }
+      why.push(o.name + ':' + (r && r.reason));
+      if (r && r.ok) { changed(); return { ok: true, with: o.name, stranger: ((data.relations[[qid, o.id].sort().join('|')] || {}).affinity || 0) < 10 }; }
+    }
+    return { ok: false, why };
   });
   ipcMain.on('item:offer', (e, { qid, item } = {}) => { if (BAG[item] === 'gift' && qById(qid)) toStage('item:offer', { qid, item }); });
   // 禮物掉在地上：先扣掉（不能同時丟好幾朵最後一朵玫瑰）；沒人撿、消失了就退回

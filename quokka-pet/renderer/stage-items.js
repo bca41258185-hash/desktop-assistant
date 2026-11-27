@@ -53,7 +53,16 @@
   async function use(a, item, prepaid) {
     if (!canUse(a)) { a.say('我還太小了……', { ms: 1800 }); if (prepaid) S.api.refundItem(item); return; }
     if (a.mode !== 'awake') { a.say('Zzz……', { ms: 1600 }); if (prepaid) S.api.refundItem(item); return; }
-    if (PLAY.has(item)) { if (!a.play(item)) a.say('等我一下～', { ms: 1600 }); return; }
+    if (PLAY.has(item)) {
+      // 球類：多半會去找同伴一起玩（害羞、酷酷的比較常自己玩）；找不到有空的就自己玩
+      const ar = (a.traits && a.traits.personality && a.traits.personality.archetype) || 'easy';
+      if (item !== 'eat' && Math.random() < ({ shy: .45, cool: .4, sleepy: .55 }[ar] || .8)) {
+        const r = await S.api.playWith({ qid: a.id, item }).catch(() => null);
+        if (r && r.ok) { a.say(r.stranger ? `${r.with}，要不要一起${NAME[item] === '羽球拍' ? '打羽球' : '打' + NAME[item]}？` : `${r.with}！來${NAME[item] === '羽球拍' ? '打羽球' : '打' + NAME[item]}！`, { ms: 2200 }); return; }
+      }
+      if (!a.play(item)) a.say('等我一下～', { ms: 1600 });
+      return;
+    }
     if (!prepaid) { choose(a, item); return; }                          // 你放到牠身上的禮物：牠自己決定自己用還是送給誰
     const r = await S.api.useItem({ qid: a.id, item, prepaid }).catch(() => null);
     if (!r || !r.ok) a.say((r && r.message) || `${NAME[item]}送不出去`, { ms: 2600 });

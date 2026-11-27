@@ -296,6 +296,15 @@
       if (pa && pb && displayId(pa.display) !== displayId(pb.display)) return { ok: false, reason: 'far' };   // 只限同一個螢幕：多遠都會走過去，地面高度不同就跳過去
       return { ok: true, job: start(a, b, type, { gift: true }) };
     }
+    // 拿到球的那隻去找同伴一起玩（a 邀 b，type＝badminton／volleyball／basketball）：兩隻都要閒著、同一個螢幕
+    function invite(aId, bId, type) {
+      const a = byId(aId), b = byId(bId);
+      if (!a || !b || aId === bId || !TYPES[type]) return { ok: false, reason: 'missing' };
+      if (!available(a) || !available(b)) return { ok: false, reason: 'busy' };
+      const pa = posOf(aId), pb = posOf(bId);
+      if (pa && pb && displayId(pa.display) !== displayId(pb.display)) return { ok: false, reason: 'far' };
+      return { ok: true, job: start(a, b, type, {}) };
+    }
     function removeQuokka(qid) {
       const pairId = busy.get(qid);
       if (!pairId) return null;
@@ -318,7 +327,7 @@
     }
 
     return {
-      tick, done, abort, onLayer, removeQuokka, passBy, gift,
+      tick, done, abort, onLayer, removeQuokka, passBy, gift, invite,
       isBusy: (qid) => busy.has(qid),
       pairOf: (qid) => (busy.has(qid) ? { ...active.get(busy.get(qid)) } : null),
       activePairs: () => Array.from(active.values()).map((j) => ({ ...j })),
