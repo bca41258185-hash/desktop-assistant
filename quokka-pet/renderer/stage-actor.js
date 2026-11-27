@@ -650,6 +650,8 @@
           m.step = len;
           if (o.check && o.check(a.x + dir * len, dir) === false) { m.blocked = true; m.done = true; return false; }
           dur = GINFO(gait).dur * 1000 / speed; p0 = now; x0 = a.x; y0 = a.y; phase = 'step';
+          // 斜著走（往上或往下）：把剩下的高度差平均分給剩下的每一步
+          if (o.yTo != null) { const left = Math.max(1, Math.round(Math.abs(rem) / len)); m.y1 = y0 + (o.yTo - y0) / left; }
         }
         if (phase === 'turn') { if (turn.tick(now)) return true; phase = 'plan'; return m.tick(now); }
         const u = Math.min(1, (now - p0) / dur), adv = a.gaitFrame(gait, m.dir, u);
@@ -657,6 +659,7 @@
         // 繞過家人（小袋鼠從媽媽腳邊繞到另一側）：走靠鏡頭的那一道，畫在前面，看得出是繞過去而不是穿過去
         if (o.lane) { let near = 0; for (const q of o.lane) if (q && !q.inPouch) near = Math.max(near, 1 - Math.abs(q.x - a.x) / (70 * Math.max(q.k, .6))); near = S.clamp(near * 1.6, 0, 1); a.depth = -18 * a.k / .5 * .5 * near; a.zBoost = near > 0 ? 80 : 0; }
         if (o.toY != null && Math.abs(o.toY() - y0) > .5) a.y = y0 + (o.toY() - y0) * adv;      // 跳到另一個高度（小袋鼠回媽媽身邊）
+        else if (o.yTo != null && m.y1 != null) a.y = y0 + (m.y1 - y0) * adv;
         a.place();
         if (u >= 1) { m.steps++; phase = 'plan'; if (o.onStep) o.onStep(m); }
         return true;
@@ -704,10 +707,25 @@
         if (gait === 'walk' && !o.gait && (t2 == null || Math.abs(t2 - target) > 4)) { const t3 = S.politeTarget(a, target, { ignore: o.ignore, gait: 'hop' }); if (t3 != null && (t2 == null || Math.abs(t3 - target) < Math.abs(t2 - target))) { gait = 'hop'; t2 = t3; } }
         target = t2 == null ? a.x : t2;
       }
+      // 上下移動：散步時也會換到別的高度（螢幕上方、下方）；常常走到同伴的那一層，才碰得到面、一起玩
+      let ty = o.y != null ? o.y : null;
+      if (ty == null && to == null && S.settings.walk !== 'off' && !a.isFollow && Math.random() < .55) {
+        const top = Math.max(a.h * .9, 80), bot = innerHeight - 4;
+        if (a.homeY == null) a.homeY = a.y;
+        const vr = S.settings.walk === 'screen' ? bot - top : 260;
+        const mates = [...S.actors.values()].filter((q) => q !== a && !q.inPouch && Math.abs(q.y - a.y) > 40);
+        const r = Math.random();
+        if (mates.length && r < .45) ty = mates[Math.floor(Math.random() * mates.length)].y;                  // 走到某個同伴的那一層
+        else if (Math.abs(a.y - a.homeY) > 140 && r < .75) ty = a.homeY;                                        // 離家太遠：回到自己那一層
+        else { ty = a.y + (Math.random() * 2 - 1) * Math.min(vr, 220); if (ty > bot - 20 || ty < top + 20) ty = a.y + (a.y > (top + bot) / 2 ? -1 : 1) * (60 + Math.random() * 160); }   // 碰到底（或頂）：往另一邊走
+        ty = S.clamp(ty, Math.max(top, a.homeY - vr), Math.min(bot, a.homeY + vr));
+        if (Math.abs(ty - a.y) < 30) ty = null;
+      }
+      if (ty != null) { ty = S.clamp(ty, Math.max(a.h * .9, 80), innerHeight - 4); if (Math.abs(target - a.x) < 50) target = S.clamp(a.x + (Math.random() < .5 ? -1 : 1) * Math.max(80, Math.abs(ty - a.y) * .8), 60, innerWidth - 60); }
       const dir = Math.sign(target - a.x) || 1;
-      const job = { name: o.name || 'walk', ticks: true, phase: 'glance', dir, target, gait, step: GINFO('hop').stride * a.k };
+      const job = { name: o.name || 'walk', ticks: true, phase: 'glance', dir, target, ty, gait, step: GINFO('hop').stride * a.k };
       const pauseAt = !o.noPause && Math.abs(target - a.x) > 110 && Math.random() < .4 ? a.x + (target - a.x) * (.35 + Math.random() * .3) : null;
-      const leg = (tx) => a.mover(tx, { gait, ignore: o.ignore, lane: o.lane || null, check: (nx, d) => !a.blocked(nx, d, o.ignore, gait, o.cursorOk ? { cursor: false } : undefined), onStep: () => a.checkPass() });
+      const leg = (tx) => a.mover(tx, { gait, ignore: o.ignore, lane: o.lane || null, yTo: ty == null ? null : tx === target ? ty : a.y + (ty - a.y) * (tx - a.x) / ((target - a.x) || 1), check: (nx, d) => !a.blocked(nx, d, o.ignore, gait, o.cursorOk ? { cursor: false } : undefined), onStep: () => a.checkPass() });
       let m = null, sub = null, p0 = 0;
       job.start = (now) => { p0 = now; a.lookBucket = dir < 0 ? 'L' : 'R'; a.showRest(); a.lookBucket = null; };
       job.tick = (now) => {
@@ -1183,7 +1201,7 @@
         land(now) { job.ticks = true; job.after = { anim: a.leadIn(ANIM.REACT.land), t0: now, line: null }; S.kick(); },      // 從拎著的姿勢平順接到「輕輕放下」
         end() {
           a.x = S.clamp(a.x, 44, innerWidth - 44); a.y = S.clamp(a.y, Math.min(innerHeight - 4, a.h * .8), innerHeight - 4); a.place();   // 存檔前再夾一次（甩出、被打斷都一樣）
-          a.home = a.x; a.th = -15;
+          a.home = a.x; a.homeY = a.y; a.th = -15;
           S.api.savePos(a.id, { x: Math.round(a.x), y: Math.round(a.y) });
           a.nextAt = performance.now() + 8000;
           a.el.classList.remove('dragging');
