@@ -532,8 +532,8 @@
     const q = qById(ui.sel);
     if (q && isJoey(q)) { slot.innerHTML = joeyCardHTML(q); return; }
     if (q && ui.gear) { slot.innerHTML = gearCardHTML(q); return; }
-    if (q) { slot.innerHTML = postcardsHTML((S.postcards || []).filter((c) => c.to === q.id).slice(-1)) + (ui.infoShown ? infoCardHTML(q) : '') + (ui.relOpen ? relGraphHTML(ui.relSel || q.id) : ''); markRead(); return; }
-    slot.innerHTML = ui.sel === 'all' ? postcardsCardHTML() + (ui.relOpen ? relGraphHTML(ui.relSel) : '') : '';
+    if (q) { slot.innerHTML = postcardsHTML((S.postcards || []).filter((c) => c.to === q.id).slice(-1)) + (ui.infoShown ? infoCardHTML(q) + (ui.relOpen ? relGraphHTML(ui.relSel || q.id) : '') : ''); markRead(); return; }
+    slot.innerHTML = ui.sel === 'all' ? postcardsCardHTML() : '';
     markRead();
   }
 
@@ -711,7 +711,7 @@
     return `<div class="card info" role="group" aria-label="${esc(q.name)}的資訊">
       <div class="card-h">${avatar(q, 'md')}<h2>${esc(q.name)} <span class="sex ${sexCls(t)}" aria-label="${TR.sexName(t)}">${sexSym(t)}</span>${genderTag(q)}</h2>
         <button type="button" class="link-btn" data-act="infoToggle" data-fk="i:toggle" aria-expanded="${open}" aria-controls="infoMore">${open ? '收起' : '更多資訊'}</button>
-        <button type="button" class="pill-btn gear-btn" data-act="gear" data-fk="gear" aria-label="${esc(q.name)}的設定：改名、飾品、重新生成、放生"><span aria-hidden="true">⚙</span>設定</button></div>
+        ${relBtn()}<button type="button" class="pill-btn gear-btn" data-act="gear" data-fk="gear" aria-label="${esc(q.name)}的設定：改名、飾品、重新生成、放生"><span aria-hidden="true">⚙</span>設定</button></div>
       <p class="info-line">${esc(traitLine(t, ageMonths(q)))}${genderShown(q) ? `・${TR.GENDER_SPECIAL.sym} ${TR.GENDER_SPECIAL.name}` : ''}</p>
       <p class="info-line">💕 ${likeLine}${!partner && likedBy.length ? `・${likedBy.map((o) => esc(o.name)).join('、')}喜歡牠` : ''}</p>
       ${open ? `<div id="infoMore">
@@ -1042,7 +1042,7 @@
     line.innerHTML = ''; line.hidden = true;                                       // 「○○盯著…」那一行拿掉（簡化）
     $('playRow').hidden = !!ui.globalOpen || !!ui.adding || !target;
     if (!bagDrag) $('playRow').innerHTML = `<div class="bag" role="group" aria-label="道具包：拖到桌面上的庫卡身上，或點一下給${esc(tName)}">${PLAYS.map((p) =>
-      `<button type="button" class="bag-it" data-act="play" data-a="${p.id}" data-item="${p.id}" data-fk="play:${p.id}" aria-label="${p.name}：點一下叫${esc(tName)}${p.name === '吃葉子' ? '吃葉子' : '打' + p.name}；也可以拖到桌面上的庫卡身上" title="${p.name}：拖到桌面上的庫卡身上，或放在空地讓牠們去撿"><span aria-hidden="true">${p.icon}</span></button>`).join('')}${giftsHTML(target, tName)}</div>${relBtn()}`;
+      `<button type="button" class="bag-it" data-act="play" data-a="${p.id}" data-item="${p.id}" data-fk="play:${p.id}" aria-label="${p.name}：點一下叫${esc(tName)}${p.name === '吃葉子' ? '吃葉子' : '打' + p.name}；也可以拖到桌面上的庫卡身上" title="${p.name}：拖到桌面上的庫卡身上，或放在空地讓牠們去撿"><span aria-hidden="true">${p.icon}</span></button>`).join('')}${giftsHTML(target, tName)}</div>`;
     const hasStocks = !ui.adding && !ui.globalOpen && itemsOf('stock', ui.sel).length > 0 && !(q && isJoey(q));
     $('disclaimer').hidden = true;                                                    // 改成股票區塊底下的一小行
     $('footer').hidden = !!ui.globalOpen || !!ui.adding;

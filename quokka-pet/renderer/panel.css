@@ -590,3 +590,4 @@ body.bag-dragging, body.bag-dragging * { cursor: grabbing !important; }
 .play-row .rel-btn { margin-left: auto; }
 @media (prefers-reduced-motion: reduce) { .tile-ic, .stock .del, .tile .del { transition: none; } }
 .stock.up, .stock.down, .stock.is-stale, .stock.is-wait, .stock.flat { border-top-color: var(--line); }
+.rg-map { max-width: 520px; margin-left: auto; margin-right: auto; }   /* 面板很寬時不要把圖撐得太大 */
