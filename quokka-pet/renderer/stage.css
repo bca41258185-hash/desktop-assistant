@@ -158,3 +158,4 @@ body.hidden .leaf-fall { display: none; }
 .relay-sight { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 55; animation: relaySight .85s ease forwards; }
 @keyframes relaySight { 0% { opacity: 0; } 20%, 80% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .relay-sight { animation: none; } }
+.shortcuts .sc img, .bk-it, .basket, .tile-ic img { -webkit-user-drag: none; user-select: none; }   /* 不讓瀏覽器自己的拖放介入 */

@@ -81,10 +81,12 @@
     el.textContent = ICON[item];
     const [lo, hi] = PATIENCE[(a.traits && a.traits.personality && a.traits.personality.archetype) || 'easy'] || [30, 80];
     a.holdDecideAt = performance.now() + (lo + Math.random() * (hi - lo)) * 1000;
-    follow();
+    if (!following) { following = true; requestAnimationFrame(follow); }
   }
   // 手上的道具跟著牠（抱在胸前、手的位置）；正在送禮物（那段動畫自己會畫禮物）、在育兒袋裡時先藏起來
+  let following = false;
   function follow() {
+    following = false;
     for (const [id, el] of holdEls) {
       const a = S.actors.get(id);
       if (!a) { el.remove(); holdEls.delete(id); continue; }
@@ -96,7 +98,7 @@
       el.style.transform = `translate(${(p.x - sz / 2).toFixed(1)}px, ${(p.y - sz / 2).toFixed(1)}px) rotate(-10deg)`;
       el.style.zIndex = (a.z || 0) + 1;
     }
-    if (holdEls.size) requestAnimationFrame(follow);
+    if (holdEls.size && !following) { following = true; requestAnimationFrame(follow); }
   }
   const hearts = (a) => { if (S.burst) { const p = a.toStage(80, 40); S.burst(p.x, p.y, 'hearts'); } };
   async function choose(a, item, prepaid) {
@@ -104,7 +106,7 @@
     const r = await S.api.holdItem({ qid: a.id, item, prepaid: !!prepaid }).catch(() => null);
     if (!r || !r.ok) { a.say((r && r.message) || `${NAME[item]}拿不到`, { ms: 2400 }); return; }
     if (r.eatNow) { a.play('eat'); a.say(pickOne(['點心！謝謝！我直接吃掉～', '手上拿不下了，那就馬上吃！', '好好吃！']), { ms: 2200 }); return; }
-    if (!holdEls.size) setTimeout(() => requestAnimationFrame(follow), 0);
+    if (!holdEls.size) setTimeout(() => { if (!following) { following = true; requestAnimationFrame(follow); } }, 0);
     setHolding(a, item);
     hearts(a);
     a.say(pickOne(item === 'rose' ? ['哇，玫瑰！謝謝你！', '好香～我先拿著！', '給我的？嘿嘿 ♥'] : ['點心！謝謝！', '先拿著，等一下再想要怎麼吃～', '好香喔！']), { ms: 2200 });

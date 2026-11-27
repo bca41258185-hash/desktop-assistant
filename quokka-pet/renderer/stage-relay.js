@@ -34,7 +34,7 @@
     const getter = !r && owner && Math.abs(owner.x - ball.x) < 500 && near.includes(owner) ? owner : near[0];
     if (!getter) return false;
     ball.picked = true; ball.relayLock = true;
-    const run = r || { ball, team: new Set(), passes: 0, max: 3 + Math.floor(Math.random() * 5), pairs: new Set(), last: null };
+    const run = r || { at: performance.now(), ball, team: new Set(), passes: 0, max: 3 + Math.floor(Math.random() * 5), pairs: new Set(), last: null };
     ball.relayRun = run; relays.add(run);
     if (owner && owner.job && owner.job.st && owner.job.st.thrown) owner.job.handoff = true;   // 丟球的那隻不用再盯著球
     S.kick();
@@ -65,7 +65,7 @@
   }
 
   function take(run, a) {
-    const ball = run.ball;
+    const ball = run.ball; run.at = performance.now();
     if (ball.gone || !S.actors.has(a.id)) { endRun(run, null); return; }
     if (!enlist(run, a)) { endRun(run, null); return; }
     ball.held = true; ball.stopped = true; ball.vx = ball.vy = 0; ball.el.style.visibility = '';
@@ -78,7 +78,9 @@
 
   // 選要傳給誰：有空的、或已經在接力裡的；不傳回剛剛傳給我的那隻（有別人的話）
   function aim(run, a) {
-    if (run.holder !== a || run.ball.gone) return;
+    if (run.ball.gone) { endRun(run, a); return; }
+    if (run.holder !== a) return;
+    run.at = performance.now();
     const cands = [...S.actors.values()].filter((o) => o !== a && (free(o) || (o.relay === run && o.job && o.job.name === 'relay')) && Math.abs(o.x - a.x) < innerWidth * .7);
     const pool = cands.filter((o) => o !== run.last).length ? cands.filter((o) => o !== run.last) : cands;
     if (!pool.length) { finishRun(run, a); return; }
@@ -115,8 +117,9 @@
     run.holder = null; run.last = a; release(run, a);
     if (window.__L) window.__L({ id: a.id, ev: '傳球', with: to.id, ok: catchOk });   // 記錄器（測試用，平常沒有）
     const t0 = performance.now();
+    run.at = performance.now();
     const step = (now) => {
-      if (ball.gone) return;
+      if (ball.gone) { endRun(run, to); return; }
       const u = Math.min(1, (now - t0) / T), p1 = handOf(to);
       ball.x = p0.x + (p1.x - p0.x) * u; ball.y = p0.y + (p1.y - p0.y) * u - H * 4 * u * (1 - u);
       ball.rot += 9; ball.place();
@@ -156,7 +159,11 @@
     relays.delete(run); lastEnd = performance.now();
     const ball = run.ball;
     for (const id of run.team) { const o = S.actors.get(id); if (o && o.relay === run) release(run, o); }
-    if (!ball.gone) { ball.relayRun = null; ball.relayLock = false; if (ball.held) { ball.held = false; ball.fade(); } }
+    if (!ball.gone) {
+      ball.relayRun = null; ball.relayLock = false;
+      if (ball.held) { ball.held = false; ball.fade(); }
+      else { ball.picked = false; ball.born = performance.now(); if (ball.owner) { ball.owner.ball = ball; S.kick(); } }
+    }
     if (run.pairs.size && S.api.relayDone) S.api.relayDone([...run.pairs].map((k) => k.split('|')));
     // 賽後互相說一句：漏接的那隻跟傳球的那隻說「下次一定接到」；不然隨便挑一對互相誇
     setTimeout(() => {
@@ -172,5 +179,7 @@
     }, 1800);
   }
 
-  S.Relay = { active: () => [...relays].map((r) => ({ passes: r.passes, max: r.max, holder: r.holder && r.holder.id, team: [...r.team] })) };
+  // 保險：20 秒沒有任何進展（撿、傳、接）就結束這一輪，不讓誰卡在接力裡
+  setInterval(() => { const now = performance.now(); for (const r of [...relays]) if (now - (r.at || now) > 20000) endRun(r, r.holder); }, 5000);
+  S.Relay = { active: () => [...relays].map((r) => ({ age: Math.round(performance.now() - (r.at || 0)), passes: r.passes, max: r.max, holder: r.holder && r.holder.id, team: [...r.team] })) };
 })();

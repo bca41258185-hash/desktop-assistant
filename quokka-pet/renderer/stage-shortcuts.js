@@ -48,7 +48,7 @@
     el.className = 'shortcuts';
     el.innerHTML = items.map((it, i) => `<button type="button" class="sc${it.missing ? ' missing' : ''}" data-id="${esc(it.id)}" title="${esc(it.path)}${it.missing ? '（找不到）' : ''}"
       style="left:${Math.round(pos[i].x - CELL / 2)}px;top:${Math.round(pos[i].y - ICON / 2)}px;transition-delay:${i * 25}ms">
-      <span class="ic">${it.dir ? FOLDER : it.icon ? `<img src="${esc(it.icon)}" alt="">` : '<b>📄</b>'}</span><span class="lab">${esc(short(it.name, 14))}</span></button>`).join('');
+      <span class="ic">${it.dir ? FOLDER : it.icon ? `<img src="${esc(it.icon)}" alt="" draggable="false">` : '<b>📄</b>'}</span><span class="lab">${esc(short(it.name, 14))}</span></button>`).join('');
     document.getElementById('fx').appendChild(el);
     const rects = pos.map((p) => ({ id: a.id, kind: 'shortcut', x: Math.round(p.x - CELL / 2), y: Math.round(p.y - ICON / 2 - 6), w: CELL, h: ICON + 40 }));
     fan = { qid: a.id, el, rects, items };

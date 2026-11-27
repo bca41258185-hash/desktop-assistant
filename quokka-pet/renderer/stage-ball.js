@@ -21,7 +21,7 @@
       this.el.style.width = this.el.style.height = this.size + 'px';
       this.el.innerHTML = S.POSE.ballSVG(kind);
       S.fxEl.appendChild(this.el);
-      if (owner.ball && owner.ball !== this) owner.ball.remove();
+      if (owner.ball && owner.ball !== this && !owner.ball.relayRun) owner.ball.remove();   // 正在接力的球交給接力自己收
       owner.ball = this;
       S.balls.add(this);
       this.place();
