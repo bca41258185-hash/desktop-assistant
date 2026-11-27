@@ -481,3 +481,22 @@ body.dragging .chip[data-drop] { background: var(--surface-2); border-style: das
 .play.gift { position: relative; }
 .gift-n { position: absolute; right: -3px; bottom: -3px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px; background: #fff; border: 1px solid var(--line); font-size: 10px; line-height: 13px; color: var(--ink); text-align: center; }
 .play.gift:disabled { opacity: .45; }
+
+/* 道具包：一格一格的道具，可以抓起來拖到桌面上 */
+.play-row { display: block; }
+.bag-h { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.bag-t { font-weight: 600; font-size: 13px; }
+.bag-hint { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.bag-hint b { color: var(--ink); font-weight: 600; }
+.bag { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; }
+.bag-it {
+  position: relative; aspect-ratio: 1; max-height: 48px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line);
+  box-shadow: 0 2px 0 var(--line); font-size: 22px; display: grid; place-items: center; cursor: grab; touch-action: none; user-select: none;
+  transition: transform .12s, box-shadow .12s, background .12s;
+}
+.bag-it:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); transform: translateY(-2px); }
+.bag-it.lift { transform: translateY(-5px) rotate(-8deg); background: var(--ring); border-color: var(--ring-line); box-shadow: 0 8px 12px rgba(80, 60, 30, .22); opacity: .55; }
+.bag-it:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
+.bag-it .gift-n { right: -5px; bottom: -5px; }
+body.bag-dragging, body.bag-dragging * { cursor: grabbing !important; }
+@media (prefers-reduced-motion: reduce) { .bag-it { transition: none; } .bag-it.lift { transform: none; } }

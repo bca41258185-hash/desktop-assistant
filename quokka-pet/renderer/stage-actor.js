@@ -691,7 +691,7 @@
       const dir = Math.sign(target - a.x) || 1;
       const job = { name: o.name || 'walk', ticks: true, phase: 'glance', dir, target, gait, step: GINFO('hop').stride * a.k };
       const pauseAt = !o.noPause && Math.abs(target - a.x) > 110 && Math.random() < .4 ? a.x + (target - a.x) * (.35 + Math.random() * .3) : null;
-      const leg = (tx) => a.mover(tx, { gait, ignore: o.ignore, lane: o.lane || null, check: (nx, d) => !a.blocked(nx, d, o.ignore, gait), onStep: () => a.checkPass() });
+      const leg = (tx) => a.mover(tx, { gait, ignore: o.ignore, lane: o.lane || null, check: (nx, d) => !a.blocked(nx, d, o.ignore, gait, o.cursorOk ? { cursor: false } : undefined), onStep: () => a.checkPass() });
       let m = null, sub = null, p0 = 0;
       job.start = (now) => { p0 = now; a.lookBucket = dir < 0 ? 'L' : 'R'; a.showRest(); a.lookBucket = null; };
       job.tick = (now) => {

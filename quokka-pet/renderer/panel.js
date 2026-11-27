@@ -21,7 +21,7 @@
     { id: 'badminton', icon: '🏸', name: '羽球' },
     { id: 'volleyball', icon: '🏐', name: '排球' },
     { id: 'basketball', icon: '🏀', name: '籃球' },
-    { id: 'eat', icon: '🍃', name: '吃葉子' }
+    { id: 'eat', icon: '🌿', name: '吃葉子' }
   ];
   const ARCH_NAME = { athlete: '運動健將', clingy: '黏人開心果', shy: '害羞小可愛', explorer: '好奇探險家', sleepy: '慵懶睡神', cool: '獨立酷酷派', easy: '隨和好夥伴' };
 
@@ -915,12 +915,32 @@
     return it.n;
   }
   function giftsHTML(target, tName) {
-    if (!target || isJoey(target) || workers().length < 2) return '';
-    return `<span class="gift-sep" aria-hidden="true"></span>` + GIFT_UI.map(([k, icon, name, what]) => {
-      const n = giftCount(k);
-      return `<button type="button" class="play gift" data-act="gift" data-i="${k}" data-fk="gift:${k}"${n ? '' : ' disabled'} aria-label="給${esc(tName)}${name}，讓牠${what}（剩 ${n} 個）" title="${name}：讓${esc(tName)}${what}（剩 ${n} 個${n ? '' : '，等一下會補'}）"><span aria-hidden="true">${icon}</span><span class="gift-n" aria-hidden="true">${n}</span></button>`;
+    const off = !target || isJoey(target) || workers().length < 2;
+    return GIFT_UI.map(([k, icon, name, what]) => {
+      const n = giftCount(k), dis = off || !n;
+      return `<button type="button" class="bag-it gift" data-act="gift" data-i="${k}" data-item="${k}" data-fk="gift:${k}"${dis ? ' disabled' : ''} aria-label="${name}（剩 ${n} 個）：點一下給${esc(tName)}，讓牠${what}；也可以拖到桌面上的庫卡身上" title="${name}：拖到桌面上的庫卡身上，牠會拿去${what}（剩 ${n} 個${n ? '' : '，等一下會補'}）"><span aria-hidden="true">${icon}</span><span class="gift-n" aria-hidden="true">${n}</span></button>`;
     }).join('');
   }
+  // 道具包：按住一格往外拖 → 道具離開面板、跟著游標到桌面（舞台畫），放開時主行程看放在哪
+  let bagDrag = null, bagJustDragged = 0;
+  document.addEventListener('pointerdown', (e) => {
+    const b = e.target.closest('.bag-it'); if (!b || b.disabled || e.button !== 0) return;
+    bagDrag = { b, item: b.dataset.item, x: e.clientX, y: e.clientY, id: e.pointerId, out: false };
+    try { b.setPointerCapture(e.pointerId); } catch (err) { /* 沒抓到也沒關係，只是拖出面板後收不到放開 */ }
+  });
+  document.addEventListener('pointermove', (e) => {
+    const d = bagDrag; if (!d || e.pointerId !== d.id) return;
+    if (!d.out && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8) { d.out = true; d.b.classList.add('lift'); document.body.classList.add('bag-dragging'); api.itemGrab(d.item); }
+  });
+  const bagEnd = (e, cancel) => {
+    const d = bagDrag; if (!d || (e && e.pointerId !== d.id)) return;
+    bagDrag = null; d.b.classList.remove('lift'); document.body.classList.remove('bag-dragging');
+    if (d.out) { bagJustDragged = Date.now(); api.itemRelease(cancel); }
+    render();
+  };
+  document.addEventListener('pointerup', (e) => bagEnd(e, false));
+  document.addEventListener('pointercancel', (e) => bagEnd(e, true));
+  document.addEventListener('click', (e) => { if (Date.now() - bagJustDragged < 400 && e.target.closest('.bag-it')) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
   async function giveGift(item) {
     const q = qById(ui.sel) && !isJoey(qById(ui.sel)) ? qById(ui.sel) : workers()[0];
     if (!q) return;
@@ -945,8 +965,9 @@
     const target = q || workers()[0];
     const tName = target ? target.name : '庫卡';
     $('playRow').hidden = !!ui.globalOpen || !!ui.adding || !target;
-    $('playRow').innerHTML = `<span class="play-l">陪<b>${esc(tName)}</b>玩</span>${PLAYS.map((p) =>
-      `<button type="button" class="play" data-act="play" data-a="${p.id}" data-fk="play:${p.id}" aria-label="叫${esc(tName)}${p.name === '吃葉子' ? '吃葉子' : '打' + p.name}" title="${p.name}"><span aria-hidden="true">${p.icon}</span></button>`).join('')}${giftsHTML(target, tName)}`;
+    if (!bagDrag) $('playRow').innerHTML = `<div class="bag-h"><span class="bag-t">道具包</span><span class="bag-hint">拖到桌面上的庫卡身上，或點一下給<b>${esc(tName)}</b></span></div>
+      <div class="bag">${PLAYS.map((p) =>
+      `<button type="button" class="bag-it" data-act="play" data-a="${p.id}" data-item="${p.id}" data-fk="play:${p.id}" aria-label="${p.name}：點一下叫${esc(tName)}${p.name === '吃葉子' ? '吃葉子' : '打' + p.name}；也可以拖到桌面上的庫卡身上" title="${p.name}：拖到桌面上的庫卡身上，或放在空地讓牠們去撿"><span aria-hidden="true">${p.icon}</span></button>`).join('')}${giftsHTML(target, tName)}</div>`;
     const hasStocks = !ui.adding && !ui.globalOpen && itemsOf('stock', ui.sel).length > 0 && !(q && isJoey(q));
     $('disclaimer').hidden = !hasStocks;
     $('footer').hidden = !!ui.globalOpen || !!ui.adding;
