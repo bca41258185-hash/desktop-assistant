@@ -570,6 +570,7 @@ test('伴侶被放生（刪除）後，留下的那隻可以有新的感情、�
 test('放下得比較快：喜歡的對象有了別的伴侶 → 1 小時後愛情每半小時 −10、一起互動也不再加愛情；友情照常', () => {
   const P = 30 * MIN;
   const w = couple();                                         // m 和 f 是一對
+  w.data.quokkas.find((q) => q.id === 'f').traits.personality.archetype = 'shy';   // f 專情（不會偷偷開感情線）
   w.data.quokkas.push(mk(w.now, 'x', 'male'));
   setLove(w, 'x', 'f', 100); setAff(w, 'x', 'f', 50);          // x 還愛著 f（f 已經和 m 在一起）
   const r = w.data.relations[pairKey('x', 'f')];
@@ -605,8 +606,28 @@ test('禮物：玫瑰愛情 +15、友情 +5；只是朋友的有機會擦出火�
   w.data.relations[pairKey('a', 'b')].love = 95;
   const g = w.R.onGift('a', 'b', 'rose');
   assert.ok(g.couple && g.events.some((e) => e.type === 'couple'));
-  // d 送玫瑰給已經和 a 在一起的 b：不加愛情
+  // d 送玫瑰給已經和 a 在一起的 b（b 專情、不會偷偷開感情線）：不加愛情
+  w.data.quokkas.find((q) => q.id === 'b').traits.personality.archetype = 'shy';
   setLove(w, 'd', 'b', 40);
   w.R.onGift('d', 'b', 'rose');
   assert.equal(w.R.relation('d', 'b').love, 40);
+});
+
+test('好幾條感情線看個性：好奇探險家有伴侶也會偷偷喜歡別隻（長得慢一半）；專情的只喜歡 1 隻', () => {
+  const w = couple();                                         // m 和 f 是一對
+  const f = w.data.quokkas.find((q) => q.id === 'f'); f.traits.personality.archetype = 'explorer';
+  w.data.quokkas.push(mk(w.now, 'x', 'male', 400, { personality: { archetype: 'easy' } }));
+  setLove(w, 'x', 'f', 60); setAff(w, 'x', 'f', 50);
+  const r = w.data.relations[pairKey('x', 'f')]; r.attracted = true;
+  w.R.onTogether('x', 'f');
+  assert.ok(r.love > 60);                                      // 探險家 f 有伴侶，愛情還是會長（偷偷的）
+  assert.ok(!r.couple);                                        // 但不會變成一對
+  assert.deepEqual(w.R.crushesOf('f').slice(0, 2), ['m', 'x']); // 伴侶排第一，再來是偷偷喜歡的
+  // 專情（害羞）的：已經喜歡一隻了，對第二隻的愛情不會再長
+  const w2 = world([(n) => mk(n, 'a', 'male', 400, { personality: { archetype: 'shy' } }), (n) => mk(n, 'b', 'female'), (n) => mk(n, 'c', 'female')]);
+  setLove(w2, 'a', 'b', 70); w2.data.relations[pairKey('a', 'b')].attracted = true;
+  setLove(w2, 'a', 'c', 10); const rc = w2.data.relations[pairKey('a', 'c')]; rc.attracted = true;
+  w2.R.onTogether('a', 'c');
+  assert.equal(rc.love, 10);
+  assert.deepEqual(w2.R.crushesOf('a'), ['b']);
 });

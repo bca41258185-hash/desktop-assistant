@@ -78,6 +78,7 @@ function start() {
     growScale: (q.traits && q.traits.growScale) || null, pregnant: !!q.pregnancy, hasJoey: q.joey ? q.joey.id : null, partner: partnerId(q.id), crush: crushId(q.id), flirt: flirtId(q.id) });
   function partnerId(qid) { try { return romance.partnerOf(qid) || null; } catch (e) { return null; } }
   function crushId(qid) { try { return romance.crushOf(qid) || null; } catch (e) { return null; } }
+  function crushesOf(qid) { try { return romance.crushesOf ? romance.crushesOf(qid) : [romance.crushOf(qid)].filter(Boolean); } catch (e) { return []; } }
   function flirtId(qid) { try { return romance.flirtOf(qid) || null; } catch (e) { return null; } }
   // 喜歡的對象變了（好感度變動後）：舞台要知道才會偷看對方；面板顯示也跟著更新
   let crushSig = '';
@@ -171,7 +172,7 @@ function start() {
   const quotes = {};                 // symbol → 最新報價
   function snapshot() {
     return { quokkas: data.quokkas, tasks: data.tasks, reminders: data.reminders, stocks: data.stocks, folders: data.folders,
-      relations: data.relations, items: itemsView(), postcards: (data.postcards || []).filter((c) => c.sent).slice(-20), crushes: Object.fromEntries(data.quokkas.map((q) => [q.id, crushId(q.id)])), flirts: Object.fromEntries(data.quokkas.map((q) => [q.id, flirtId(q.id)])), settings: data.settings, quotes, ringing: data.reminders.filter((r) => r.ringing).map((r) => r.id),
+      relations: data.relations, items: itemsView(), postcards: (data.postcards || []).filter((c) => c.sent).slice(-20), crushes: Object.fromEntries(data.quokkas.map((q) => [q.id, crushId(q.id)])), crushLists: Object.fromEntries(data.quokkas.map((q) => [q.id, crushesOf(q.id)])), flirts: Object.fromEntries(data.quokkas.map((q) => [q.id, flirtId(q.id)])), settings: data.settings, quotes, ringing: data.reminders.filter((r) => r.ringing).map((r) => r.id),
       folderChanges: folderWatch.recentAll() };
   }
   function changed({ quokkas = false } = {}) {
@@ -903,7 +904,36 @@ function start() {
     it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now();
     changed(); return { ok: true };
   });
-  // 面板上點一下禮物：到桌面上那隻頭上讓你選「自己用」或「送給誰」
+  // 給某隻禮物：要自己用還是送人、送給誰，都由牠自己決定（看個性和跟大家的感情，每次不一定一樣）
+  const KEEP = { sleepy: .4, cool: .4, shy: .3, athlete: .25, explorer: .25, easy: .2, clingy: .1 };
+  function decideGift(qid, item) {
+    const q = qById(qid); if (!q || BAG[item] !== 'gift') return { ok: false };
+    if (!romance.canOwnTasks(q)) return { ok: false, message: '小袋鼠還太小了' };
+    if (items()[item].n <= 0) return { ok: false, message: `${GIFTS[item].name}用完了，等一下會補` };
+    const ar = (q.traits && q.traits.personality && q.traits.personality.archetype) || 'easy';
+    const others = data.quokkas.filter((o) => o.id !== qid && romance.canOwnTasks(o));
+    const keep = others.length ? (KEEP[ar] || .2) + (item === 'snack' ? .1 : 0) : 1;
+    if (Math.random() < keep) {
+      const it = items()[item]; it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now(); changed();
+      return { ok: true, self: true };
+    }
+    const crush = new Set(crushesOf(qid));
+    const w = others.map((o) => { const r = data.relations[[qid, o.id].sort().join('|')] || {};
+      return 1 + (r.affinity || 0) / 20 + (item === 'rose' ? (r.love || 0) / 8 + (r.couple ? 8 : 0) + (crush.has(o.id) ? 5 : 0) : (r.friend ? 3 : 0)) + Math.random() * 2; });
+    // 依權重排順序（每次抽一個，抽過的拿掉）；第一個沒空（正在忙、剛收過禮物）就換下一個
+    const pool = others.map((o, i) => [o, w[i]]); let last = null;
+    while (pool.length) {
+      let x = Math.random() * pool.reduce((a, b) => a + b[1], 0), i = 0;
+      for (; i < pool.length - 1; i++) { x -= pool[i][1]; if (x <= 0) break; }
+      const [to] = pool.splice(i, 1);
+      last = giveGift(qid, item, { to: to.id });
+      if (last.ok) return last;
+    }
+    // 大家都沒空：那就自己用
+    const it = items()[item]; it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now(); changed();
+    return { ok: true, self: true, busy: true };
+  }
+  ipcMain.handle('item:decide', (e, { qid, item } = {}) => decideGift(qid, item));
   ipcMain.on('item:offer', (e, { qid, item } = {}) => { if (BAG[item] === 'gift' && qById(qid)) toStage('item:offer', { qid, item }); });
   // 禮物掉在地上：先扣掉（不能同時丟好幾朵最後一朵玫瑰）；沒人撿、消失了就退回
   ipcMain.handle('item:ground', (e, { item } = {}) => {

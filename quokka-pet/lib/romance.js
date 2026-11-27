@@ -270,6 +270,35 @@
       }
       return best;
     }
+    // 好幾條感情線（看個性）：好奇探險家、黏人開心果最多同時喜歡 3 隻，而且有伴侶也會偷偷喜歡別隻；
+    //   隨和、運動型最多 2 隻；害羞、慵懶、酷酷的只專心喜歡 1 隻
+    const HEART = { explorer: 3, clingy: 3, easy: 2, athlete: 2, sleepy: 1, shy: 1, cool: 1 };
+    const heartOf = (q) => HEART[(P(q) || {}).archetype] || 1;
+    const roams = (id) => { const q = byId(id); return !!q && heartOf(q) >= 3; };
+    // 喜歡的全部對象（伴侶排第一；其他是愛情 ≥ crushAt 的，依愛情高到低，最多「心的容量」隻）
+    function crushesOf(qid) {
+      const me = byId(qid), isKid = (q) => !q || q.stage === 'pouch' || q.stage === 'follow';
+      if (isKid(me)) return [];
+      const p = partnerOf(qid), cap = heartOf(me);
+      if (p && !roams(qid)) return [p];
+      const list = [];
+      for (const [k, v] of Object.entries(data.relations)) {
+        if (!v || v.couple || !v.attracted || !((v.love || 0) >= C.crushAt)) continue;
+        const [a, b] = k.split('|'), o = a === qid ? b : b === qid ? a : null;
+        if (!o || isKid(byId(o)) || isKin(qid, o)) continue;
+        list.push([o, v.love]);
+      }
+      list.sort((x, y) => y[1] - x[1]);
+      const out = list.map((x) => x[0]);
+      return p ? [p, ...out].slice(0, cap) : out.slice(0, cap);
+    }
+    // 這一對的愛情能不能長：誰有別的伴侶，誰就要是會偷偷開感情線的個性；心已經滿了（喜歡的隻數到上限、不含對方）也不再長
+    function loveOk(aId, bId) {
+      if (takenBy(aId, bId) && !roams(bId)) return false;
+      if (takenBy(bId, aId) && !roams(aId)) return false;
+      for (const [x, y] of [[aId, bId], [bId, aId]]) { const q = byId(x), l = crushesOf(x); if (q && l.length >= heartOf(q) && !l.includes(y)) return false; }
+      return true;
+    }
     // 曖昧的對象：兩隻都單身、互相有感覺、愛情 ≥ flirtAt；有好幾個就取愛情最高的
     function flirtOf(qid) {
       const me = byId(qid);
@@ -357,7 +386,7 @@
       const amount = Math.round(lerp(C.togetherMin, C.togetherMax, clamp(0.5 * soc + 0.5 * sim, 0, 1)));
       const gained = gain(r, amount);
       // 對方已經有別的伴侶：愛情不再增加（要放下），友情照常
-      const loveGained = attraction(a, b, r) && !takenBy(aId, bId) && !takenBy(bId, aId) ? gainLove(r, amount) : 0;
+      const loveGained = attraction(a, b, r) && loveOk(aId, bId) ? gainLove(r, takenBy(aId, bId) || takenBy(bId, aId) ? Math.ceil(amount / 2) : amount) : 0;   // 偷偷的感情線長得慢一點
       const d = today();
       const firstToday = r.lastTogetherDay !== d;
       r.lastTogetherDay = d; r.decayDays = 0; r.takenDecayDone = 0;
@@ -420,7 +449,7 @@
         }
         // 放下得比較快：喜歡的對象已經有別的伴侶 → 1 小時沒一起互動後，愛情每半小時 −10
         const [a, b] = k.split('|');
-        if (!r.couple && (r.love || 0) > 0 && (takenBy(a, b) || takenBy(b, a))) {
+        if (!r.couple && (r.love || 0) > 0 && !loveOk(a, b)) {
           const tt = Math.max(0, gap - C.takenDecayAfter), td = r.takenDecayDone || 0;
           if (tt > td) { const lb = r.love; r.love = Math.max(0, r.love - C.takenDecayPer * (tt - td)); r.takenDecayDone = tt; changed.push({ pair: k, love: true, from: lb, to: r.love }); }
         }
@@ -582,7 +611,7 @@
       const a = byId(aId), b = byId(bId), events = [];
       if (!a || !b || aId === bId) return { events };
       const r = rel(aId, bId), wasFriend = r.friend;
-      const free = !takenBy(aId, bId) && !takenBy(bId, aId);
+      const free = loveOk(aId, bId);
       if (item === 'rose') {
         r.affinity = Math.min(C.affinityMax, r.affinity + 5);
         if (r.attracted == null) { attraction(a, b, r); if (r.attracted === false && !isKin(aId, bId) && random() < .25) r.attracted = true; }
@@ -656,7 +685,7 @@
 
     return {
       onTogether, onInterrupted, onPass, dailyDecay, canPair, tickClock, ageMonths, onDelete, deleteWarning,
-      canRegenerate, onRegenerate, onReturn, onGift, refreshAges, isKin, partnerOf, crushOf, flirtOf, isCouple, isFriend, guardianOf, canOwnTasks,
+      canRegenerate, onRegenerate, onReturn, onGift, refreshAges, isKin, partnerOf, crushOf, crushesOf, flirtOf, isCouple, isFriend, guardianOf, canOwnTasks,
       tempName, resolveNameClash, relation: (a, b) => rel(a, b, false), pairKey, constants: C
     };
   }

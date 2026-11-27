@@ -541,6 +541,7 @@
   const ACT_NAME = { badminton: '打羽球', volleyball: '打排球', basketball: '打籃球', eat: '吃葉子', hop: '跳跳', selfie: '自拍', nap: '打盹' };
   const hashStr = (t) => { let h = 2166136261; for (const c of t) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
   const pickBy = (arr, key) => arr[hashStr(key) % arr.length];
+  const likesOf = (id) => ((S.crushLists || {})[id]) || ((S.crushes || {})[id] ? [S.crushes[id]] : []);   // 牠喜歡的全部（可能好幾隻）
   const isKin = (a, b) => a.mom === b.id || a.dad === b.id || b.mom === a.id || b.dad === a.id || (!!a.mom && a.mom === b.mom) || (!!a.dad && a.dad === b.dad);
   const parentWord = (o) => (o.traits && o.traits.sex === 'male' ? '爸爸' : '媽媽');
   // A 對 B 的想法（兩隻對彼此的想法可以不一樣：看自己的個性、喜好，還有有沒有偷偷喜歡對方）
@@ -550,7 +551,7 @@
     const both = (P.likes || []).filter((x) => (Q.likes || []).includes(x));
     const fun = both.length ? ACT_NAME[both[0]] : ACT_NAME[(P.likes || [])[0]] || '玩';
     const hobby = (P.hobbies || [])[0] || '曬太陽';
-    const crush = (S.crushes || {})[A.id] === B.id;
+    const crush = likesOf(A.id).includes(B.id);
     const by = (m, d) => m[ar] || d;
     let t;
     if (B.mom === A.id || B.dad === A.id) t = pickBy(isJoey(B) ? ['好小一隻，整天黏著我，好可愛。', '要快快長大喔。', '睡著的樣子最可愛了。'] : ['長這麼大了，好欣慰。', '有時候還是會擔心牠。'], key);
@@ -582,7 +583,7 @@
       else if (r.friend) lines += L(A, B, `stroke="#e7b93a" stroke-width="4" opacity="${op}"`);
       else if ((r.affinity || 0) >= 10) lines += L(A, B, `stroke="#c9b9a0" stroke-width="${(1 + (r.affinity || 0) / 40).toFixed(1)}" opacity="${op}"`);
       // 偷偷喜歡：單向的虛線箭頭（兩隻互相喜歡就兩條，各偏一邊）
-      for (const [x, y] of [[a, b], [b, a]]) if (!r.couple && crushes[x.id] === y.id) {
+      for (const [x, y] of [[a, b], [b, a]]) if (!r.couple && likesOf(x.id).includes(y.id)) {
         const P1 = pos.get(x.id), P2 = pos.get(y.id), dx = P2.x - P1.x, dy = P2.y - P1.y, d = Math.hypot(dx, dy) || 1, nx = -dy / d * 7, ny = dx / d * 7;
         lines += `<line x1="${(P1.x + dx / d * 24 + nx).toFixed(1)}" y1="${(P1.y + dy / d * 24 + ny).toFixed(1)}" x2="${(P2.x - dx / d * 28 + nx).toFixed(1)}" y2="${(P2.y - dy / d * 28 + ny).toFixed(1)}" stroke="#e0739a" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#rgArrow)" opacity="${x.id === sel.id || y.id === sel.id ? 1 : .35}"/>`;
       }
@@ -591,7 +592,7 @@
       return `<button type="button" class="rg-node${q.id === sel.id ? ' on' : ''}${isJoey(q) ? ' small' : ''}" data-act="relSel" data-q="${esc(q.id)}" data-fk="rg:${esc(q.id)}" style="left:${(p.x / W * 100).toFixed(2)}%;top:${(p.y / H * 100).toFixed(2)}%" aria-pressed="${q.id === sel.id}" aria-label="看${esc(q.name)}的想法">${avatar(q, 'md')}<span class="rg-name">${esc(q.name)}</span></button>`; }).join('');
     const others = qs.filter((o) => o.id !== sel.id).map((o) => ({ o, r: rel(sel.id, o.id) || { affinity: 0, love: 0 } }))
       .sort((x, y) => ((y.r.couple ? 1 : 0) - (x.r.couple ? 1 : 0)) || ((y.r.love || 0) + (y.r.affinity || 0)) - ((x.r.love || 0) + (x.r.affinity || 0)));
-    const tag = (o, r) => r.couple ? '<span class="itag heart">♥ 伴侶</span>' : (o.mom === sel.id || o.dad === sel.id) ? '<span class="itag">牠的寶寶</span>' : (sel.mom === o.id || sel.dad === o.id) ? `<span class="itag">${parentWord(o)}</span>` : isKin(o, sel) ? '<span class="itag">家人</span>' : crushes[sel.id] === o.id ? '<span class="itag crush">偷偷喜歡</span>' : r.friend ? '<span class="itag star">★ 好朋友</span>' : '';
+    const tag = (o, r) => r.couple ? '<span class="itag heart">♥ 伴侶</span>' : (o.mom === sel.id || o.dad === sel.id) ? '<span class="itag">牠的寶寶</span>' : (sel.mom === o.id || sel.dad === o.id) ? `<span class="itag">${parentWord(o)}</span>` : isKin(o, sel) ? '<span class="itag">家人</span>' : likesOf(sel.id).includes(o.id) ? '<span class="itag crush">偷偷喜歡</span>' : r.friend ? '<span class="itag star">★ 好朋友</span>' : '';
     const meter = (r) => { const f = Math.max(0, Math.min(100, Math.round(r.affinity || 0))); return `<span class="rg-meter${r.couple ? ' love' : ''}" role="img" aria-label="友情 ${f}／100"><i style="width:${f}%"></i></span>`; };
     return `<div class="card relg" role="group" aria-label="關係圖">
       <div class="card-h"><h2>💞 關係圖</h2><span class="rg-sub">點頭像看牠的想法</span><button type="button" class="icon-btn" data-act="relToggle" data-fk="rg:close" aria-label="收起關係圖">✕</button></div>
@@ -1010,7 +1011,7 @@
     const q = qById(ui.sel) && !isJoey(qById(ui.sel)) ? qById(ui.sel) : workers()[0];
     if (!q) return;
     api.itemOffer({ qid: q.id, item });
-    showToast(`到桌面上${q.name}的頭上選：自己用，還是送給誰`);
+    showToast(`${GIFT_UI.find((g) => g[0] === item)[2]}交給${q.name}了，牠會自己決定要自己用還是送給誰`);
   }
   const relBtn = () => (S.quokkas.length < 2 ? '' : `<button type="button" class="pill-btn rel-btn${ui.relOpen ? ' on' : ''}" data-act="relToggle" data-fk="relbtn" aria-expanded="${!!ui.relOpen}" title="大家之間的關係和想法"><span aria-hidden="true">💞</span>關係圖</button>`);
   function renderFooter() {

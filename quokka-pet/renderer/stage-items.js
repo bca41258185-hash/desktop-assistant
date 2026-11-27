@@ -54,44 +54,25 @@
     if (!canUse(a)) { a.say('我還太小了……', { ms: 1800 }); if (prepaid) S.api.refundItem(item); return; }
     if (a.mode !== 'awake') { a.say('Zzz……', { ms: 1600 }); if (prepaid) S.api.refundItem(item); return; }
     if (PLAY.has(item)) { if (!a.play(item)) a.say('等我一下～', { ms: 1600 }); return; }
-    if (!prepaid) { choose(a, item); return; }                          // 你放到牠身上的禮物：讓你選自己用還是送給誰
+    if (!prepaid) { choose(a, item); return; }                          // 你放到牠身上的禮物：牠自己決定自己用還是送給誰
     const r = await S.api.useItem({ qid: a.id, item, prepaid }).catch(() => null);
     if (!r || !r.ok) a.say((r && r.message) || `${NAME[item]}送不出去`, { ms: 2600 });
     else a.say(`我拿${NAME[item]}去給${r.to}！`, { ms: 2000 });
   }
 
-  // ---- 禮物選單：在牠頭上浮出「自己用」和「送給○○」，點一個；8 秒沒選就收起來（禮物不會用掉） ----
-  let menu = null;
-  const SELF = { rose: '🌹 自己收下', snack: '🍪 自己吃' };
-  function closeMenu() { if (!menu) return; clearTimeout(menu.timer); menu.el.remove(); menu = null; S.reportRects(); }
-  function choose(a, item) {
-    closeMenu();
-    const others = [...S.actors.values()].filter((o) => o !== a && canUse(o)).sort((x, y) => Math.abs(x.x - a.x) - Math.abs(y.x - a.x)).slice(0, 6);
-    const el = document.createElement('div'); el.className = 'gift-menu';
-    el.innerHTML = `<div class="gm-t">${ICON[item]} ${NAME[item]}要怎麼用？</div>
-      <button type="button" class="gm-b self" data-to="">${SELF[item]}</button>
-      ${others.map((o) => `<button type="button" class="gm-b" data-to="${o.id}">送給${String(o.name || '').replace(/[&<>"]/g, '')}</button>`).join('')}`;
-    S.fxEl.appendChild(el);
-    const r = a.rect, w = el.offsetWidth, h = el.offsetHeight;
-    const x = S.clamp(r.x + r.w / 2 - w / 2, 6, innerWidth - w - 6), y = Math.max(6, r.y - h - 58);          // 在牠自己的對話泡泡上面
-    el.style.left = x + 'px'; el.style.top = y + 'px';
-    menu = { el, a, rect: { id: a.id, kind: 'giftmenu', x: Math.round(x) - 4, y: Math.round(y) - 4, w: Math.round(w) + 8, h: Math.round(h) + 8 }, timer: setTimeout(closeMenu, 8000) };
-    el.addEventListener('click', async (e) => {
-      const b = e.target.closest('.gm-b'); if (!b) return;
-      const to = b.dataset.to; closeMenu();
-      if (!to) {                                                        // 自己用
-        const r2 = await S.api.selfItem({ qid: a.id, item }).catch(() => null);
-        if (!r2 || !r2.ok) { a.say((r2 && r2.message) || `${NAME[item]}用完了`, { ms: 2200 }); return; }
-        if (item === 'snack') { a.play('eat'); a.say('好好吃！', { ms: 1800 }); } else { a.play('hop'); a.say('好香～我好喜歡！', { ms: 2000 }); }
-        return;
-      }
-      const r3 = await S.api.useItem({ qid: a.id, item, to }).catch(() => null);
-      if (!r3 || !r3.ok) a.say((r3 && r3.message) || `${NAME[item]}送不出去`, { ms: 2600 });
-      else a.say(`我拿${NAME[item]}去給${r3.to}！`, { ms: 2000 });
-    });
-    S.reportRects();
+  // ---- 你給牠的禮物：要自己用還是送人、送給誰，牠自己決定（主行程看個性和感情決定） ----
+  async function choose(a, item) {
+    const r = await S.api.decideItem({ qid: a.id, item }).catch(() => null);
+    if (!r || !r.ok) { a.say((r && r.message) || `${NAME[item]}送不出去`, { ms: 2400 }); return; }
+    if (r.self) {
+      if (r.busy) { a.play(item === 'snack' ? 'eat' : 'hop'); a.say(item === 'snack' ? '大家都在忙，那我自己吃！' : '大家都在忙……那這朵我先留著 ♥'); return; }
+      if (item === 'snack') { a.play('eat'); a.say(pickOne(['我自己吃！', '嘿嘿，這個我要自己吃～', '好好吃！'])); }
+      else { a.play('hop'); a.say(pickOne(['好香～我要自己留著！', '這朵是我的！', '送給我自己 ♥'])); }
+      return;
+    }
+    a.say(`我拿${NAME[item]}去給${r.to}！`, { ms: 2000 });
   }
-  document.addEventListener('mousedown', (e) => { if (menu && !e.target.closest('.gift-menu')) closeMenu(); }, true);
+  const pickOne = (l) => l[Math.floor(Math.random() * l.length)];
   S.api.onItemOffer && S.api.onItemOffer((p) => { const a = p && S.actors.get(p.qid); if (a && ICON[p.item]) { if (a.mode !== 'awake') a.say('Zzz……', { ms: 1600 }); else choose(a, p.item); } });
 
   // 最近、醒著、有空的那一隻
@@ -162,5 +143,5 @@
     use(a, g.item, !PLAY.has(g.item));
   }
 
-  S.Items = { rects: () => (menu ? [menu.rect] : []), ground: () => [...ground].map((g) => ({ item: g.item, x: g.x, y: g.y, landed: !!g.landed })), held: () => (held ? held.item : null) };
+  S.Items = { rects: () => [], ground: () => [...ground].map((g) => ({ item: g.item, x: g.x, y: g.y, landed: !!g.landed })), held: () => (held ? held.item : null) };
 })();

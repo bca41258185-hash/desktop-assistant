@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('stageApi', {
   groundItem: (item) => ipcRenderer.invoke('item:ground', { item: str(item, 20) }),
   refundItem: (item) => ipcRenderer.send('item:refund', { item: str(item, 20) }),
   selfItem: (p) => ipcRenderer.invoke('item:self', { qid: str(p && p.qid), item: str(p && p.item, 20) }),
+  decideItem: (p) => ipcRenderer.invoke('item:decide', { qid: str(p && p.qid), item: str(p && p.item, 20) }),
   onItemOffer: on('item:offer'),            // 面板點了禮物：{qid, item} → 在那隻頭上問要自己用還是送誰
   onHide: on('stage:hide'),                 // {until}
   onSocialStart: on('social:start'),        // {pairId, a, b, type, initiator}
