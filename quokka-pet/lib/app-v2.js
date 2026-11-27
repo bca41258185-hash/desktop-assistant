@@ -386,6 +386,24 @@ function start() {
   // 捷徑的右鍵選單：在檔案總管中顯示、複製路徑（只對清單裡的 id）
   ipcMain.on('shortcut:reveal', (e, { id } = {}) => { const f = data.folders.find((x) => x.id === id); if (f) { try { shell.showItemInFolder(f.path); } catch (err) { /* 找不到就算了 */ } } });
   ipcMain.on('shortcut:copy', (e, { id } = {}) => { const f = data.folders.find((x) => x.id === id); if (f) require('electron').clipboard.writeText(f.path); });
+  // 桌面上浮出來的捷徑圖示按右鍵：打開、在檔案總管中顯示、複製路徑、交給別隻、從捷徑移除
+  ipcMain.on('shortcut:menu', (e, { id } = {}) => {
+    const f = data.folders.find((x) => x.id === id); if (!f) return;
+    const name = (path.basename(f.path) || f.path).replace(/\.lnk$/i, '');
+    const others = data.quokkas.filter((q) => q.id !== f.owner && romance.canOwnTasks(q));
+    const give = (owner) => {
+      if (LIM.folder && countOf('folder', owner) >= LIM.folder) { event(f.owner, 'note', { text: `${qById(owner).name}的捷徑已經滿了` }); return; }
+      f.owner = owner; changed(); event(owner, 'task-added', { text: name });
+    };
+    stage.popupMenu(Menu.buildFromTemplate([
+      { label: `打開「${name}」`, click: () => shell.openPath(f.path).then((err) => { if (err) event(f.owner, 'note', { text: `打不開「${name}」，可能被移走或刪掉了` }); }) },
+      { label: '在檔案總管中顯示', click: () => { try { shell.showItemInFolder(f.path); } catch (err) { /* 找不到 */ } } },
+      { label: '複製路徑', click: () => require('electron').clipboard.writeText(f.path) },
+      { type: 'separator' },
+      { label: '交給…', enabled: others.length > 0, submenu: others.length ? others.map((q) => ({ label: q.name, click: () => give(q.id) })) : [{ label: '（沒有別隻）', enabled: false }] },
+      { label: '從捷徑移除', click: () => { const i = data.folders.indexOf(f); if (i >= 0) { data.folders.splice(i, 1); changed(); event(f.owner, 'note', { text: `「${name}」從捷徑拿掉了` }); } } }
+    ]), e.sender);
+  });
   ipcMain.on('shortcut:open', async (e, { id } = {}) => {
     const f = data.folders.find((x) => x.id === id); if (!f) return;      // 只開清單裡的路徑
     const err = await shell.openPath(f.path).catch((x) => String(x));

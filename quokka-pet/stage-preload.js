@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('stageApi', {
   refundItem: (item) => ipcRenderer.send('item:refund', { item: str(item, 20) }),
   selfItem: (p) => ipcRenderer.invoke('item:self', { qid: str(p && p.qid), item: str(p && p.item, 20) }),
   decideItem: (p) => ipcRenderer.invoke('item:decide', { qid: str(p && p.qid), item: str(p && p.item, 20) }),
+  shortcutMenu: (id) => ipcRenderer.send('shortcut:menu', { id: str(id) }),
   holdItem: (p) => ipcRenderer.invoke('item:hold', { qid: str(p && p.qid), item: str(p && p.item, 20) }),
   heldDecide: (qid) => ipcRenderer.invoke('item:held-decide', { qid: str(qid) }),
   onItemOffer: on('item:offer'),            // 面板點了禮物：{qid, item} → 在那隻頭上問要自己用還是送誰

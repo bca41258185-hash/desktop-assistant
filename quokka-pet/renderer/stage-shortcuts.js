@@ -52,6 +52,13 @@
     document.getElementById('fx').appendChild(el);
     const rects = pos.map((p) => ({ id: a.id, kind: 'shortcut', x: Math.round(p.x - CELL / 2), y: Math.round(p.y - ICON / 2 - 6), w: CELL, h: ICON + 40 }));
     fan = { qid: a.id, el, rects, items };
+    // 右鍵：主行程跳出選單（打開、在檔案總管中顯示、複製路徑、交給…、移除）
+    el.addEventListener('contextmenu', (e) => {
+      const b = e.target.closest('.sc'); if (!b) return;
+      e.preventDefault(); e.stopPropagation();
+      clearTimeout(hideTimer); hideTimer = 0;
+      S.api.shortcutMenu(b.dataset.id);
+    });
     el.addEventListener('click', (e) => {
       const b = e.target.closest('.sc'); if (!b) return;
       S.api.openShortcut(b.dataset.id);
