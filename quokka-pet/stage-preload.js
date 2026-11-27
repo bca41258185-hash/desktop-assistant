@@ -30,8 +30,8 @@ contextBridge.exposeInMainWorld('stageApi', {
   basketPos: (fx, fy) => ipcRenderer.send('basket:pos', { fx: Number(fx), fy: Number(fy) }),
   basketMenu: () => ipcRenderer.send('basket:menu'),
   onBasket: on('basket:cmd'),
-  holdItem: (p) => ipcRenderer.invoke('item:hold', { qid: str(p && p.qid), item: str(p && p.item, 20) }),
-  heldDecide: (qid) => ipcRenderer.invoke('item:held-decide', { qid: str(qid) }),
+  holdItem: (p) => ipcRenderer.invoke('item:hold', { qid: str(p && p.qid), item: str(p && p.item, 20), prepaid: !!(p && p.prepaid) }),
+  heldDecide: (qid, prefer) => ipcRenderer.invoke('item:held-decide', { qid: str(qid), prefer: prefer ? str(prefer) : null }),
   onItemOffer: on('item:offer'),            // 面板點了禮物：{qid, item} → 在那隻頭上問要自己用還是送誰
   onHide: on('stage:hide'),                 // {until}
   onSocialStart: on('social:start'),        // {pairId, a, b, type, initiator}

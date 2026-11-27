@@ -90,9 +90,9 @@
     if (holdEls.size) requestAnimationFrame(follow);
   }
   const hearts = (a) => { if (S.burst) { const p = a.toStage(80, 40); S.burst(p.x, p.y, 'hearts'); } };
-  async function choose(a, item) {
-    if (a.holding && item !== 'snack') { a.say(`我手上已經有${NAME[a.holding]}了～`, { ms: 2000 }); return; }
-    const r = await S.api.holdItem({ qid: a.id, item }).catch(() => null);
+  async function choose(a, item, prepaid) {
+    if (a.holding && item !== 'snack') { a.say(`我手上已經有${NAME[a.holding]}了～`, { ms: 2000 }); if (prepaid) S.api.refundItem(item); return; }
+    const r = await S.api.holdItem({ qid: a.id, item, prepaid: !!prepaid }).catch(() => null);
     if (!r || !r.ok) { a.say((r && r.message) || `${NAME[item]}拿不到`, { ms: 2400 }); return; }
     if (r.eatNow) { a.play('eat'); a.say(pickOne(['點心！謝謝！我直接吃掉～', '手上拿不下了，那就馬上吃！', '好好吃！']), { ms: 2200 }); return; }
     if (!holdEls.size) setTimeout(() => requestAnimationFrame(follow), 0);
@@ -107,15 +107,30 @@
       if (!a.holding || now < (a.holdDecideAt || 0) || a.mode !== 'awake' || a.dragging || a.inPouch || (a.job && a.job.layer <= 5) || a.deciding) continue;
       a.deciding = true;
       const item = a.holding;
-      const r = await S.api.heldDecide(a.id).catch(() => null);
+      const r = await S.api.heldDecide(a.id, a.giftFor && a.giftTries < 6 ? a.giftFor : null).catch(() => null);
       a.deciding = false;
       if (!r || !r.ok) { a.holdDecideAt = now + 30000; continue; }
+      if (r.pending) {                                                   // 對方在忙：走過去開口問，等牠忙完再給
+        const first = a.askedFor !== r.toId;                             // 第一次等這一隻：先走過去開口
+        a.giftFor = r.toId; a.askedFor = r.toId; a.giftTries = first ? 1 : (a.giftTries || 0) + 1;
+        const o = S.actors.get(r.toId);
+        if (o && first) {
+          const side = o.x > a.x ? -1 : 1, tx = S.clamp(o.x + side * 110 * a.k, 60, innerWidth - 60);
+          const job = a.walkJob(tx, { name: 'askGift', noPause: true, y: Math.abs(o.y - a.y) > 30 ? o.y : null,
+            onArrive: () => a.say(r.stranger ? `${r.to}你好～我有${NAME[item]}想給你，等你忙完喔！` : `${r.to}，等你忙完，有${NAME[item]}要給你！`, { ms: 2800 }) });
+          if (!a.requestActivity(7, job)) a.say(`等${r.to}忙完，我要把${NAME[item]}給牠～`, { ms: 2400 });
+        } else if (Math.random() < .5) a.say(pickOne([`${r.to}忙完了嗎？`, `再等${r.to}一下下～`, `${NAME[item]}要給${r.to}的！`]), { ms: 2000 });
+        a.holdDecideAt = performance.now() + (6 + Math.random() * 5) * 1000;
+        if (a.giftTries >= 6) { a.giftFor = null; a.askedFor = null; a.giftTries = 0; }       // 等太久了：之後再想要給誰
+        continue;
+      }
+      a.giftFor = null; a.askedFor = null; a.giftTries = 0;
       if (r.wait) { a.holdDecideAt = performance.now() + (20 + Math.random() * 40) * 1000; if (Math.random() < .4) a.say(pickOne(['這個要給誰好呢……', '再拿一下下～', '捨不得用掉耶。']), { ms: 2000 }); continue; }
       setHolding(a, null);
       if (r.self) {
         if (item === 'snack') { a.play('eat'); a.say(pickOne(['我決定自己吃！', '嘿嘿，這個我要自己吃～', '好好吃！'])); }
         else { hearts(a); a.say(pickOne(['這朵我要自己留著！', '送給我自己 ♥', '好香～放在家裡。'])); }
-      } else a.say(`我要把${NAME[item]}拿去給${r.to}！`, { ms: 2200 });
+      } else a.say(r.stranger ? pickOne([`我去問${r.to}要不要${NAME[item]}～`, `${r.to}還不熟，送個${NAME[item]}交朋友！`, `${r.to}，這個${NAME[item]}給你，當朋友好嗎？`]) : `我要把${NAME[item]}拿去給${r.to}！`, { ms: 2400 });
     }
   }, 3000);
   // 重開程式：手上的東西還在
@@ -194,7 +209,8 @@
   function pick(a, g) {
     if (!ground.has(g)) return;
     g.who = null; ground.delete(g); clearTimeout(g.timer); g.el.remove();
-    use(a, g.item, !PLAY.has(g.item));
+    if (PLAY.has(g.item)) { use(a, g.item, false); return; }
+    choose(a, g.item, true);                                            // 撿到禮物：先拿在手上，之後自己決定
   }
 
   // 道具籃用：在舞台上直接拿著道具（不經過面板）；放開時看放在哪、甩多快

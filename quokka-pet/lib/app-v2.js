@@ -886,9 +886,9 @@ function start() {
     if (!o.prepaid && it.n <= 0) return { ok: false, message: `${g.name}用完了，等一下會補` };
     const to = o.to && o.to !== qid && qById(o.to) && romance.canOwnTasks(qById(o.to)) ? o.to : giftTarget(qid, item);
     if (!to) return { ok: false, message: `${q.name}還沒有可以送的對象` };
-    if (lastGiftTo[to] && Date.now() - lastGiftTo[to] < 10 * 60000) return { ok: false, message: `${qById(to).name}剛收過禮物，等一下再送吧` };
+    if (lastGiftTo[to] && Date.now() - lastGiftTo[to] < 60000) return { ok: false, reason: 'recent', message: `${qById(to).name}剛收過禮物，等一下再送吧` };
     const r = social.gift(qid, to, item);
-    if (!r.ok) return { ok: false, message: r.reason === 'busy' ? `${q.name}或${qById(to).name}正在忙，等一下再試` : `${qById(to).name}離得太遠了` };
+    if (!r.ok) return { ok: false, reason: r.reason || 'busy', message: r.reason === 'busy' ? `${q.name}或${qById(to).name}正在忙，等一下再試` : `${qById(to).name}離得太遠了` };
     if (!o.prepaid) { it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now(); }
     lastGiftTo[to] = Date.now();
     changed();
@@ -946,7 +946,7 @@ function start() {
     ]), e.sender);
   });
   // 給某隻禮物：要自己用還是送人、送給誰，都由牠自己決定（看個性和跟大家的感情，每次不一定一樣）
-  const STRANGER = { snack: 2.5, rose: .5 };                 // 還不熟的同伴：點心常常拿去送（交朋友），玫瑰偶爾
+  const STRANGER = { snack: 5, rose: 2 };                     // 還不熟的同伴也願意分享：點心常常拿去送（交朋友），玫瑰也會                 // 還不熟的同伴：點心常常拿去送（交朋友），玫瑰偶爾
   const KEEP = { sleepy: .4, cool: .4, shy: .3, athlete: .25, explorer: .25, easy: .2, clingy: .1 };
   function decideGift(qid, item) {
     const q = qById(qid); if (!q || BAG[item] !== 'gift') return { ok: false };
@@ -977,40 +977,45 @@ function start() {
   }
   ipcMain.handle('item:decide', (e, { qid, item } = {}) => decideGift(qid, item));
   // 你給牠的禮物先拿在手上（扣掉道具包的一個）；之後要自己用、留著還是送誰，牠自己挑時間決定
-  ipcMain.handle('item:hold', (e, { qid, item } = {}) => {
+  ipcMain.handle('item:hold', (e, { qid, item, prepaid } = {}) => {
     const q = qById(qid);
     if (!q || BAG[item] !== 'gift') return { ok: false };
     if (!romance.canOwnTasks(q)) return { ok: false, message: '小袋鼠還太小了' };
     if (!data.holding || typeof data.holding !== 'object') data.holding = {};
     const it = items()[item];
-    if (it.n <= 0) return { ok: false, message: `${GIFTS[item].name}用完了，等一下會補` };
+    const take = () => { if (prepaid) return; it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now(); };
+    if (!prepaid && it.n <= 0) return { ok: false, message: `${GIFTS[item].name}用完了，等一下會補` };
     // 點心一定收：手上已經有東西就直接吃掉
-    if (data.holding[qid] && item === 'snack') { it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now(); changed(); return { ok: true, eatNow: true }; }
-    if (data.holding[qid]) return { ok: false, message: `我手上已經有${GIFTS[data.holding[qid]] ? GIFTS[data.holding[qid]].name : '東西'}了` };
-    it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now();
+    if (data.holding[qid] && item === 'snack') { take(); changed(); return { ok: true, eatNow: true }; }
+    if (data.holding[qid]) { if (prepaid) { it.n = Math.min(GIFTS[item].max, it.n + 1); changed(); } return { ok: false, message: `我手上已經有${GIFTS[data.holding[qid]] ? GIFTS[data.holding[qid]].name : '東西'}了` }; }
+    take();
     data.holding[qid] = item; changed();
     return { ok: true };
   });
   // 手上的禮物：牠決定好了 → 自己用（拿掉）／送給誰（照個性和感情挑，沒空就換下一個）／再拿一下（之後再說）
-  ipcMain.handle('item:held-decide', (e, { qid } = {}) => {
+  ipcMain.handle('item:held-decide', (e, { qid, prefer } = {}) => {
     const q = qById(qid), item = data.holding && data.holding[qid];
     if (!q || !GIFTS[item]) return { ok: false };
     const ar = (q.traits && q.traits.personality && q.traits.personality.archetype) || 'easy';
     const others = data.quokkas.filter((o) => o.id !== qid && romance.canOwnTasks(o));
-    const r = Math.random(), keep = (KEEP[ar] || .2) + (item === 'snack' ? .1 : 0);
-    if (!others.length || r < keep) { delete data.holding[qid]; changed(); return { ok: true, self: true, item }; }
-    if (r < keep + .15) return { ok: true, wait: true, item };                       // 再拿一下、捨不得
-    const crush = new Set(crushesOf(qid));
-    const pool = others.map((o) => { const rr = data.relations[[qid, o.id].sort().join('|')] || {};
-      return [o, 1 + (rr.affinity || 0) / 20 + (item === 'rose' ? (rr.love || 0) / 8 + (rr.couple ? 8 : 0) + (crush.has(o.id) ? 5 : 0) : (rr.friend ? 3 : 0)) + ((rr.affinity || 0) < 10 ? STRANGER[item] : 0) + Math.random() * 2]; });
-    while (pool.length) {
-      let x = Math.random() * pool.reduce((a, b) => a + b[1], 0), i = 0;
+    const relOf = (o) => data.relations[[qid, o.id].sort().join('|')] || {};
+    let to = prefer && others.find((o) => o.id === prefer);
+    if (!to) {
+      const r = Math.random(), keep = (KEEP[ar] || .2) + (item === 'snack' ? .1 : 0);
+      if (!others.length || r < keep) { delete data.holding[qid]; changed(); return { ok: true, self: true, item }; }
+      if (r < keep + .12) return { ok: true, wait: true, item };                       // 再拿一下、捨不得
+      const crush = new Set(crushesOf(qid));
+      const pool = others.map((o) => { const rr = relOf(o);
+        return [o, 1 + (rr.affinity || 0) / 25 + (item === 'rose' ? (rr.love || 0) / 8 + (rr.couple ? 8 : 0) + (crush.has(o.id) ? 5 : 0) : (rr.friend ? 2 : 0)) + ((rr.affinity || 0) < 10 ? STRANGER[item] : 0) + Math.random() * 2]; });
+      let x = Math.random() * pool.reduce((a2, b2) => a2 + b2[1], 0), i = 0;
       for (; i < pool.length - 1; i++) { x -= pool[i][1]; if (x <= 0) break; }
-      const [to] = pool.splice(i, 1);
-      const g = giveGift0(qid, item, { prepaid: true, to: to.id });
-      if (g.ok) { delete data.holding[qid]; changed(); return { ...g, item }; }
+      to = pool[i][0];
     }
-    return { ok: true, wait: true, item };                                          // 大家都沒空：先拿著
+    const stranger = (relOf(to).affinity || 0) < 10;
+    const g = giveGift0(qid, item, { prepaid: true, to: to.id });
+    if (g.ok) { delete data.holding[qid]; changed(); return { ...g, item, stranger }; }
+    if (g.reason === 'busy' || g.reason === 'recent') return { ok: true, pending: true, item, toId: to.id, to: to.name, stranger };   // 對方在忙：走過去問、等一下
+    return { ok: true, wait: true, item };
   });
   ipcMain.on('item:offer', (e, { qid, item } = {}) => { if (BAG[item] === 'gift' && qById(qid)) toStage('item:offer', { qid, item }); });
   // 禮物掉在地上：先扣掉（不能同時丟好幾朵最後一朵玫瑰）；沒人撿、消失了就退回
