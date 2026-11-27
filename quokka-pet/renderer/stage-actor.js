@@ -32,8 +32,24 @@
       return Math.abs(Number(p.pct) || 0) < .05 ? { t: `${nm}${pt} 平盤` } : p.pct < 0 ? { t: `${nm}${pt} ▼${pctTxt(p.pct)}`, tone: 'down' } : { t: `${nm}${pt} ▲${pctTxt(p.pct)}`, tone: 'up' }; }
     return p.dir === 'down' ? { t: `${nm} ▼${pctTxt(p.pct)}……`, tone: 'down' } : { t: `${nm} ▲${pctTxt(p.pct)}！`, tone: 'up' };
   };
+  // 報股價時順便說牠自己的感想（看個性；只是心情，不是建議）
+  const MUSE = {
+    athlete: { up2: ['衝啊！像投進三分球！', '狀態超好，再來一球！'], up: ['小跑步前進～', '穩穩往前推進。'], flat: ['原地踏步，當作暖身。'], down: ['小失誤，下一球再來！', '沒關係，調整一下。'], down2: ['被蓋火鍋了……', '今天手感不好。'] },
+    clingy: { up2: ['漲好多！快來一起開心！', '想跟你擊掌！'], up: ['漲了耶～開心！'], flat: ['沒什麼動，陪你等等。'], down: ['有點跌……要抱抱嗎？'], down2: ['嗚，跌好多，好想討抱抱……'] },
+    shy: { up2: ['（小聲）漲、漲好多……好開心。'], up: ['（小聲）漲了一點。'], flat: ['靜靜的……'], down: ['有點不安……'], down2: ['我、我不敢看了……'] },
+    explorer: { up2: ['一路往上爬！上面的風景一定很棒！'], up: ['咦，往上走了！'], flat: ['今天好安靜，在找方向吧。'], down: ['往下探探路～'], down2: ['掉進山谷了！要怎麼爬出來呢？'] },
+    sleepy: { up2: ['漲好多……那我安心睡了。'], up: ['漲了……呼啊～'], flat: ['Zzz……沒動靜。'], down: ['跌一點……先睡一下再說。'], down2: ['跌好多……睡醒會不會就好了。'] },
+    cool: { up2: ['嗯，還不錯。'], up: ['還行。'], flat: ['沒動。'], down: ['跌了，沒什麼。'], down2: ['……跌滿多的。'] },
+    easy: { up2: ['今天運氣不錯喔～'], up: ['小漲，開心一下。'], flat: ['平平的，也很好。'], down: ['跌一點點，沒關係啦。'], down2: ['今天比較慘，明天再說吧。'] }
+  };
+  function museOf(who, p) {
+    const ar = (who && who.traits && who.traits.personality && who.traits.personality.archetype) || 'easy';
+    const pct = Number(p.pct) || 0, k = p.limit === 'up' || pct >= 2 ? 'up2' : p.limit === 'down' || pct <= -2 ? 'down2' : Math.abs(pct) < .05 ? 'flat' : pct > 0 ? 'up' : 'down';
+    const list = (MUSE[ar] || MUSE.easy)[k] || MUSE.easy[k];
+    return { t: list[Math.floor(Math.random() * list.length)], tone: 'muse' };
+  }
   // 一則報告 → 動作、台詞、特效
-  function describe(item, beh) {
+  function describe(item, beh, who) {
     const L = item.list, n = L.length, p = L[n - 1] || {};
     switch (item.kind) {
       case 'task-added':
@@ -44,10 +60,10 @@
       case 'stock': {
         if (L.some((x) => x.ticks)) {                            // 每分鐘報價：一隻的好幾檔一次送來，攤開來一起講
           const all = L.flatMap((x) => (Array.isArray(x.ticks) ? x.ticks : [x]));
-          return describe({ kind: 'stock', list: all }, beh);
+          return describe({ kind: 'stock', list: all }, beh, who);
         }
         if (L.every((x) => x.tick)) {                            // 每分鐘報價：平常說話的樣子，不跳不垂頭；好幾檔就一檔一檔輪流講
-          const seq = L.map((x) => [stockSeg(x)]);
+          const seq = L.map((x) => [stockSeg(x), museOf(who, x)]);
           return { anim: 'talk', text: seq[0], seq: seq.length > 1 ? seq : null };
         }
         if (n > 1) {
@@ -56,10 +72,10 @@
           const ups = L.filter((x) => x.dir !== 'down').length;
           return { anim: ups * 2 >= n ? 'cheer' : 'droop', text: segs };
         }
-        const seg = stockSeg(p);
-        if (p.limit === 'up') return { anim: 'bigCheer', text: [seg], burst: 'fireworks', big: true };
-        if (p.limit === 'down') return { anim: 'cover', text: [seg], big: true };
-        return { anim: p.dir === 'down' ? 'droop' : 'cheer', text: [seg] };
+        const seg = stockSeg(p), muse = museOf(who, p);
+        if (p.limit === 'up') return { anim: 'bigCheer', text: [seg, muse], burst: 'fireworks', big: true };
+        if (p.limit === 'down') return { anim: 'cover', text: [seg, muse], big: true };
+        return { anim: p.dir === 'down' ? 'droop' : 'cheer', text: [seg, muse] };
       }
       case 'folder': {
         const names = [...new Set(L.map((x) => short(x.name || '資料夾', 12)))];
@@ -478,7 +494,7 @@
     }
     // L2 工作反應
     reactJob(item) {
-      const d = describe(item, this.beh);
+      const d = describe(item, this.beh, this);
       const anim = ANIM.REACT[d.anim] || ANIM.REACT.talk;
       const STEP = 2400, seq = d.seq;                                   // seq：同一個氣泡輪流講好幾句（每句 STEP）
       const ms = seq ? STEP * seq.length : Math.max(1500, Math.min(3000, anim.dur * 1000));

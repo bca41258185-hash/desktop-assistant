@@ -1,11 +1,11 @@
 // 捷徑：游標碰到某隻短尾矮袋鼠 → 頭上浮出牠負責的資料夾／檔案（Windows 本來的圖示），排成弧形；
-//   滑過去會放大，點一下打開。游標離開矮袋鼠和捷徑超過 0.25 秒就收起來。
+//   滑過去會放大，點一下打開。游標離開矮袋鼠和捷徑超過 0.12 秒就收起來。
 //   也可以把檔案或資料夾拖到矮袋鼠身上，加進牠的捷徑。
 //   滑鼠事件：舞台平常是穿透的，但游標移動會轉送進來（forward），所以用 mousemove 判斷游標在不在矮袋鼠上；
 //   捷徑浮出來時，把它們的範圍一起回報（S.reportRects），主行程就會讓那一塊可以點。
 (function () {
   const S = window.Stage;
-  const MAX = 12, ROW = 6, ICON = 52, CELL = 78, HIDE_MS = 250;
+  const MAX = 12, ROW = 6, ICON = 52, CELL = 78, HIDE_MS = 120;
   let fan = null;          // { qid, el, rects, items }
   let hideTimer = 0, loading = '', mx = -1, my = -1;
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -16,7 +16,7 @@
     clearTimeout(hideTimer); hideTimer = 0;
     if (!fan) return;
     const el = fan.el; fan = null; loading = '';
-    el.classList.add('out'); el.classList.remove('on'); setTimeout(() => el.remove(), 110);
+    el.classList.add('out'); el.classList.remove('on'); setTimeout(() => el.remove(), 90);
     S.reportRects();
   }
   // 排位置：頭頂上方一道平緩的弧（左右兩端稍微低一點），間距固定不會重疊；超過 6 個再往上排一排

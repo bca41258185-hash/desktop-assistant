@@ -530,3 +530,20 @@ body.bag-dragging, body.bag-dragging * { cursor: grabbing !important; }
 .rg-meter.love i { background: #e0739a; }
 .rg-say { color: #4a4238; margin-top: 2px; font-size: 13px; }
 @media (prefers-reduced-motion: reduce) { .rg-node .av { transition: none; } }
+
+/* 看得出來是按鈕：圖示＋文字、有邊框和底色（原本只有一個小圖示的按鈕都改成這樣） */
+.pill-btn {
+  display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 11px; border-radius: 999px; flex: 0 0 auto;
+  border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 600; white-space: nowrap;
+  box-shadow: 0 1px 0 var(--line);
+}
+.pill-btn span[aria-hidden] { font-size: 15px; line-height: 1; }
+.pill-btn:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-hi); }
+.pill-btn.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-hi); }
+.gear-btn.pill-btn, .rel-btn.pill-btn { width: auto; height: 30px; font-size: 13px; }
+.owner-line .pill-btn + .pill-btn, .ol-text + .pill-btn { margin-left: 4px; }
+/* ✕ 關閉：加上圓框和底色，不會只是一個淡淡的叉 */
+.icon-btn { border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); width: 30px; height: 30px; font-size: 14px; }
+/* 文字連結式的按鈕（更多資訊、＋資料夾…）：改成淡底的小膠囊 */
+.link-btn { text-decoration: none; background: var(--accent-soft); border: 1px solid #ecd3b6; padding: 3px 10px; }
+.link-btn:hover { background: #f0d9bf; }

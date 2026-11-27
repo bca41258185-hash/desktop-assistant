@@ -293,7 +293,7 @@
       if (!a || !b || aId === bId) return { ok: false, reason: 'missing' };
       if (!available(a) || !available(b)) return { ok: false, reason: 'busy' };
       const pa = posOf(aId), pb = posOf(bId);
-      if (pa && pb && (displayId(pa.display) !== displayId(pb.display) || Math.abs(pa.y - pb.y) > C.groundDiff)) return { ok: false, reason: 'far' };
+      if (pa && pb && displayId(pa.display) !== displayId(pb.display)) return { ok: false, reason: 'far' };   // 只限同一個螢幕：多遠都會走過去，地面高度不同就跳過去
       return { ok: true, job: start(a, b, type, { gift: true }) };
     }
     function removeQuokka(qid) {

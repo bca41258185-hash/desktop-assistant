@@ -147,6 +147,7 @@
       // 送禮物：送的那隻走到收禮的那隻面前（收禮的不動）
       const gift = !!this.soc.gift;
       if (gift && !anc) { ix = O.x - side * gap; ox = O.x; }
+      if (gift && Math.abs(I.y - O.y) > 40) { I.y = O.y; I.depth = 0; I.place(); }      // 在不同高度：送的那隻先跳到收禮那隻的地面
       // 螢幕邊放不下時，整組往內挪
       if (ix < 44) { ix = 44; ox = ix + side * gap; } else if (ix > W - 44) { ix = W - 44; ox = ix + side * gap; }
       else if (ox < 44) { ox = 44; ix = ox - side * gap; } else if (ox > W - 44) { ox = W - 44; ix = ox - side * gap; }

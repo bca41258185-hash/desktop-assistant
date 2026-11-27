@@ -111,7 +111,7 @@ body.hidden .leaf-fall { display: none; }
   font: 12px/1.3 "Microsoft JhengHei", "Noto Sans TC", sans-serif; color: #fff;
   opacity: 0; transform: translateY(10px) scale(.85); transition: opacity .16s ease, transform .16s ease; }
 .shortcuts.on .sc { opacity: 1; transform: none; }
-.shortcuts.out .sc { transition-duration: .1s; transition-delay: 0s !important; }   /* 收起來：不要一個一個慢慢退 */
+.shortcuts.out .sc { transition-duration: .08s; transition-delay: 0s !important; }   /* 收起來：不要一個一個慢慢退 */
 .shortcuts .ic { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; margin: 0 auto 4px; border-radius: 14px;
   background: rgba(255,250,240,.93); box-shadow: 0 3px 10px rgba(0,0,0,.28); transition: transform .12s ease, box-shadow .12s ease; }
 .shortcuts .ic img { width: 34px; height: 34px; image-rendering: auto; }
@@ -129,3 +129,11 @@ body.hidden .leaf-fall { display: none; }
 .item-ground { filter: drop-shadow(0 3px 2px rgba(0, 0, 0, .25)); transition: opacity .45s; }
 .item-ground.fade { opacity: 0; }
 .item-ring { position: absolute; border: 3px dashed #ffd86b; border-radius: 50%; pointer-events: none; box-shadow: 0 0 12px rgba(255, 216, 107, .55); z-index: 59; }
+.bubble .tone-muse { display: block; margin-top: 2px; font-weight: 400; font-size: .88em; color: #6b5a48; }   /* 報股價時牠自己的感想（第二行） */
+/* 禮物選單：自己用／送給誰 */
+.gift-menu { position: absolute; z-index: 61; display: flex; flex-wrap: wrap; gap: 5px; max-width: 280px; padding: 8px; border-radius: 14px; background: #fffaf0;
+  box-shadow: 0 4px 14px rgba(60, 40, 20, .25); font: 13px/1.3 "Microsoft JhengHei", "Noto Sans TC", sans-serif; color: #3a2f25; pointer-events: auto; }
+.gift-menu .gm-t { width: 100%; font-weight: 700; margin-bottom: 1px; }
+.gift-menu .gm-b { border: 1.5px solid #e6d6bd; background: #fff; border-radius: 999px; padding: 4px 10px; font: inherit; color: inherit; cursor: pointer; }
+.gift-menu .gm-b:hover { background: #fff2c9; border-color: #e7b93a; }
+.gift-menu .gm-b.self { background: #fbe7ee; border-color: #f0c2d2; font-weight: 700; }

@@ -19,9 +19,11 @@ contextBridge.exposeInMainWorld('stageApi', {
   onCursor: on('stage:cursor'),             // {x, y}
   onItemCarry: on('item:carry'),            // 道具包：拖著的道具 {item, x, y}
   onItemDrop: on('item:drop'),              // 放開了 {item, x, y, cancel}
-  useItem: (p) => ipcRenderer.invoke('item:use', { qid: str(p && p.qid), item: str(p && p.item, 20), prepaid: !!(p && p.prepaid) }),
+  useItem: (p) => ipcRenderer.invoke('item:use', { qid: str(p && p.qid), item: str(p && p.item, 20), prepaid: !!(p && p.prepaid), to: p && p.to ? str(p.to) : null }),
   groundItem: (item) => ipcRenderer.invoke('item:ground', { item: str(item, 20) }),
   refundItem: (item) => ipcRenderer.send('item:refund', { item: str(item, 20) }),
+  selfItem: (p) => ipcRenderer.invoke('item:self', { qid: str(p && p.qid), item: str(p && p.item, 20) }),
+  onItemOffer: on('item:offer'),            // 面板點了禮物：{qid, item} → 在那隻頭上問要自己用還是送誰
   onHide: on('stage:hide'),                 // {until}
   onSocialStart: on('social:start'),        // {pairId, a, b, type, initiator}
   onSocialAbort: on('social:abort'),        // {pairId, by, reason}

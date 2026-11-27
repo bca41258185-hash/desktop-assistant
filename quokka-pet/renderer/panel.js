@@ -1006,13 +1006,13 @@
   document.addEventListener('pointerup', (e) => bagEnd(e, false));
   document.addEventListener('pointercancel', (e) => bagEnd(e, true));
   document.addEventListener('click', (e) => { if (Date.now() - bagJustDragged < 400 && e.target.closest('.bag-it')) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
-  async function giveGift(item) {
+  function giveGift(item) {
     const q = qById(ui.sel) && !isJoey(qById(ui.sel)) ? qById(ui.sel) : workers()[0];
     if (!q) return;
-    const r = await api.giveGift({ qid: q.id, item }).catch(() => ({ ok: false }));
-    showToast(r && r.ok ? `${q.name}拿著${r.item}去找${r.to}了` : (r && r.message) || '沒有送出去');
+    api.itemOffer({ qid: q.id, item });
+    showToast(`到桌面上${q.name}的頭上選：自己用，還是送給誰`);
   }
-  const relBtn = () => (S.quokkas.length < 2 ? '' : `<button type="button" class="icon-btn rel-btn${ui.relOpen ? ' on' : ''}" data-act="relToggle" data-fk="relbtn" aria-expanded="${!!ui.relOpen}" aria-label="關係圖：大家之間的關係和想法" title="關係圖">💞</button>`);
+  const relBtn = () => (S.quokkas.length < 2 ? '' : `<button type="button" class="pill-btn rel-btn${ui.relOpen ? ' on' : ''}" data-act="relToggle" data-fk="relbtn" aria-expanded="${!!ui.relOpen}" title="大家之間的關係和想法"><span aria-hidden="true">💞</span>關係圖</button>`);
   function renderFooter() {
     const q = qById(ui.sel);
     const line = $('ownerLine');
@@ -1023,7 +1023,7 @@
       const arch = archetypeName(q.traits);
       const preg = q.pregnancy ? `｜懷孕中，約 ${Math.max(1, Math.ceil((PREGNANCY_MS - (q.pregnancy.gestationMs || 0)) / 60000))} 分鐘後出生` : '';
       line.innerHTML = `<span class="ol-text">${esc(q.name)}盯著：${parts.length ? esc(parts.join('、')) : '還沒有事'}${arch ? `<span class="sep">｜</span><span class="nowrap">個性：${esc(arch)}</span>` : ''}${esc(preg)}</span>
-        ${relBtn()}<button type="button" class="icon-btn gear-btn${ui.gear ? ' on' : ''}" data-act="gear" data-fk="gear" aria-expanded="${ui.gear}" aria-label="${esc(q.name)}的設定：改名、飾品、重新生成、刪除">⚙</button>`;
+        ${relBtn()}<button type="button" class="pill-btn gear-btn${ui.gear ? ' on' : ''}" data-act="gear" data-fk="gear" aria-expanded="${ui.gear}" aria-label="${esc(q.name)}的設定：改名、飾品、重新生成、刪除" title="改名、飾品、重新生成、放生"><span aria-hidden="true">⚙</span>設定</button>`;
     } else if (!q) {
       const n = S.tasks.filter((t) => !t.archivedAt && !t.done).length + S.reminders.length + S.stocks.length + S.folders.length;
       line.innerHTML = `<span class="ol-text">${workers().length} 隻庫卡・一共盯著 ${n} 件事<span class="sep">｜</span>交給：${esc(qName(targetOwnerForAll()))}</span>${relBtn()}`;

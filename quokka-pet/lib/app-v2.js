@@ -857,7 +857,7 @@ function start() {
     if (!romance.canOwnTasks(q)) return { ok: false, message: '小袋鼠還太小，不能幫忙送禮物' };
     const it = items()[item];
     if (!o.prepaid && it.n <= 0) return { ok: false, message: `${g.name}用完了，等一下會補` };
-    const to = giftTarget(qid, item);
+    const to = o.to && o.to !== qid && qById(o.to) && romance.canOwnTasks(qById(o.to)) ? o.to : giftTarget(qid, item);
     if (!to) return { ok: false, message: `${q.name}還沒有可以送的對象` };
     if (lastGiftTo[to] && Date.now() - lastGiftTo[to] < 10 * 60000) return { ok: false, message: `${qById(to).name}剛收過禮物，等一下再送吧` };
     const r = social.gift(qid, to, item);
@@ -894,7 +894,17 @@ function start() {
   }
   ipcMain.on('item:release', (e, { cancel } = {}) => endCarry(!!cancel));
   // 放在某隻身上的禮物，或掉在地上被撿起來的禮物 → 牠拿去送給想送的那隻
-  ipcMain.handle('item:use', (e, { qid, item, prepaid } = {}) => (BAG[item] === 'gift' ? giveGift(qid, item, { prepaid: !!prepaid }) : { ok: false }));
+  ipcMain.handle('item:use', (e, { qid, item, prepaid, to } = {}) => (BAG[item] === 'gift' ? giveGift(qid, item, { prepaid: !!prepaid, to: typeof to === 'string' ? to : null }) : { ok: false }));
+  // 禮物自己用（點心自己吃、玫瑰自己收下）：扣一個
+  ipcMain.handle('item:self', (e, { qid, item } = {}) => {
+    if (BAG[item] !== 'gift' || !qById(qid)) return { ok: false };
+    const it = items()[item];
+    if (it.n <= 0) return { ok: false, message: `${GIFTS[item].name}用完了，等一下會補` };
+    it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now();
+    changed(); return { ok: true };
+  });
+  // 面板上點一下禮物：到桌面上那隻頭上讓你選「自己用」或「送給誰」
+  ipcMain.on('item:offer', (e, { qid, item } = {}) => { if (BAG[item] === 'gift' && qById(qid)) toStage('item:offer', { qid, item }); });
   // 禮物掉在地上：先扣掉（不能同時丟好幾朵最後一朵玫瑰）；沒人撿、消失了就退回
   ipcMain.handle('item:ground', (e, { item } = {}) => {
     if (BAG[item] !== 'gift') return { ok: true };
