@@ -2,7 +2,7 @@
 //   Store、Router（事件交給負責的那隻）、ReminderClock、StockService、FolderWatch、PresenceWatch、
 //   StageManager（舞台圖層）、面板、右鍵選單、系統通知
 // 面板與舞台之間不直接溝通；所有修改經這裡驗證後寫入，再廣播完整快照給面板、必要的事件給舞台。
-const { app, BrowserWindow, ipcMain, dialog, screen, Menu, Notification, powerMonitor, net, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, Menu, Notification, powerMonitor, net, shell, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
@@ -353,11 +353,29 @@ function start() {
     iconCache.set(p, url);
     return url;
   }
+  // 捷徑指定的圖示檔（.ico／.png）：直接讀圖（getFileIcon 只會給「圖示檔」這種檔案類型的通用圖）
+  function imageIcon(p) {
+    if (iconCache.has('img:' + p)) return iconCache.get('img:' + p);
+    let url = '';
+    try { let im = nativeImage.createFromPath(p); if (!im.isEmpty()) { const z = im.getSize(); if (z.width > 64) im = im.resize({ width: 64, quality: 'best' }); url = im.toDataURL(); } } catch (e) { url = ''; }
+    iconCache.set('img:' + p, url);
+    return url;
+  }
   ipcMain.handle('shortcuts:list', async (e, { qid } = {}) => {
     const mine = data.folders.filter((f) => f.owner === qid).slice(0, 12);
     return Promise.all(mine.map(async (f) => {
       let st = null; try { st = await fs.promises.stat(f.path); } catch (err) { /* 找不到 */ }
-      return { id: f.id, path: f.path, name: path.basename(f.path) || f.path, dir: st ? st.isDirectory() : !f.file, missing: !st, icon: st && st.isFile() ? await iconOf(f.path) : '' };
+      let name = path.basename(f.path) || f.path, dir = st ? st.isDirectory() : !f.file, icon = '';
+      // Windows 捷徑（.lnk）：用它指向的程式／資料夾的圖示（直接拿 .lnk 的圖示只會是一張白紙），名稱去掉 .lnk
+      if (st && st.isFile() && /\.lnk$/i.test(f.path) && process.platform === 'win32') {
+        name = name.replace(/\.lnk$/i, '');
+        let link = null; try { link = shell.readShortcutLink(f.path); } catch (err) { /* 讀不到就照一般檔案 */ }
+        let tst = null; if (link && link.target) { try { tst = await fs.promises.stat(link.target); } catch (err) { /* 目標不見了 */ } }
+        if (tst && tst.isDirectory()) dir = true;
+        else if (link) icon = (link.icon && (/\.(ico|png)$/i.test(link.icon) ? imageIcon(link.icon) : await iconOf(link.icon))) || (link.target && tst && await iconOf(link.target)) || '';
+      }
+      if (!dir && !icon && st && st.isFile()) icon = await iconOf(f.path);
+      return { id: f.id, path: f.path, name, dir, missing: !st, icon };
     }));
   });
   ipcMain.on('shortcut:open', async (e, { id } = {}) => {
@@ -827,23 +845,65 @@ function start() {
     return (best && best.other) || ok(romance.partnerOf(qid)) || ok(romance.crushOf(qid)) || (data.quokkas.find((q) => ok(q.id)) || {}).id || null;
   }
   const lastGiftTo = {};                                      // 每隻 10 分鐘內只收一份禮物
-  function giveGift(qid, item) {
+  //   o.prepaid：道具已經先扣掉了（從道具包丟在地上、被撿起來的）；送不出去就退回
+  function giveGift(qid, item, o = {}) {
+    const r = giveGift0(qid, item, o);
+    if (o.prepaid && !r.ok && GIFTS[item]) { const it = items()[item]; it.n = Math.min(GIFTS[item].max, it.n + 1); changed(); }
+    return r;
+  }
+  function giveGift0(qid, item, o) {
     const g = GIFTS[item], q = qById(qid);
     if (!g || !q) return { ok: false, message: '找不到這個道具' };
     if (!romance.canOwnTasks(q)) return { ok: false, message: '小袋鼠還太小，不能幫忙送禮物' };
     const it = items()[item];
-    if (it.n <= 0) return { ok: false, message: `${g.name}用完了，等一下會補` };
+    if (!o.prepaid && it.n <= 0) return { ok: false, message: `${g.name}用完了，等一下會補` };
     const to = giftTarget(qid, item);
     if (!to) return { ok: false, message: `${q.name}還沒有可以送的對象` };
     if (lastGiftTo[to] && Date.now() - lastGiftTo[to] < 10 * 60000) return { ok: false, message: `${qById(to).name}剛收過禮物，等一下再送吧` };
     const r = social.gift(qid, to, item);
     if (!r.ok) return { ok: false, message: r.reason === 'busy' ? `${q.name}或${qById(to).name}正在忙，等一下再試` : `${qById(to).name}離得太遠了` };
-    it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now();
+    if (!o.prepaid) { it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now(); }
     lastGiftTo[to] = Date.now();
     changed();
     return { ok: true, to: qById(to).name, item: g.name };
   }
   ipcMain.handle('gift:give', (e, { qid, item } = {}) => giveGift(qid, item));
+
+  // ---- 道具包：從面板按住道具拖出來 → 道具跟著游標在桌面上（舞台畫）→ 放開時看放在哪 ----
+  //   面板按下去就抓住滑鼠（pointer capture），所以拖出面板也收得到放開；游標位置由這裡每格讀、送給舞台
+  const BAG = { badminton: 'play', volleyball: 'play', basketball: 'play', eat: 'play', rose: 'gift', snack: 'gift' };
+  let carry = null;
+  ipcMain.on('item:grab', (e, { item } = {}) => {
+    if (!BAG[item] || carry) return;
+    if (BAG[item] === 'gift' && items()[item].n <= 0) return;
+    const st = stage.primary(); if (!st || st.win.isDestroyed()) return;
+    const wa = st.display.workArea;
+    const tick = () => { const c = screen.getCursorScreenPoint(); if (!st.win.isDestroyed()) st.win.webContents.send('item:carry', { item, x: c.x - wa.x, y: c.y - wa.y }); };
+    carry = { item, st, timer: setInterval(tick, 16), until: setTimeout(() => endCarry(true), 30000) };
+    tick();
+  });
+  function endCarry(cancel) {
+    if (!carry) return;
+    const { item, st } = carry; clearInterval(carry.timer); clearTimeout(carry.until); carry = null;
+    if (st.win.isDestroyed()) return;
+    const c = screen.getCursorScreenPoint(), wa = st.display.workArea;
+    const pb = panel && !panel.isDestroyed() && panel.isVisible() && !panel.isMinimized() ? panel.getBounds() : null;
+    const inPanel = !!pb && c.x >= pb.x && c.x < pb.x + pb.width && c.y >= pb.y && c.y < pb.y + pb.height;
+    const off = c.x < wa.x || c.y < wa.y || c.x >= wa.x + wa.width || c.y >= wa.y + wa.height;
+    st.win.webContents.send('item:drop', { item, x: c.x - wa.x, y: c.y - wa.y, cancel: !!cancel || inPanel || off });
+  }
+  ipcMain.on('item:release', (e, { cancel } = {}) => endCarry(!!cancel));
+  // 放在某隻身上的禮物，或掉在地上被撿起來的禮物 → 牠拿去送給想送的那隻
+  ipcMain.handle('item:use', (e, { qid, item, prepaid } = {}) => (BAG[item] === 'gift' ? giveGift(qid, item, { prepaid: !!prepaid }) : { ok: false }));
+  // 禮物掉在地上：先扣掉（不能同時丟好幾朵最後一朵玫瑰）；沒人撿、消失了就退回
+  ipcMain.handle('item:ground', (e, { item } = {}) => {
+    if (BAG[item] !== 'gift') return { ok: true };
+    const it = items()[item];
+    if (it.n <= 0) return { ok: false, message: `${GIFTS[item].name}用完了，等一下會補` };
+    it.n -= 1; if (it.n === GIFTS[item].max - 1) it.at = Date.now();
+    changed(); return { ok: true };
+  });
+  ipcMain.on('item:refund', (e, { item } = {}) => { if (BAG[item] !== 'gift') return; const it = items()[item]; it.n = Math.min(GIFTS[item].max, it.n + 1); changed(); });
   // 送禮物的途中被打斷（拖曳、響鈴、太久）：道具退回去
   function refundGift(j) {
     if (!j || !j.gift || !GIFTS[j.type]) return;

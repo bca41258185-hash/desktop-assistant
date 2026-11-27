@@ -33,6 +33,8 @@ contextBridge.exposeInMainWorld('api', {
   readPostcard: call('postcard:read'),
   replyPostcard: call('postcard:reply'),
   giveGift: call('gift:give'),
+  itemGrab: (item) => ipcRenderer.send('item:grab', { item: String(item || '').slice(0, 20) }),   // 道具包：開始拖出面板
+  itemRelease: (cancel) => ipcRenderer.send('item:release', { cancel: !!cancel }),
   deleteWarning: call('quokka:delete-warning'),
   stockReport: (p) => ipcRenderer.invoke('stock:report', p),
   play: call('quokka:play'),
