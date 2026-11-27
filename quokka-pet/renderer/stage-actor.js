@@ -351,6 +351,8 @@
       // 動作的最後一格和待機姿勢差很多（坐著、彎腰、四肢著地…）：先花一點時間平順回到待機姿勢（任何活動都可以打斷它）
       const skip = this.skipSettle; this.skipSettle = false;
       if (!skip && this.mode === 'awake' && !this.alerts.length && !this.queue.length && !(this.ball && this.ball.stopped && !this.ball.picked) && !this.inPouch && !this.duetOn) {
+        // 做完事停在側身（走路被打斷、撿東西、互動結束…）：待機時轉回接近正面，不要一直側著身、斜眼看人
+        if (Math.abs(this.th) > 40) this.th = Math.sign(this.th) * 25;
         const r = this.restSpec(), b = this.blendTicker({ th: r.th, pose: r.pose });
         if (b) {
           const a = this, prev = this.lastDone, job = { name: 'settle', ticks: true, layer: 7.9, endOpts: { rest: false }, after: prev && prev.name, other: prev && prev.other };
