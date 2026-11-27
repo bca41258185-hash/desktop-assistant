@@ -189,7 +189,18 @@
     if (until && until > Date.now()) hideTimer = setTimeout(() => setHidden(false), Math.min(until - Date.now(), 24 * 3600e3));
   });
 
-  window.addEventListener('resize', () => { for (const a of S.actors.values()) { a.y = Math.min(a.y, innerHeight - 4); a.x = S.clamp(a.x, 20, innerWidth - 20); a.place(); } S.reportRects(); });
+  // 螢幕大小改變：身體整個留在螢幕內；原本站在最底下的，螢幕變高後也回到最底下（不會停在半空）
+  let lastH = innerHeight;
+  window.addEventListener('resize', () => {
+    for (const a of S.actors.values()) {
+      const onFloor = a.y >= lastH - 8;
+      a.y = onFloor ? innerHeight - 4 : Math.min(a.y, innerHeight - 4);
+      const half = Math.max(20, (a.w || 0) * .32);
+      a.x = S.clamp(a.x, half, innerWidth - half); a.place();
+    }
+    lastH = innerHeight;
+    S.reportRects();
+  });
   // 給測試和除錯用
   window.__stage = { actors: S.actors, balls: S.balls, cache: S.cacheInfo, kick: S.kick, running: S.running, leafRain: (n) => S.leafRain && S.leafRain(n), S };
   api.ready();

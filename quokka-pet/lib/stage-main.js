@@ -5,6 +5,7 @@
 (function () {
   // 連續第 n 次當掉後，等多久再重新載入
   const REVIVE_STEPS = [0, 10000, 30000, 60000, 120000], REVIVE_MAX = 300000, STABLE_MS = 60000;
+  const crashed = (wc) => !!(wc && typeof wc.isCrashed === 'function' && wc.isCrashed());
   const reviveDelay = (n) => (n < REVIVE_STEPS.length ? REVIVE_STEPS[n] : REVIVE_MAX);
   function createStageManager({ BrowserWindow, screen, ipcMain, path, dir, onGone = null, setTimer = setTimeout, now = () => Date.now() }) {
     const stages = new Map();          // displayId → { win, rects: [{id,x,y,w,h}], ignoring }
@@ -40,11 +41,15 @@
           st.reviveTimer = null;
           if (win.isDestroyed()) return;
           st.lastReload = now();
+          // 卡死（無限迴圈）的頁面不理 reload：先強制結束它的畫面程式（不再算成另一次當掉），再載入
+          if (st.hung && !crashed(win.webContents)) { st.killing = true; try { win.webContents.forcefullyCrashRenderer(); } catch (e) { st.killing = false; } }
+          st.hung = false;
           try { win.webContents.reload(); } catch (e) { /* 下次當掉再試 */ }
         }, delay);
       };
-      win.webContents.on('render-process-gone', () => revive('gone'));
-      win.on('unresponsive', () => revive('unresponsive'));
+      win.webContents.on('render-process-gone', () => { if (st.killing) { st.killing = false; return; } revive('gone'); });
+      win.on('unresponsive', () => { st.hung = true; revive('unresponsive'); });
+      win.on('responsive', () => { st.hung = false; });
       stages.set(display.id, st);
       return st;
     }
@@ -89,7 +94,7 @@
       }
     });
     function start() { primary(); if (!cursorTimer) poll(); }
-    function send(channel, payload) { for (const st of stages.values()) if (!st.win.isDestroyed()) st.win.webContents.send(channel, payload); }
+    function send(channel, payload) { for (const st of stages.values()) if (!st.win.isDestroyed() && !crashed(st.win.webContents)) { try { st.win.webContents.send(channel, payload); } catch (e) { /* 頁面正在重載 */ } } }
     // 暫停（離開、鎖定、隱藏）時一律先恢復穿透，不能讓透明舞台擋住桌面
     function pause(v) {
       paused = !!v;

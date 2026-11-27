@@ -24,7 +24,7 @@
   };
 
   // 互動種類：couple＝情侶專屬、family＝家族專屬
-  const TYPES = {
+  const TYPES = Object.assign(Object.create(null), {
     wave: { name: '揮手打招呼' },
     nose: { name: '碰鼻' },
     paw: { name: '碰碰手掌' },
@@ -39,7 +39,7 @@
     leanNap: { name: '靠著打盹', couple: true },
     walkTogether: { name: '並肩散步', couple: true },
     dadNose: { name: '爸爸碰鼻小袋鼠', family: true }
-  };
+  });
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;

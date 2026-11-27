@@ -14,7 +14,7 @@
       if (hit && now() - hit.at < ttlMs) return hit.val;
       let val;
       try {
-        const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(key)}?range=6mo&interval=1d`, { headers: { 'User-Agent': UA, Accept: 'application/json' } });
+        const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(key)}?range=6mo&interval=1d`, { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(10000) });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const r = (await res.json()).chart.result[0], q = r.indicators.quote[0];
         const bars = r.timestamp.map((t, i) => ({ t: new Date(t * 1000).toISOString().slice(0, 10), o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i], v: q.volume[i] }))

@@ -19,15 +19,18 @@
   S.fxEl.appendChild(el);
 
   const defaultPos = () => ({ x: innerWidth - W / 2 - 40, y: innerHeight - 6 });   // y＝籃底
+  // pos 存的是螢幕比例（fx, fy）：螢幕變小時只是畫的時候夾進來，變回原來大小還在原本的地方
+  let frac = null;
   function place() {
-    const p = pos || defaultPos();
-    p.x = S.clamp(p.x, W / 2 + 4, innerWidth - W / 2 - 4); p.y = S.clamp(p.y, H + 4, innerHeight - 2);
+    if (frac) pos = { x: frac.fx * innerWidth, y: frac.fy * innerHeight };
+    const raw = pos || defaultPos();
+    const p = { x: S.clamp(raw.x, W / 2 + 4, innerWidth - W / 2 - 4), y: S.clamp(raw.y, H + 4, innerHeight - 2) };
     el.style.transform = `translate(${Math.round(p.x - W / 2)}px, ${Math.round(p.y - H)}px)`;
     el.hidden = Date.now() < hiddenUntil || S.mode === 'hidden';
     if (fan) layoutFan();
     S.reportRects();
   }
-  const cur = () => pos || defaultPos();
+  const cur = () => { const raw = pos || defaultPos(); return { x: S.clamp(raw.x, W / 2 + 4, innerWidth - W / 2 - 4), y: S.clamp(raw.y, H + 4, innerHeight - 2) }; };
   function rect() { const p = cur(); return { id: 'basket', kind: 'basket', x: Math.round(p.x - W / 2), y: Math.round(p.y - H), w: W, h: H }; }
   const inR = (r, x, y, pad = 0) => x >= r.x - pad && x <= r.x + r.w + pad && y >= r.y - pad && y <= r.y + r.h + pad;
 
@@ -101,7 +104,7 @@
       S.Items.hold.move(e.clientX, e.clientY);
     } else if (move) {
       if (!move.moved && Math.hypot(e.clientX - move.dx - cur().x, e.clientY - move.dy - cur().y) < 4) return;
-      move.moved = true; pos = { x: e.clientX - move.dx, y: e.clientY - move.dy }; place();
+      move.moved = true; frac = null; pos = { x: e.clientX - move.dx, y: e.clientY - move.dy }; place();
     }
   }, true);
   function endDrag(e, cancel) {
@@ -116,7 +119,7 @@
       S.reportRects();
     } else if (move) {
       const m = move; move = null;
-      if (m.moved) { const p = cur(); S.api.basketPos(p.x / innerWidth, p.y / innerHeight); }
+      if (m.moved) { const p = cur(); frac = { fx: p.x / innerWidth, fy: p.y / innerHeight }; S.api.basketPos(frac.fx, frac.fy); }
       else open();
       S.reportRects();
     }
@@ -129,11 +132,11 @@
   S.api.onBasket && S.api.onBasket((p) => {
     if (!p) return;
     if ('hiddenUntil' in p) { hiddenUntil = p.hiddenUntil || 0; close(); setTimeout(place, Math.max(0, hiddenUntil - Date.now()) + 50); }
-    if ('pos' in p && !p.pos) pos = null;
+    if ('pos' in p && !p.pos) { pos = null; frac = null; }
     place();
   });
   S.api.basketGet && S.api.basketGet().then((b) => {
-    if (b && b.pos && isFinite(b.pos.fx) && isFinite(b.pos.fy)) pos = { x: b.pos.fx * innerWidth, y: b.pos.fy * innerHeight };
+    if (b && b.pos && isFinite(b.pos.fx) && isFinite(b.pos.fy)) frac = { fx: b.pos.fx, fy: b.pos.fy };
     hiddenUntil = (b && b.hiddenUntil) || 0;
     if (hiddenUntil > Date.now()) setTimeout(place, hiddenUntil - Date.now() + 50);
     place();

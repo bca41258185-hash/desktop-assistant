@@ -69,7 +69,9 @@
   // 現在該不該響：回傳 { at, missed } 或 null
   function dueNow(rem, now) {
     if (!isActive(rem)) return null;
-    const fired = dateOrNull(rem.lastFiredAt), created = dateOrNull(rem.createdAt), enabledAt = dateOrNull(rem.enabledAt);
+    let fired = dateOrNull(rem.lastFiredAt);
+    if (fired && fired > now) fired = null;                                     // 響的時間在「現在」之後＝時鐘被調回來過
+    const created = dateOrNull(rem.createdAt), enabledAt = dateOrNull(rem.enabledAt);
     const cands = [];
     const occ = latestOccurrence(rem.rule, now);
     // 建立之前、或停用期間（重新開啟 enabledAt 之前）的時段都不算，不能變成「錯過」

@@ -3,6 +3,13 @@
 //   StageManager（舞台圖層）、面板、右鍵選單、系統通知
 // 面板與舞台之間不直接溝通；所有修改經這裡驗證後寫入，再廣播完整快照給面板、必要的事件給舞台。
 const { app, BrowserWindow, ipcMain, dialog, screen, Menu, Notification, powerMonitor, net, shell, nativeImage } = require('electron');
+// 面板／舞台送來的參數是 null 時當成沒給（各處的 ({ a, b } = {}) 預設值擋不住 null，會丟例外）
+{
+  const fix = (fn) => function (e, ...a) { return fn.call(this, e, ...a.map((x) => (x === null ? undefined : x))); };
+  const h = ipcMain.handle.bind(ipcMain), o = ipcMain.on.bind(ipcMain);
+  ipcMain.handle = (ch, fn) => h(ch, fix(fn));
+  ipcMain.on = (ch, fn) => o(ch, fix(fn));
+}
 const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
@@ -27,7 +34,7 @@ const talk = require('./market-talk');
 const TR = require('../renderer/traits');
 
 const ROOT = path.join(__dirname, '..');
-const KINDS = { task: 'tasks', reminder: 'reminders', stock: 'stocks', folder: 'folders' };
+const KINDS = Object.assign(Object.create(null), { task: 'tasks', reminder: 'reminders', stock: 'stocks', folder: 'folders' });
 const ACTIONS = new Set(['badminton', 'volleyball', 'basketball', 'eat', 'hop', 'nap']);
 const NAMES = ['庫卡', '工地鼠', '股票鼠', '小助理', '資料夾鼠', '阿跳', '小麥', '團團'];
 
@@ -158,15 +165,17 @@ function start() {
       webPreferences: { preload: path.join(ROOT, 'panel-preload.js'), contextIsolation: true, nodeIntegration: false }
     });
     panel.loadFile(path.join(ROOT, 'renderer', 'panel.html'));
-    panel.on('closed', () => { panel = null; });            // 關掉就整個釋放；下次打開重新載入（約 1 秒）
+    panel.on('closed', () => { panel = null; });
+    panel.webContents.on('render-process-gone', () => { const p = panel; panel = null; try { if (p && !p.isDestroyed()) p.destroy(); } catch (e) { /* 已經關了 */ } });            // 關掉就整個釋放；下次打開重新載入（約 1 秒）
     // 最小化或藏起來的時候可能沒收到更新：叫回來（restore／show／focus）時補送一份完整快照
-    const resync = () => { if (panel && !panel.isDestroyed() && !panel.webContents.isLoading()) panel.webContents.send('store:changed', snapshot()); };
+    const resync = () => { if (panel && !panel.isDestroyed() && !panel.webContents.isCrashed() && !panel.webContents.isLoading()) panel.webContents.send('store:changed', snapshot()); };
     for (const ev of ['restore', 'show', 'focus']) panel.on(ev, resync);
   }
   // 只有面板開著、看得到時才傳資料給它
   const panelLive = () => panel && !panel.isDestroyed() && panel.isVisible();
   const toPanel = (ch, payload) => { if (panelLive()) panel.webContents.send(ch, payload); };
   function showPanel(qid) {
+    if (panel && !panel.isDestroyed() && panel.webContents.isCrashed()) { try { panel.destroy(); } catch (e) { /* 已經關了 */ } panel = null; }
     if (!panel || panel.isDestroyed()) createPanel();
     const go = () => { panel.show(); panel.focus(); if (qid) panel.webContents.send('panel:select', { qid }); };
     if (panel.webContents.isLoading()) panel.webContents.once('did-finish-load', go); else go();
@@ -609,13 +618,13 @@ function start() {
     const it = findItem(kind, id); let message;
     if (!it || !patch || typeof patch !== 'object') return { ok: false };
     if (kind === 'task') {
-      if ('text' in patch && str(patch.text)) it.text = str(patch.text);
+      if ('text' in patch && typeof patch.text === 'string' && str(patch.text)) it.text = str(patch.text);
       if ('done' in patch) {
         const was = it.done; it.done = !!patch.done; it.doneAt = it.done ? nowISO() : null;
         if (it.done && !was) event(it.owner, 'task-done', { text: it.text, allDone: !data.tasks.some((t) => t.owner === it.owner && !t.done) });
       }
     } else if (kind === 'reminder') {
-      if ('text' in patch && str(patch.text)) it.text = str(patch.text);
+      if ('text' in patch && typeof patch.text === 'string' && str(patch.text)) it.text = str(patch.text);
       if ('enabled' in patch) {
         const was = it.enabled !== false;
         if (!patch.enabled) { it.enabled = false; delete it.snoozeUntil; if (it.ringing) clearAlert(it); }
@@ -798,6 +807,7 @@ function start() {
   });
   ipcMain.handle('baby:name', (e, { qid, name } = {}) => {
     const q = qById(qid), nm = str(name, LIMITS.name);
+    if (q && !(q.stage === 'pouch' || q.stage === 'follow' || !q.namedAt && (q.mom || q.dad))) return { ok: false, message: '這隻已經有名字了，請用改名' };
     if (q && nameTooLong(name)) return { ok: false, message: `名字最多 ${LIMITS.name} 個字` };
     if (!q || !nm || data.quokkas.some((x) => x !== q && normName(x.name) === normName(nm))) return { ok: false, message: '名字不能空白或重複' };
     q.name = nm; q.namedAt = nowISO(); changed({ quokkas: true });
@@ -833,7 +843,7 @@ function start() {
   // 位置沒變就不寫；有變的最快每 10 秒寫一次（結束程式前一定寫入）
   const savePos = (e, { id, qid, pos, x, y } = {}) => {
     const q = qById(qid || id), px = pos ? pos.x : x, py = pos ? pos.y : y;
-    if (q && isNum(px) && isNum(py)) posSaver.update(q, px, py);
+    if (q && isNum(px) && isNum(py)) posSaver.update(q, Math.max(-200, Math.min(20000, px)), Math.max(0, Math.min(20000, py)));
   };
   ipcMain.on('stage:save-pos', savePos);
   ipcMain.on('q:rest', savePos);
@@ -853,7 +863,7 @@ function start() {
     syncCrush();
   } catch (err) {} });
   // ---- 道具欄：玫瑰（最多 3，每 30 分鐘 +1）、點心（最多 5，每 10 分鐘 +1）。給某一隻 → 牠拿去送給別隻 ----
-  const GIFTS = { rose: { name: '玫瑰', icon: '🌹', max: 3, every: 30 * 60000 }, snack: { name: '點心', icon: '🍪', max: 5, every: 10 * 60000 } };
+  const GIFTS = Object.assign(Object.create(null), { rose: { name: '玫瑰', icon: '🌹', max: 3, every: 30 * 60000 }, snack: { name: '點心', icon: '🍪', max: 5, every: 10 * 60000 } });
   function items() {
     const now = Date.now();
     if (!data.items || typeof data.items !== 'object') data.items = {};
@@ -904,11 +914,11 @@ function start() {
     changed();
     return { ok: true, to: qById(to).name, item: g.name };
   }
-  ipcMain.handle('gift:give', (e, { qid, item } = {}) => giveGift(qid, item));
+  ipcMain.handle('gift:give', (e, { qid, item } = {}) => (GIFTS[item] ? giveGift(qid, item) : { ok: false }));
 
   // ---- 道具包：從面板按住道具拖出來 → 道具跟著游標在桌面上（舞台畫）→ 放開時看放在哪 ----
   //   面板按下去就抓住滑鼠（pointer capture），所以拖出面板也收得到放開；游標位置由這裡每格讀、送給舞台
-  const BAG = { badminton: 'play', volleyball: 'play', basketball: 'play', eat: 'play', rose: 'gift', snack: 'gift' };
+  const BAG = Object.assign(Object.create(null), { badminton: 'play', volleyball: 'play', basketball: 'play', eat: 'play', rose: 'gift', snack: 'gift' });
   let carry = null;
   ipcMain.on('item:grab', (e, { item } = {}) => {
     if (!BAG[item] || carry) return;
@@ -997,7 +1007,7 @@ function start() {
     if (!prepaid && it.n <= 0) return { ok: false, message: `${GIFTS[item].name}用完了，等一下會補` };
     // 點心一定收：手上已經有東西就直接吃掉
     if (data.holding[qid] && item === 'snack') { take(); changed(); return { ok: true, eatNow: true }; }
-    if (data.holding[qid]) { if (prepaid) { it.n = Math.min(GIFTS[item].max, it.n + 1); changed(); } return { ok: false, message: `我手上已經有${GIFTS[data.holding[qid]] ? GIFTS[data.holding[qid]].name : '東西'}了` }; }
+    if (data.holding[qid]) { return { ok: false, message: `我手上已經有${GIFTS[data.holding[qid]] ? GIFTS[data.holding[qid]].name : '東西'}了` }; }
     take();
     data.holding[qid] = item; changed();
     return { ok: true };

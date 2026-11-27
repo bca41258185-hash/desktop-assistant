@@ -191,6 +191,7 @@
 
     // ---- 位置與畫格 ----
     place() {
+      if (this.y > innerHeight - 4 && !this.dragging) this.y = innerHeight - 4;      // 腳不能超過螢幕底（螢幕變小時正在走的那隻）
       const left = this.x - (S.FOOT.x - S.VB.x) * this.k, top = this.y - (S.FOOT.y - S.VB.y) * this.k - this.depth;
       this.el.style.transform = `translate3d(${left.toFixed(1)}px, ${top.toFixed(1)}px, 0)`;
       const z = Math.round(this.y - this.depth) + this.zBoost + (this.dragging ? 10000 : 0);
