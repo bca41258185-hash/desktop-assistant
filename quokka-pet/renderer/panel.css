@@ -596,3 +596,4 @@ body.bag-dragging, body.bag-dragging * { cursor: grabbing !important; }
 .menu-act { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; text-align: left; font-size: 13.5px; }
 .menu-act:hover, .menu-act:focus-visible { background: var(--accent-soft); }
 .menu-act.danger { color: var(--bad); }
+.av img { width: 100%; height: 100%; display: block; }   /* 頭像轉成的小圖 */

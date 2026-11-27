@@ -49,13 +49,13 @@
     const seen = new Set();
     setPouch(list.filter(isPouch));
     list = list.filter((q) => !isPouch(q));
-    list.slice(0, 500).forEach((q, i) => {
+    list.slice(0, 500).forEach((q, i) => { try {
       if (!q || !isId(q.id)) return;
       seen.add(q.id);
       if (S.actors.has(q.id)) S.actors.get(q.id).applyData(q);
       else if (q.stage === 'follow' && S.actors.size) addNear(q);
       else add(q, i, list.length);
-    });
+    } catch (e) { console.error('這隻畫不出來，先跳過：', q && q.id, e && e.message); } });
     for (const id of [...S.actors.keys()]) if (!seen.has(id)) remove(id);
     S.family.setPouch(pouchList);
     S.checkOverlapSoon();

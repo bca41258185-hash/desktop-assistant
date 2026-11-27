@@ -28,6 +28,16 @@
       // 欄位型別不對（手動改壞、同步軟體衝突）：該欄用空的，其他照讀，不讓程式起不來
       for (const k of ['quokkas', 'tasks', 'reminders', 'stocks', 'folders', 'postcards']) out[k] = Array.isArray(out[k]) ? out[k].filter((x) => x && typeof x === 'object') : [];
       if (!out.relations || typeof out.relations !== 'object' || Array.isArray(out.relations)) out.relations = {};
+      const seen = new Set();
+      out.quokkas = out.quokkas.filter((q) => typeof q.id === 'string' && q.id && !seen.has(q.id) && seen.add(q.id));
+      out.quokkas.forEach((q, i) => {
+        if (typeof q.name !== 'string' || !q.name.trim()) q.name = '庫卡' + (i + 1);
+        if (q.traits != null && (typeof q.traits !== 'object' || Array.isArray(q.traits))) q.traits = null;
+        if (q.traits && q.traits.personality != null && (typeof q.traits.personality !== 'object' || !Array.isArray(q.traits.personality.likes))) delete q.traits.personality;   // 個性壞掉：之後重新產生
+      });
+      out.folders = out.folders.filter((f) => typeof f.path === 'string' && f.path);
+      out.stocks = out.stocks.filter((x) => typeof x.symbol === 'string' && x.symbol);
+      for (const k of ['tasks', 'reminders']) out[k] = out[k].filter((x) => typeof x.id === 'string' || typeof x.id === 'number');
       return out;
     }
     const v1 = raw, s = v1.settings || {}, d = defaults();
@@ -43,7 +53,7 @@
   }
 
   function createStore(file, { debounceMs = 300 } = {}) {
-    let data = defaults(), timer = null; const readOnly = false;
+    let data = defaults(), timer = null, retries = 0; const readOnly = false;
     // 把讀不懂的檔案另存一份，絕不直接用預設值蓋掉使用者的資料
     function quarantine(tag) {
       try { fs.copyFileSync(file, file.replace(/\.json$/, '') + `.${tag}-${Date.now()}.json`); } catch (e) { /* 備份失敗不阻擋 */ }
@@ -61,7 +71,7 @@
         }
       }
       if (text != null) {
-        try { raw = JSON.parse(text); } catch (e) { raw = null; }
+        try { raw = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { raw = null; }
         if (!raw || typeof raw !== 'object') {
           // 寫到一半斷電留下的暫存檔若還在且完整，優先救回來
           quarantine('corrupt');
@@ -73,12 +83,16 @@
         quarantine(`v${String(ver).replace(/[^0-9a-z.]/gi, '')}`);
         raw = { ...raw, version: 2 };
       }
+      if (raw && raw.version == null && Array.isArray(raw.quokkas)) raw = { ...raw, version: 2 };
       const isV1 = raw && raw.version !== 2;
       if (isV1) {
         const bak = file.replace(/\.json$/, '.v1.bak.json');
-        try { if (!fs.existsSync(bak)) fs.writeFileSync(bak, JSON.stringify(raw, null, 2)); } catch (e) { /* 備份失敗不阻擋 */ }
+        try { fs.writeFileSync(fs.existsSync(bak) ? bak.replace(/\.json$/, `-${Date.now()}.json`) : bak, JSON.stringify(raw, null, 2)); } catch (e) { /* 備份失敗不阻擋 */ }
       }
+      const COLS = ['quokkas', 'tasks', 'reminders', 'stocks', 'folders', 'postcards'];
       data = migrate(raw);
+      // 有整欄格式不對、或有項目壞掉被拿掉：先備份原檔（不默默覆蓋使用者的資料）
+      if (raw && !isV1 && text != null && COLS.some((k) => raw[k] != null && (!Array.isArray(raw[k]) || raw[k].length !== data[k].length))) quarantine('fixed');
       if (isV1) saveNow();
       return data;
     }
@@ -91,7 +105,11 @@
         const fd = fs.openSync(tmp, 'w');
         try { fs.writeFileSync(fd, JSON.stringify(data, null, 2), 'utf-8'); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
         fs.renameSync(tmp, file);              // 原子取代：不會留下寫一半的檔案
-      } catch (e) { console.error('儲存失敗:', e.message); }
+        retries = 0;
+      } catch (e) {
+        console.error('儲存失敗:', e.message);
+        if (retries < 5) { retries++; timer = setTimeout(saveNow, 2000 * retries); }   // 被鎖住：等一下再存
+      }
     }
     function save() { if (timer) clearTimeout(timer); timer = setTimeout(saveNow, debounceMs); }
     return { load, save, saveNow, get data() { return data; }, set data(v) { data = v; } };

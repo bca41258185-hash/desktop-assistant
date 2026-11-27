@@ -219,7 +219,7 @@
     return { ...P, likes, dislike, hobbies, archetype, socialStyle, initiative };
   }
   function ensurePersonality(t) {
-    if (t && !t.personality) t.personality = personality(t);
+    if (t && (!t.personality || typeof t.personality !== 'object' || !Array.isArray(t.personality.likes))) t.personality = personality(t);
     return t;
   }
   const bars = (v) => '●'.repeat(Math.round(v * 4) + 1) + '○'.repeat(4 - Math.round(v * 4));

@@ -241,7 +241,24 @@
     g.setAttribute('style', '--band:' + ((q.traits && q.traits.band) || '#e5533d'));
     g.innerHTML = svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
     avKeys.set(q.id, key);
+    rasterize(q.id, key, svg);
     return sid;
+  }
+  const avImg = new Map();                                   // qid → { key, url }
+  let avRedraw = 0;
+  function rasterize(qid, key, svg) {
+    if (!svg || (avImg.get(qid) || {}).key === key) return;
+    const full = /^<svg[^>]*xmlns=/.test(svg) ? svg : svg.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const c = document.createElement('canvas'); c.width = c.height = 96;
+        c.getContext('2d').drawImage(im, 0, 0, 96, 96);
+        avImg.set(qid, { key, url: c.toDataURL('image/png') });
+        clearTimeout(avRedraw); avRedraw = setTimeout(() => render(), 200);    // 圖好了：換成圖片
+      } catch (e) { /* 畫不出來就繼續用向量圖 */ }
+    };
+    im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(full);
   }
   function pruneAvatars() {
     const ids = new Set(S.quokkas.map((q) => q.id));
@@ -251,7 +268,8 @@
   }
   function avatar(q, cls) {
     if (!q) return `<span class="av ${cls || ''} av-missing" aria-hidden="true">?</span>`;
-    const sid = ensureAvatar(q);
+    const sid = ensureAvatar(q), img = avImg.get(q.id);
+    if (img && img.key === avKeys.get(q.id)) return `<span class="av ${cls || ''}" aria-hidden="true"><img src="${img.url}" alt="" draggable="false"></span>`;
     return `<span class="av ${cls || ''}" aria-hidden="true"><svg viewBox="${HEAD_VB}" focusable="false"><use href="#${sid}"/></svg></span>`;
   }
   let bigSeq = 0;
@@ -937,7 +955,7 @@
     const active = tasks.filter((t) => !t.done || ui.justDone.has(t.id)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
     const done = tasks.filter((t) => t.done && !ui.justDone.has(t.id)).sort((a, b) => String(b.doneAt || '').localeCompare(String(a.doneAt || '')));
     if (active.length || done.length) {
-      const doneBox = done.length ? `<details class="done-box"${ui.doneOpen ? ' open' : ''}><summary data-fk="doneSum">已完成（${done.length}）</summary><ul class="list">${done.map(taskRow).join('')}</ul></details>` : '';
+      const doneBox = done.length ? `<details class="done-box"${ui.doneOpen ? ' open' : ''}><summary data-fk="doneSum">已完成（${done.length}）</summary>${ui.doneOpen ? `<ul class="list">${done.slice(0, 50).map(taskRow).join('')}</ul>${done.length > 50 ? `<p class="note">只顯示最近 50 筆</p>` : ''}` : ''}</details>` : '';
       out.push(section('task', '待辦', active.filter((t) => !t.done).length, `<ul class="list">${active.map(taskRow).join('')}</ul>${doneBox}`));
     }
     // 提醒：響鈴中、錯過的排最上面
@@ -1394,7 +1412,7 @@
     } else if (t.id === 'defOwner') { S.settings.defaultOwner = t.value; render(); api.setSettings({ defaultOwner: t.value }); }
   });
   document.addEventListener('toggle', (e) => {
-    if (e.target.classList && e.target.classList.contains('done-box')) ui.doneOpen = e.target.open;
+    if (e.target.classList && e.target.classList.contains('done-box')) { const was = ui.doneOpen; ui.doneOpen = e.target.open; if (ui.doneOpen && !was) renderLists(); }   // 展開時才畫已完成的清單
     if (e.target.classList && e.target.classList.contains('f-changes')) { const id = e.target.dataset.fid; if (e.target.open) ui.folderOpen.add(id); else ui.folderOpen.delete(id); }
   }, true);
   document.addEventListener('keydown', (e) => {

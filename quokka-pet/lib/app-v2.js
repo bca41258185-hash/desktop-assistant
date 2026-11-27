@@ -1140,6 +1140,10 @@ function start() {
   boot('股價', () => { syncWatchlist(); stocks.start(); });
   try { romance.refreshAges(); romance.dailyDecay(); sweepReminders(); } catch (e) {}
   scheduleSocial(15000);               // 開機 15 秒後開始安排互動
+  // Windows 關機／登出：before-quit 不會觸發，視窗收到 session-end 時就先把最後的修改存起來
+  const flushAll = () => { try { reminderNotes.flush(); posSaver.flush(); store.saveNow(); } catch (e) { /* 盡量存 */ } };
+  app.on('browser-window-created', (e, w) => w.on('session-end', flushAll));
+  for (const w of BrowserWindow.getAllWindows()) w.on('session-end', flushAll);
   app.on('before-quit', () => { app.isQuitting = true; clearTimeout(socialTimer); clearTimeout(affTimer); stocks.stop(); clock.stop(); folderWatch.stop(); reminderNotes.flush(); posSaver.flush(); store.saveNow(); });
   return { store, stage, data, showPanel, unhide, stocks, quotes, layers, positions, folderWatch, posSaver, perf };
 }
