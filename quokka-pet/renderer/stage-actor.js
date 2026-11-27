@@ -46,10 +46,9 @@
           const all = L.flatMap((x) => (Array.isArray(x.ticks) ? x.ticks : [x]));
           return describe({ kind: 'stock', list: all }, beh);
         }
-        if (L.every((x) => x.tick)) {                            // 每分鐘報價：平常說話的樣子，不跳不垂頭
-          const segs = [];
-          L.forEach((x, i) => { if (i) segs.push({ t: '、' }); segs.push(stockSeg(x)); });
-          return { anim: 'talk', text: segs };
+        if (L.every((x) => x.tick)) {                            // 每分鐘報價：平常說話的樣子，不跳不垂頭；好幾檔就一檔一檔輪流講
+          const seq = L.map((x) => [stockSeg(x)]);
+          return { anim: 'talk', text: seq[0], seq: seq.length > 1 ? seq : null };
         }
         if (n > 1) {
           const segs = [{ t: `${n} 檔股票有變化：` }];
@@ -481,14 +480,20 @@
     reactJob(item) {
       const d = describe(item, this.beh);
       const anim = ANIM.REACT[d.anim] || ANIM.REACT.talk;
-      const ms = Math.max(1500, Math.min(3000, anim.dur * 1000));
+      const STEP = 2400, seq = d.seq;                                   // seq：同一個氣泡輪流講好幾句（每句 STEP）
+      const ms = seq ? STEP * seq.length : Math.max(1500, Math.min(3000, anim.dur * 1000));
+      let shown = 0;
       const job = this.animJob('react:' + item.kind, anim, {
+        loop: !!seq,
+        each: (j, now) => {
+          if (seq) { const k = Math.min(seq.length - 1, Math.floor((now - j.t0) / STEP)); if (k !== shown) { shown = k; this.say(seq[k], { ms: STEP + 1600 }); } }
+          return now - j.t0 < ms;
+        },
         start: () => {
-          this.say(d.text, { ms: ms + 1600, big: d.big });
+          this.say(d.text, { ms: (seq ? STEP : ms) + 1600, big: d.big });
           if (d.burst) { const p = this.toStage(80, 40); S.burst(p.x, p.y, d.burst); }
           if (S.family) S.family.momReact(this, anim);
         },
-        each: (j, now) => now - j.t0 < ms,
         end: () => { this.lastReportEnd = performance.now(); }
       });
       job.item = item;
