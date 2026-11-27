@@ -404,6 +404,15 @@ function start() {
       { label: '從捷徑移除', click: () => { const i = data.folders.indexOf(f); if (i >= 0) { data.folders.splice(i, 1); changed(); event(f.owner, 'note', { text: `「${name}」從捷徑拿掉了` }); } } }
     ]), e.sender);
   });
+  // 捷徑圖示拖到另一隻身上：交給牠
+  ipcMain.on('shortcut:give', (e, { id, qid } = {}) => {
+    const f = data.folders.find((x) => x.id === id), q = qById(qid);
+    if (!f || !q || f.owner === qid) return;
+    const name = (path.basename(f.path) || f.path).replace(/\.lnk$/i, '');
+    if (!romance.canOwnTasks(q)) { event(f.owner, 'note', { text: `${q.name}還太小，不能幫忙拿捷徑` }); return; }
+    if (LIM.folder && countOf('folder', qid) >= LIM.folder) { event(f.owner, 'note', { text: `${q.name}的捷徑已經滿了` }); return; }
+    f.owner = qid; changed(); event(qid, 'task-added', { text: name });
+  });
   ipcMain.on('shortcut:open', async (e, { id } = {}) => {
     const f = data.folders.find((x) => x.id === id); if (!f) return;      // 只開清單裡的路徑
     const err = await shell.openPath(f.path).catch((x) => String(x));

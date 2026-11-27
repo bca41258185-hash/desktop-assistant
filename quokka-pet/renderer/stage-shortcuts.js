@@ -61,6 +61,7 @@
     });
     el.addEventListener('click', (e) => {
       const b = e.target.closest('.sc'); if (!b) return;
+      if (performance.now() - dragEndAt < 400) return;                  // 剛拖完，不算點一下
       S.api.openShortcut(b.dataset.id);
       b.classList.add('opened'); setTimeout(hide, 250);
     });
@@ -75,6 +76,7 @@
   }
   function onMove(x, y) {
     mx = x; my = y;
+    if (sdrag && sdrag.on) return;                                       // 正在拖捷徑圖示：不浮出別隻的捷徑
     const a = actorAt(x, y);
     const overFan = fan && fan.rects.some((r) => inRect(r, x, y, 6));
     if (a && !a.dragging && !pressed && a.mode === 'awake' || overFan) {
@@ -110,5 +112,37 @@
     S.api.dropShortcuts(a.id, files);
   });
 
-  S.Shortcuts = { hide, rects: () => (fan ? fan.rects : []), refresh: () => { if (fan) { const q = S.actors.get(fan.qid); hide(); if (q) show(q); } } };
+  // ---- 把捷徑圖示拖到另一隻身上 → 交給牠 ----
+  let sdrag = null, dragEndAt = 0;
+  document.addEventListener('pointerdown', (e) => {
+    const b = e.button === 0 && e.target.closest && e.target.closest('.shortcuts .sc'); if (!b || !fan) return;
+    sdrag = { id: b.dataset.id, from: fan.qid, x0: e.clientX, y0: e.clientY, on: false, ghost: null, target: null, html: b.querySelector('.ic').innerHTML };
+  }, true);
+  document.addEventListener('pointermove', (e) => {
+    const d = sdrag; if (!d) return;
+    if (!d.on) {
+      if (Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 8) return;
+      d.on = true; d.ghost = document.createElement('div'); d.ghost.className = 'sc-ghost'; d.ghost.innerHTML = d.html;
+      document.getElementById('fx').appendChild(d.ghost); hide(); S.reportRects();
+    }
+    d.ghost.style.transform = `translate(${e.clientX - 26}px, ${e.clientY - 26}px) rotate(-8deg)`;
+    const a = actorAt(e.clientX, e.clientY), t = a && a.id !== d.from && !a.inPouch ? a : null;
+    if (t !== d.target) {
+      if (d.target) d.target.el.classList.remove('sc-target');
+      d.target = t;
+      if (t) { t.el.classList.add('sc-target'); if (t.mode === 'awake' && !t.job) t.say('要給我嗎？', { ms: 1200 }); }
+    }
+  }, true);
+  const sEnd = (e, cancel) => {
+    const d = sdrag; sdrag = null; if (!d || !d.on) return;
+    dragEndAt = performance.now();
+    if (d.target) d.target.el.classList.remove('sc-target');
+    if (d.ghost) d.ghost.remove();
+    if (!cancel && d.target) S.api.giveShortcut(d.id, d.target.id);
+    S.reportRects();
+  };
+  document.addEventListener('pointerup', (e) => sEnd(e, false), true);
+  document.addEventListener('pointercancel', (e) => sEnd(e, true), true);
+
+  S.Shortcuts = { dragging: () => !!(sdrag && sdrag.on), hide, rects: () => (fan ? fan.rects : []), refresh: () => { if (fan) { const q = S.actors.get(fan.qid); hide(); if (q) show(q); } } };
 })();

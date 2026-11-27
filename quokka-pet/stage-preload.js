@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('stageApi', {
   selfItem: (p) => ipcRenderer.invoke('item:self', { qid: str(p && p.qid), item: str(p && p.item, 20) }),
   decideItem: (p) => ipcRenderer.invoke('item:decide', { qid: str(p && p.qid), item: str(p && p.item, 20) }),
   shortcutMenu: (id) => ipcRenderer.send('shortcut:menu', { id: str(id) }),
+  giveShortcut: (id, qid) => ipcRenderer.send('shortcut:give', { id: str(id), qid: str(qid) }),
   itemCounts: () => ipcRenderer.invoke('items:counts'),
   basketGet: () => ipcRenderer.invoke('basket:get'),
   basketPos: (fx, fy) => ipcRenderer.send('basket:pos', { fx: Number(fx), fy: Number(fy) }),
