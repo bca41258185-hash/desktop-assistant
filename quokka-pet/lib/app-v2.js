@@ -9,7 +9,7 @@ const chokidar = require('chokidar');
 const { createStore, newId, LIMITS } = require('./store');
 const { parseInput, noteText } = require('./parse-input');
 const R = require('./reminders');
-const { createStockService } = require('./stock-service');
+const { createStockService, isMarketOpen } = require('./stock-service');
 const { createStepTracker } = require('./stock-step');
 const { createStageManager } = require('./stage-main');
 const { createCircleDetector } = require('./gesture');
@@ -230,10 +230,12 @@ function start() {
   powerMonitor.on('unlock-screen', () => clock.check());
 
   // ---- 股價（StockService ＋ 跨門檻） ----------------------------------------------
+  const quoteAt = {};                                         // 每檔最後一次拿到新報價的時間（判斷今天有沒有開盤）
   const steps = createStepTracker({ stepPct: data.settings.stockStepPct || 1 });
   const stocks = createStockService({
     fetch: (url, opt) => net.fetch(url, opt),                 // Electron 的 net 會走系統代理（公司網路）
     onUpdate: (u) => {
+      if (!u.stale) quoteAt[u.symbol] = Date.now();
       quotes[u.symbol] = { price: u.price, pct: u.pct, stale: !!u.stale, recovered: !!u.recovered, name: u.name, time: u.time, market: u.market,
         prevClose: u.prevClose, open: u.open, high: u.high, low: u.low, volume: u.volume, day: u.day };
       toPanel('stock:tick', { symbol: u.symbol, market: u.market, ...quotes[u.symbol] });
@@ -279,7 +281,6 @@ function start() {
     for (const market of ['tw', 'us']) {
       const any = Object.values(quotes).find((q) => q.market === market && q.day);
       if (!any || closeTold[market] === any.day) continue;
-      const { isMarketOpen } = require('./stock-service');
       const hm = new Intl.DateTimeFormat('en-GB', { timeZone: market === 'tw' ? 'Asia/Taipei' : 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).reduce((o, p) => (o[p.type] = p.value, o), {});
       const today = `${hm.year}-${hm.month}-${hm.day}`, mins = Number(hm.hour) * 60 + Number(hm.minute), closeAt = market === 'tw' ? 13 * 60 + 30 : 16 * 60;
       if (any.day !== today || isMarketOpen(market, new Date()) || mins < closeAt + 5 || mins > closeAt + 90 || away) continue;
@@ -288,6 +289,18 @@ function start() {
       let i = 0; for (const qid of owners) setTimeout(() => tellMarket(qid, { brief: true }).catch(() => {}), 1500 * i++);
     }
   }, 5 * 60000);
+  // 盤中每分鐘報一次價：每隻把自己盯的、開盤中而且有新報價的股票說一遍（使用者不在、睡著時不報）
+  setInterval(() => {
+    if (away || sleeping) return;
+    const by = {}, t = Date.now();
+    for (const s of data.stocks) {
+      const q = quotes[s.symbol];
+      if (!q || q.stale || !isNum(q.pct) || !isNum(q.price) || !isMarketOpen(s.market, new Date()) || !(t - (quoteAt[s.symbol] || 0) < 3 * 60000)) continue;
+      (by[s.owner] = by[s.owner] || []).push({ symbol: s.symbol, name: q.name || s.name || s.symbol, pct: q.pct, price: q.price, dir: q.pct < 0 ? 'down' : 'up', tick: true });
+    }
+    let i = 0;
+    for (const [qid, list] of Object.entries(by)) setTimeout(() => { for (const p of list) event(qid, 'stock', p); }, 1500 * i++);
+  }, 60000);
   ipcMain.handle('stock:report', async (e, { id, symbol } = {}) => {
     const st = data.stocks.find((x) => x.id === id) || data.stocks.find((x) => x.symbol === symbol);
     if (!st) return { ok: false, message: '找不到這檔股票' };
@@ -824,7 +837,7 @@ function start() {
       } catch (err) { /* 沒有語錄就算了 */ }
     };
     const play = (a, label) => ({ label, click: () => toStage('q:play', { qid, action: a }) });
-    Menu.buildFromTemplate([
+    stage.popupMenu(Menu.buildFromTemplate([
       { label: `${q.name} 說一句話`, click: say },
       { label: '今天股市怎麼了？', click: () => tellMarket(qid).catch(() => {}) },
       { label: '陪我玩', submenu: [play('badminton', '羽球'), play('volleyball', '排球'), play('basketball', '籃球'), play('eat', '吃葉子'), play('hop', '跳一跳'), play('nap', '打盹')] },
@@ -838,7 +851,7 @@ function start() {
         hideAll(30);
       } },
       { label: '結束庫卡助理', click: () => { app.isQuitting = true; app.quit(); } }
-    ]).popup();
+    ]), e.sender);
   });
   ipcMain.on('perf:stats', () => {});
   let hideTimer = null, hiddenUntil = 0;

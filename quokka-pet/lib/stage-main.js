@@ -8,7 +8,7 @@
   const reviveDelay = (n) => (n < REVIVE_STEPS.length ? REVIVE_STEPS[n] : REVIVE_MAX);
   function createStageManager({ BrowserWindow, screen, ipcMain, path, dir, onGone = null, setTimer = setTimeout, now = () => Date.now() }) {
     const stages = new Map();          // displayId → { win, rects: [{id,x,y,w,h}], ignoring }
-    let cursorTimer = null, paused = false;
+    let cursorTimer = null, paused = false, menuWin = null;   // menuWin：右鍵選單開著的那一層（選單關掉前不切穿透、不放焦點）
 
     function create(display) {
       const wa = display.workArea;
@@ -65,6 +65,7 @@
       const c = screen.getCursorScreenPoint();
       let near = false, look = false;
       for (const st of stages.values()) {
+        if (menuWin === st.win) continue;                         // 選單開著：游標移到選單上不能讓舞台變穿透、放掉焦點（選單會被關掉）
         let over = st.dragging;
         for (const r of st.rects) {
           const dx = Math.max(r.x - c.x, 0, c.x - (r.x + r.w)), dy = Math.max(r.y - c.y, 0, c.y - (r.y + r.h));
@@ -107,7 +108,16 @@
       }
     }
     for (const ev of ['display-metrics-changed', 'display-added', 'display-removed']) screen.on(ev, refit);
-    return { start, send, pause, stages, primary };
+    // 在某一層（送出事件的那個網頁）打開原生右鍵選單：選單開著時維持可點、保留焦點，關掉後回到一般判斷
+    function popupMenu(menu, sender) {
+      let st = null;
+      for (const x of stages.values()) if (!x.win.isDestroyed() && x.win.webContents === sender) st = x;
+      st = st || primary();
+      if (st.win.isDestroyed()) return;
+      menuWin = st.win; setIgnore(st, false); st.win.focus();
+      menu.popup({ window: st.win, callback: () => { if (menuWin === st.win) menuWin = null; } });
+    }
+    return { start, send, pause, stages, primary, popupMenu };
   }
   module.exports = { createStageManager, reviveDelay, REVIVE_MAX, STABLE_MS };
 })();

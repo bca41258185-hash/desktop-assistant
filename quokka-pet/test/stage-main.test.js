@@ -48,3 +48,22 @@ test('舞台當掉：立刻清掉可點範圍、回到穿透；10 秒內第二�
   s.win.webContents.emit('render-process-gone');
   s.advance(0); assert.equal(s.win.reloads, 4);
 });
+
+test('右鍵選單開著時：游標移到選單上，舞台仍然可點、不放掉焦點；選單關掉後才恢復穿透', () => {
+  const realST = global.setTimeout, realCT = global.clearTimeout, q = [];
+  global.setTimeout = (fn) => { q.push(fn); return q.length; }; global.clearTimeout = () => {};
+  try {
+    const s = setup();
+    let blurred = 0, focused = 0, popped = null;
+    s.win.blur = () => { blurred++; }; s.win.focus = () => { focused++; }; s.win.isFocused = () => true;
+    s.sm.start(); q.shift()();                                           // 第一次 poll：游標不在庫卡上 → 穿透
+    assert.equal(s.win.ignore, true);
+    s.sm.popupMenu({ popup: (o) => { popped = o; } }, s.win.webContents);
+    assert.equal(popped.window, s.win); assert.equal(s.win.ignore, false); assert.equal(focused, 1);
+    q.shift()();                                                         // 選單開著，游標在選單上（不在庫卡範圍）
+    assert.equal(s.win.ignore, false); assert.equal(blurred, 0);
+    popped.callback();                                                   // 選單關掉
+    q.shift()();
+    assert.equal(s.win.ignore, true);
+  } finally { global.setTimeout = realST; global.clearTimeout = realCT; }
+});

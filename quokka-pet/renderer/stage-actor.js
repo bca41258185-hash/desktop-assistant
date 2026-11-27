@@ -28,6 +28,8 @@
     const nm = short(p.name || p.symbol || '股票', 8);
     if (p.limit === 'up') return { t: `${nm} 漲停！▲${pctTxt(p.pct)}`, tone: 'up' };
     if (p.limit === 'down') return { t: `${nm} 跌停……▼${pctTxt(p.pct)}`, tone: 'down' };
+    if (p.tick) { const px = Number(p.price), pt = Number.isFinite(px) ? ' ' + px.toLocaleString('zh-TW', { maximumFractionDigits: px < 10 ? 3 : 2 }) : '';
+      return Math.abs(Number(p.pct) || 0) < .05 ? { t: `${nm}${pt} 平盤` } : p.pct < 0 ? { t: `${nm}${pt} ▼${pctTxt(p.pct)}`, tone: 'down' } : { t: `${nm}${pt} ▲${pctTxt(p.pct)}`, tone: 'up' }; }
     return p.dir === 'down' ? { t: `${nm} ▼${pctTxt(p.pct)}……`, tone: 'down' } : { t: `${nm} ▲${pctTxt(p.pct)}！`, tone: 'up' };
   };
   // 一則報告 → 動作、台詞、特效
@@ -40,6 +42,11 @@
         if (L.some((x) => x.allDone)) return { anim: 'bigCheer', text: '全部完成了！太棒了！', burst: 'big', big: true };
         return { anim: 'hopJoy', text: n > 1 ? `完成 ${n} 件事了！` : '完成' + (p.text ? `「${short(p.text)}」` : '') + '！', burst: 'stars' };
       case 'stock': {
+        if (L.every((x) => x.tick)) {                            // 每分鐘報價：平常說話的樣子，不跳不垂頭
+          const segs = [];
+          L.forEach((x, i) => { if (i) segs.push({ t: '、' }); segs.push(stockSeg(x)); });
+          return { anim: 'talk', text: segs };
+        }
         if (n > 1) {
           const segs = [{ t: `${n} 檔股票有變化：` }];
           L.forEach((x, i) => { if (i) segs.push({ t: '、' }); segs.push(stockSeg(x)); });
@@ -392,7 +399,7 @@
       if (same) {
         for (const p of item.list) {
           const i = item.kind === 'stock' ? same.list.findIndex((x) => x.symbol && x.symbol === p.symbol) : -1;
-          if (i >= 0) same.list[i] = p; else same.list.push(p);
+          if (i >= 0) { if (!p.tick || same.list[i].tick) same.list[i] = p; } else same.list.push(p);   // 每分鐘報價不蓋掉還沒講的漲跌反應
         }
         same.prio = Math.max(same.prio || 0, item.prio || 0);
         return;
