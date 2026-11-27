@@ -697,7 +697,8 @@ function start() {
     return { ok: true };
   }
   // 右鍵「放生」：先確認；負責的事交給第一隻放得下的，都放不下就問要不要一起刪除
-  function confirmRelease(qid) {
+  //   確認框一定要用非同步的：同步的會卡住主行程，舞台（右鍵時暫時可點）就一直蓋在確認框上面，按不到
+  async function confirmRelease(qid) {
     const q = qById(qid); if (!q) return;
     const owners = data.quokkas.filter((x) => x.id !== qid && romance.canOwnTasks(x));
     if (!owners.length) { dialog.showMessageBox({ type: 'info', title: '放生', message: '至少要留 1 隻庫卡，最後一隻不能放生。', buttons: ['好'] }); return; }
@@ -705,9 +706,9 @@ function start() {
     const fits = owners.find((o) => !transferProblem(data, qid, o.id, { LIM, kinds: KINDS, keyOf: TRANSFER_KEY, counts: (kind, x) => !(kind === 'task' && x.done) && !(kind === 'reminder' && spent(x)) }));
     const to = fits || null;
     const what = !n ? '' : to ? `牠負責的 ${n} 件事會交給${to.name}。` : `其他庫卡都放不下牠負責的 ${n} 件事，這些事會一起刪除。`;
-    const r = dialog.showMessageBoxSync({ type: 'question', title: '放生', message: `要放生${q.name}嗎？`,
+    const { response: r } = await dialog.showMessageBox({ type: 'question', title: '放生', message: `要放生${q.name}嗎？`,
       detail: `會有一隻禿鷹飛過來，把牠帶回大自然。${what}放生以後牠就不會回來了。`, buttons: ['放生', '取消'], defaultId: 1, cancelId: 1, noLink: true });
-    if (r !== 0) return;
+    if (r !== 0 || !qById(qid)) return;
     removeQuokka(qid, to ? to.id : 'delete', true);
   }
   ipcMain.handle('quokka:delete-warning', (e, { qid } = {}) => ({ warning: romance.deleteWarning(qid) }));
