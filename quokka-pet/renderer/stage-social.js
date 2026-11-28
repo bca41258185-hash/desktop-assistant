@@ -598,9 +598,11 @@
       a.peekT = 0;
       if (!S.actors.has(a.id) || !pouchJoeys.get(a.id)) return;
       if (a.mode !== 'awake' || S.mode !== 'awake') return;                               // 睡覺、隱藏時停掉（醒來由 F.refresh 再啟動）
+      a.peekT = -1;                                                                       // 佔位：下面的 F.refresh 看到「已經有計時器」就不會再開一個（之前每探頭一次就多一個，越跑越多、變成一直閃）
       if (a.joeyHide) { a.joeyHide = false; F.refresh(a, true); a.peekT = setTimeout(tick, 9000 + Math.random() * 14000); }
       else { a.joeyHide = true; F.refresh(a, true); a.peekT = setTimeout(tick, 2200 + Math.random() * 2200); }
     };
+    clearTimeout(a.peekT);
     a.peekT = setTimeout(tick, 7000 + Math.random() * 9000);
   };
   // 媽媽（或任何一隻）被拎起來
