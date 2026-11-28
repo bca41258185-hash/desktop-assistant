@@ -161,7 +161,7 @@ function start() {
     // 預設開大一點：寬 720、高度幾乎整個工作區，靠螢幕左邊
     const wa = screen.getPrimaryDisplay().workArea, pw = Math.min(720, wa.width - 40), ph = Math.min(1000, wa.height);
     panel = new BrowserWindow({
-      width: pw, height: ph, x: wa.x + 40, y: wa.y + Math.max(0, Math.round((wa.height - ph) / 2)), minWidth: 360, minHeight: 480, show: false, title: '庫卡助理', backgroundColor: '#f6efe3', autoHideMenuBar: true,
+      width: pw, height: ph, x: wa.x + 40, y: wa.y + Math.max(0, Math.round((wa.height - ph) / 2)), minWidth: 360, minHeight: 480, show: false, title: '庫卡助理', icon: path.join(ROOT, 'assets', 'icon.ico'), backgroundColor: '#f6efe3', autoHideMenuBar: true,
       webPreferences: { preload: path.join(ROOT, 'panel-preload.js'), contextIsolation: true, nodeIntegration: false }
     });
     panel.loadFile(path.join(ROOT, 'renderer', 'panel.html'));
@@ -1164,6 +1164,22 @@ function start() {
   app.on('browser-window-created', (e, w) => w.on('session-end', flushAll));
   for (const w of BrowserWindow.getAllWindows()) w.on('session-end', flushAll);
   app.on('before-quit', () => { app.isQuitting = true; clearTimeout(socialTimer); clearTimeout(affTimer); stocks.stop(); clock.stop(); folderWatch.stop(); reminderNotes.flush(); posSaver.flush(); store.saveNow(); });
+  // 桌面捷徑（專屬圖示）：打包版第一次啟動時在桌面放一個；資料夾被搬走後下次啟動會把捷徑指到新位置。
+  //   使用者自己刪掉捷徑的話不會再放回去。開發時（npm start）不做。
+  function desktopShortcut() {
+    if (process.platform !== 'win32' || !(app.isPackaged || process.env.QUOKKA_SHORTCUT_TEST)) return;
+    try {
+      const lnk = path.join(process.env.QUOKKA_SHORTCUT_TEST || app.getPath('desktop'), '庫卡助理.lnk');
+      const want = { target: process.execPath, cwd: path.dirname(process.execPath), icon: path.join(ROOT, 'assets', 'icon.ico'), iconIndex: 0, description: '庫卡助理：桌面上的短尾矮袋鼠' };
+      if (fs.existsSync(lnk)) {
+        let cur = null; try { cur = shell.readShortcutLink(lnk); } catch (e) { /* 讀不到就不動它 */ }
+        if (cur && (cur.target !== want.target || cur.icon !== want.icon)) shell.writeShortcutLink(lnk, 'update', want);
+      } else if (!data.settings.shortcutMade) {
+        if (shell.writeShortcutLink(lnk, 'create', want)) { data.settings.shortcutMade = true; store.save(); }
+      }
+    } catch (e) { /* 捷徑建不出來不影響使用 */ }
+  }
+  setTimeout(desktopShortcut, 3000);
   return { store, stage, data, showPanel, unhide, stocks, quotes, layers, positions, folderWatch, posSaver, perf };
 }
 

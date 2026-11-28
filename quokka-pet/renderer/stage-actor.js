@@ -318,7 +318,7 @@
         return false;
       }
       const cur = this.layer;
-      if (layer >= 4 && layer <= 7 && !(cur >= 4 && cur <= 7) && S.movingCount() >= S.MAX_MOVING) return false;
+      if (layer >= 4 && layer <= 7 && !(cur >= 4 && cur <= 7) && S.movingCount() >= S.MAX_MOVING + (layer <= 5 ? 1 : 0)) return false;   // 兩隻一起的互動多留一個名額（不然有人在散步就永遠湊不成對）
       if (layer < cur || (layer === cur && layer <= 3 && layer !== 2)) {
         const old = this.job;
         this.job = null;

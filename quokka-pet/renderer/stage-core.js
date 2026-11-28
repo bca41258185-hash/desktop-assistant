@@ -20,7 +20,7 @@
   S.SCALE = 0.95;                                     // 1 個 SVG 單位約 0.95 px（之後乘上個體大小）
   // 封存：四肢著地慢慢走（地上爬）先停用，散步和走位一律用小跳。程式碼和畫格都保留，改成 true 就恢復
   S.CRAWL = false;
-  S.MAX_MOVING = 3;                                  // 同時最多 3 隻在動（只限 L4–L7）
+  S.MAX_MOVING = 2;                                  // 同時最多 2 隻自己在動（只限 L4–L7；主人叫的、傳球接力不算）——省顯示卡，幀率不降
   S.REPORT_GAP = 1200;                                // 報告佇列每則間隔
   S.QUEUE_MAX = 5;
   // ---- 幀率：預設每秒 60 格 ----------------------------------------------------------------------------
@@ -37,7 +37,7 @@
   function applyFps(fps) {
     S.fps = perf.fps = fps;
     S.frameGap = 1000 / fps - 3;
-    S.LIVE_MS = S.liveBase = 1000 / fps - 2;
+    S.LIVE_MS = 1000 / fps - 2;
     S.qMul = fps >= 45 ? 2 : 1;
     perf.win = []; perf.cost = []; perf.okSince = 0; perf.since = performance.now();
   }
@@ -275,8 +275,6 @@
     if (now - lastFrame < S.frameGap) { raf = requestAnimationFrame(loop); return; }   // 每秒最多 S.fps 格（預設 60，吃力時自動降級）
     const gap = lastFrame ? now - lastFrame : 1e9, c0 = performance.now();
     lastFrame = now; perf.frames++;
-    // 同時有好幾隻在即時重畫（最吃顯示卡）：3 隻以上每隻改成每秒重畫約 30 次、5 隻以上約 20 次；位置移動照舊每格更新
-    { let n = 0; for (const a of S.actors.values()) if (now - (a.liveAt || -1e9) < 300) n++; S.liveCount = n; S.LIVE_MS = n >= 5 ? 48 : n >= 3 ? Math.max(S.liveBase, 31) : S.liveBase; }
     let busy = false;
     const dt = Math.min(0.05, (now - (lastBall || now)) / 1000); lastBall = now;
     for (const b of [...S.balls]) { try { if (b.tick(dt, now)) busy = true; } catch (e) { console.warn('球的更新出錯，收掉這顆球', e); try { b.remove(); } catch (e2) { /* 已經移除 */ } } }
