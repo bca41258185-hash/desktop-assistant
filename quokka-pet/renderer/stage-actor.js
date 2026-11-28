@@ -398,7 +398,7 @@
       }
       // 待機小動作：每 8–20 秒依個性抽一個（張望、抓臉、打哈欠…）；游標在旁邊時少播；受同時在動的名額限制
       if (now >= (this.idleAt || (this.idleAt = now + 6000 + Math.random() * 12000))) {
-        this.idleAt = now + 8000 + Math.random() * 12000;
+        this.idleAt = now + (8000 + Math.random() * 12000) * (S.restMul || 1);
         const nearCursor = Math.abs(S.cursor.x - this.x) < 200 && Math.abs(S.cursor.y - (this.y - this.h / 2)) < 260;
         const calm = !S.reduceMotion && !this.queue.length && !this.alerts.length && !this.bubble.kind;
         // 偷偷看喜歡的那一隻（游標不在旁邊時）
@@ -825,7 +825,7 @@
     }
     afterWalk() {
       this.th = Math.round(this.th / 15) * 15;
-      this.nextAt = performance.now() + this.restGap();
+      this.nextAt = performance.now() + this.restGap() * (S.restMul || 1);
     }
     blocked(nx, dir, ignore, gait, opt = {}) {   // 前方 120 px 內（四肢著地走時再加口鼻伸出去的距離）有別隻（伴侶、自己的小袋鼠、媽媽除外）、或游標就在前面 → 停
       for (const o of S.actors.values()) {

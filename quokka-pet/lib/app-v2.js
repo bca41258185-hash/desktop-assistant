@@ -825,6 +825,23 @@ function start() {
   const perf = createPerfSender({ getSaver: () => data.settings.saver, isOnBattery: () => powerMonitor.isOnBatteryPower(), send: (p) => stage.send('stage:perf', p) });
   const sendPerf = (force = false) => perf.update(force);
   powerMonitor.on('on-battery', () => sendPerf());           // 拔掉電源 → 30 格
+  // 看電腦現在忙不忙（整台的 CPU 使用率，每 5 秒看一次、取平滑值）：
+  //   閒（<35%）→ 四隻同時自己做動作、動得比較勤，偶爾全員；普通 → 兩隻；很忙（>70%）→ 一隻；用電池時不算閒。幀率不動。
+  {
+    const os = require('os');
+    const snap = () => os.cpus().reduce((a, c) => { const t = c.times; a.idle += t.idle; a.all += t.user + t.nice + t.sys + t.idle + t.irq; return a; }, { idle: 0, all: 0 });
+    let prev = snap(), ema = null, level = 'normal', pending = null, sentAt = 0;
+    const loadTimer = setInterval(() => {
+      const cur = snap(), dAll = cur.all - prev.all, use = dAll > 0 ? 100 * (1 - (cur.idle - prev.idle) / dAll) : 0; prev = cur;
+      ema = ema == null ? use : ema * .6 + use * .4;
+      let want = ema >= 70 ? 'busy' : ema <= 35 ? 'free' : level === 'busy' && ema > 60 ? 'busy' : level === 'free' && ema < 45 ? 'free' : 'normal';
+      let onBat = false; try { onBat = powerMonitor.isOnBatteryPower(); } catch (e) { /* 讀不到就當插電 */ }
+      if (onBat && want === 'free') want = 'normal';
+      if (want !== level) { if (pending === want) { level = want; pending = null; sentAt = 0; } else pending = want; } else pending = null;   // 連續兩次才換，避免跳來跳去
+      if (Date.now() - sentAt > 60000) { sentAt = Date.now(); stage.send('stage:load', { level, cpu: Math.round(ema) }); }
+    }, 5000);
+    if (loadTimer.unref) loadTimer.unref();
+  }
   powerMonitor.on('on-ac', () => sendPerf());                // 插回電源 → 60 格（省電沒開時）
 
   // ---- 舞台 → 主行程 ---------------------------------------------------------------

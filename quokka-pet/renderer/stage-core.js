@@ -20,7 +20,20 @@
   S.SCALE = 0.95;                                     // 1 個 SVG 單位約 0.95 px（之後乘上個體大小）
   // 封存：四肢著地慢慢走（地上爬）先停用，散步和走位一律用小跳。程式碼和畫格都保留，改成 true 就恢復
   S.CRAWL = false;
-  S.MAX_MOVING = 2;                                  // 同時最多 2 隻自己在動（只限 L4–L7；主人叫的、傳球接力不算）——省顯示卡，幀率不降
+  // 同時最多幾隻自己在動（只限 L4–L7；主人叫的、傳球接力不算）——看電腦忙不忙自動調，幀率不降：
+  //   閒 4 隻（偶爾有一分鐘全員一起動）、普通 2 隻、很忙 1 隻；閒的時候大家也動得比較勤（S.restMul）；舞台自己畫不順（被自動降到 30 格）時也只留 1 隻
+  let loadLevel = 'normal', partyUntil = 0;
+  S.restMul = 1;                                     // 休息間隔的倍數：閒 0.6（動得勤）、很忙 1.5
+  S.setLoad = (lv) => { loadLevel = lv === 'free' || lv === 'busy' ? lv : 'normal'; S.restMul = loadLevel === 'free' ? .6 : loadLevel === 'busy' ? 1.5 : 1; };
+  setInterval(() => { if (loadLevel === 'free' && Math.random() < .2) partyUntil = performance.now() + 60000; }, 60000);
+  let maxOverride = null;
+  Object.defineProperty(S, 'MAX_MOVING', { configurable: true, set(v) { maxOverride = v; }, get() {
+    if (maxOverride != null) return maxOverride;                              // 測試用：直接指定
+    const p = S.perf;
+    if (p && p.target === 60 && p.fps === 30) return 1;
+    return loadLevel === 'busy' ? 1 : loadLevel === 'free' ? (performance.now() < partyUntil ? 8 : 4) : 2;
+  } });
+  S.loadInfo = () => ({ level: loadLevel, max: S.MAX_MOVING });
   S.REPORT_GAP = 1200;                                // 報告佇列每則間隔
   S.QUEUE_MAX = 5;
   // ---- 幀率：預設每秒 60 格 ----------------------------------------------------------------------------

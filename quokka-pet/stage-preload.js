@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('stageApi', {
   onHide: on('stage:hide'),                 // {until}
   onSocialStart: on('social:start'),        // {pairId, a, b, type, initiator}
   onSocialAbort: on('social:abort'),        // {pairId, by, reason}
+  onLoad: on('stage:load'),                 // {level:'free'|'normal'|'busy', cpu}：電腦忙不忙 → 同時做動作的隻數
   onPerf: on('stage:perf'),                 // {fps: 60|30}（使用電池、省電模式時 30；沒收到＝60）
   onLeafRain: on('stage:leafrain'),
   onRelease: on('stage:release'),           // {qid}：放生，禿鷹把這隻帶出畫面

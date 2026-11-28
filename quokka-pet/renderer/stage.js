@@ -86,6 +86,7 @@
   });
 
   // ---- 社交：兩隻共用一個「雙人動畫」（stage-social.js） -------------------------------
+  if (api.onLoad) api.onLoad((p) => { if (p && S.setLoad) S.setLoad(p.level); });
   if (api.onPerf) api.onPerf((p) => { if (p && (p.fps === 60 || p.fps === 30)) { S.setTargetFps(p.fps); S.kick(); } });
   api.onSocialStart((p) => { if (p && isId(p.pairId)) S.startSocial(p); });
   api.onSocialAbort((p) => { if (!p || !isId(p.pairId)) return; for (const a of [...S.actors.values()]) a.endSocial(p.pairId); });
