@@ -762,6 +762,8 @@
     // 待機小動作（L6）：依個性從小動畫庫挑一個
     idleAct() {
       const H = ANIM.IDLE_HINT || {}, P = this.traits.personality || {};
+      // 愛睡的（或很慵懶的）沒事就打個盹
+      if (ANIM.REACT && ANIM.REACT.nap && Math.random() < (P.archetype === 'sleepy' ? .28 : (P.activity != null && P.activity < .3) ? .1 : .02)) return !!this.requestActivity(6, this.animJob('idle:nap', ANIM.REACT.nap, { endLine: null }));
       const list = Object.keys(ANIM.IDLE || {}).filter((k) => H[k] && H[k].w > 0 && !ANIM.IDLE[k].loop).map((k) => [k, H[k].w * (H[k].by === 'lazy' ? 1.6 - (P.activity == null ? .5 : P.activity) : H[k].by ? .5 + (P[H[k].by] == null ? .5 : P[H[k].by]) : 1)]);
       if (!list.length) return false;
       let r = Math.random() * list.reduce((n, x) => n + x[1], 0), pick = list[0][0];

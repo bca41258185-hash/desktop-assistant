@@ -315,7 +315,7 @@
       if (thA != null) a.th = S.clamp(thA, -90, 90);
       a.zBoost = 0; a.depth = 0;
       // 依偎、靠著打盹被打斷：先起身 0.4 秒再處理（拖曳、響鈴不等）
-      if (wasPlay && (this.type === 'cuddle' || this.type === 'leanNap') && reason !== 'drag' && reason !== 'ring' && reason !== 'error' && reason !== 'remove' && this.lastFr && !S.reduceMotion) {
+      if (wasPlay && (this.type === 'cuddle' || this.type === 'leanNap' || this.type === 'napTogether') && reason !== 'drag' && reason !== 'ring' && reason !== 'error' && reason !== 'remove' && this.lastFr && !S.reduceMotion) {
         const c = SOC.real(this.ctx, a === this.I ? 'a' : 'b', this.lastFr[a === this.I ? 'a' : 'b']), t0 = performance.now();
         const an = { dur: .4, follow: false, keys: [{ t: 0, th: c.th, pose: { ...c.pose, props: undefined } }, { t: .4, th: a.th, pose: { eyes: 'wide' } }] };
         let last = 0;
@@ -337,7 +337,7 @@
     }
     // 夥伴的收尾（0.5–0.8 秒）：抬頭目送（被拖走）／看對方一眼（響鈴）／「咦？」／頭一歪醒來（依偎、打盹）
     startOutro(a, job, other, why, wasPlay) {
-      const th = Math.round(a.th), toward = other.x >= a.x ? 1 : -1, sleepy = wasPlay && (this.type === 'leanNap' || this.type === 'cuddle' || this.type === 'sunbathe');
+      const th = Math.round(a.th), toward = other.x >= a.x ? 1 : -1, sleepy = wasPlay && (this.type === 'leanNap' || this.type === 'napTogether' || this.type === 'cuddle' || this.type === 'sunbathe');
       const couple = a.attach.partner === other.id, yaw = S.clamp(toward * 70 - th, -50, 50);
       let keys, dur;
       if (S.reduceMotion) { a.finish(job, { rest: true }); return; }

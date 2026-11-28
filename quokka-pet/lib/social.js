@@ -34,6 +34,7 @@
     volleyball: { name: '一起打排球' },
     basketball: { name: '一起打籃球' },
     sunbathe: { name: '並排曬太陽' },
+    napTogether: { name: '靠肩午睡' },
     cuddle: { name: '依偎', couple: true },
     groom: { name: '幫對方理毛', couple: true },
     leanNap: { name: '靠著打盹', couple: true },
@@ -134,7 +135,9 @@
         { type: 'volleyball', w: (0.7 + 1.0 * outgoing) * (act > 0.4 ? 1 : 0.6) * (likes('volleyball') ? 2.2 : 1) },
         { type: 'basketball', w: (0.7 + 1.0 * outgoing) * (act > 0.4 ? 1 : 0.6) * (likes('basketball') ? 2.2 : 1) },
         { type: 'chase', w: (0.3 + outgoing) * clamp((act - 0.2) * 2.5, 0.3, 1.2) },
-        { type: 'sunbathe', w: 0.1 + 2.5 * lazy }
+        { type: 'sunbathe', w: 0.1 + 2.5 * lazy },
+        // 靠肩午睡：慵懶的、愛睡的（sleepy）常做；兩隻都愛睡幾乎每次都想睡
+        { type: 'napTogether', w: 0.1 + 2.2 * lazy + 1.8 * [a, b].filter((q) => ((q.traits || {}).personality || {}).archetype === 'sleepy').length }
       ];
       if (isCouple(a.id, b.id)) {
         // 情侶：依偎、理毛、靠著打盹、並肩散步，也會碰鼻、分享葉子

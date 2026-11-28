@@ -117,7 +117,7 @@ test('情侶專屬互動只給情侶；情侶也會用到情侶互動', () => {
 test('依個性選種類：慵懶的常並排曬太陽，愛社交又膽大的常碰鼻／擊掌／打球／追逐；誰都常打球', () => {
   const lazy = setup([mk('a', 'male', { activity: 0.05, sociability: 0.6, boldness: 0.5 }), mk('b', 'female', { activity: 0.1, sociability: 0.6, boldness: 0.5 })]);
   const lt = runRounds(lazy, 300).map((j) => j.type);
-  assert.ok(lt.filter((t) => t === 'sunbathe').length > lt.length * 0.3);
+  assert.ok(lt.filter((t) => t === 'sunbathe' || t === 'napTogether').length > lt.length * 0.3);
   assert.ok(lt.filter((t) => t === 'chase').length < lt.length * 0.05);
   assert.ok(lt.filter((t) => ['badminton', 'volleyball', 'basketball'].includes(t)).length > lt.length * 0.1);   // 慵懶的也會打球
   const bold = setup([mk('a', 'male', { activity: 0.8 }), mk('b', 'female', { activity: 0.8 })]);

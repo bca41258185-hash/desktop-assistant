@@ -574,10 +574,13 @@
         if (t > T1 + 1.5 && t < T1 + 5.5) { a.pose.sq *= br2(t, 0); b.pose.sq *= br2(t, .8); }
         const zu = ctx.d - S.m + 24 * ctx.kk;
         return { a, b, near: 'a', moves: true, world: [...(t > T1 + 2.8 && t < T1 + 5.6 ? [{ k: 'zzz', u: zu, h: 176 * ctx.b.k + ((t - T1 - 2.8) % 1.3) * 6, s: 1, o: Math.min(1, (t - T1 - 2.8) * 2, (T1 + 5.6 - t) * 3) }] : []),
-          ...floatUp('heart', t, T1 + 1.8, ctx.d / 2, 180 * ctx.kk, .8, 1.6, 24), ...floatUp('heart', t, T1 + 6.6, ctx.d / 2, 180 * ctx.kk, .9, 1.3, 20)] };
+          ...(ctx.noHearts ? [] : [...floatUp('heart', t, T1 + 1.8, ctx.d / 2, 180 * ctx.kk, .8, 1.6, 24), ...floatUp('heart', t, T1 + 6.6, ctx.d / 2, 180 * ctx.kk, .9, 1.3, 20)])] };
       });
     }
   };
+
+  // ---- 靠肩午睡（朋友、同伴都可以）：動作和靠著打盹一樣，只是不冒愛心 ----
+  TYPES.napTogether = { gap: TYPES.leanNap.gap, build(ctx) { ctx.noHearts = true; return TYPES.leanNap.build(ctx); } };
 
   // ---- 並肩散步（情侶）：轉向同一邊、後面的跳上前貼著，一起跳幾步，前面的回頭看、冒愛心，停下來相視 --------
   TYPES.walkTogether = {
