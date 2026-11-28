@@ -144,5 +144,6 @@
   document.addEventListener('pointerup', (e) => sEnd(e, false), true);
   document.addEventListener('pointercancel', (e) => sEnd(e, true), true);
 
+  if (S.api.onShortcutsChanged) S.api.onShortcutsChanged(() => { if (S.Shortcuts && !(sdrag && sdrag.on)) S.Shortcuts.refresh(); });
   S.Shortcuts = { dragging: () => !!(sdrag && sdrag.on), hide, rects: () => (fan ? fan.rects : []), refresh: () => { if (fan) { const q = S.actors.get(fan.qid); hide(); if (q) show(q); } } };
 })();

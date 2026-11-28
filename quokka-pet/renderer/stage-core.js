@@ -48,14 +48,15 @@
     perf.target = fps; perf.need = 5000; applyFps(fps);
   };
   function perfSample(now, gap, cost) {
-    if (gap > 250) { perf.win = []; perf.cost = []; perf.okSince = 0; return; }   // 迴圈剛醒來（之前停著）：不算
+    if (gap > 250) { perf.win = []; perf.cost = []; if (perf.fps !== 30) perf.okSince = 0; return; }   // 迴圈剛醒來（之前停著）或整台機器卡了一下：這筆不算
     if (perf.target !== 60) return;
     perf.win.push([now, gap]); perf.cost.push(cost);
     while (perf.win.length && now - perf.win[0][0] > 2000) { perf.win.shift(); perf.cost.shift(); }
     if (now - perf.since < 2000 || perf.win.length < 15) return;
-    const avg = perf.win.reduce((n, w) => n + w[1], 0) / perf.win.length;
+    const gaps = perf.win.map((w) => w[1]).sort((x, y) => x - y);
+    const avg = gaps[gaps.length >> 1];                                              // 用中位數：幾格特別慢的不算數，一半以上都慢才是真的吃力
     if (perf.fps === 60 && avg > 1.5 * 1000 / 60) {
-      if (now - perf.lastUp < 20000) perf.need = Math.min(60000, perf.need * 2);
+      if (now - perf.lastUp < 20000) perf.need = Math.min(15000, perf.need * 2);
       perf.history.push({ t: Math.round(now), to: 30, avgGap: +avg.toFixed(1) });
       applyFps(30);
     } else if (perf.fps === 30) {
@@ -80,7 +81,7 @@
   // ---- 畫格快取：同一隻、同一個姿勢只畫一次（LRU，總量 200 MB） ---------------------
   const cache = new Map();          // key → { url, bytes }
   let cacheBytes = 0;
-  const CACHE_LIMIT = 200 * 1024 * 1024;
+  const CACHE_LIMIT = 80 * 1024 * 1024;
   S.frameURL = function (a, key, th, pose, wide) {
     const k = a.id + '|' + key + (wide ? '|w' : '') + (a.decoKey || '');
     const hit = cache.get(k);
@@ -284,7 +285,7 @@
     }
     const cost = performance.now() - c0;
     perf.work += cost; perfSample(now, gap, cost);
-    if (busy) { raf = requestAnimationFrame(loop); S.reportRectsThrottled(); }
+    if (busy) { if (!raf) raf = requestAnimationFrame(loop); S.reportRectsThrottled(); }
     else { lastBall = 0; lastFrame = 0; wakeLater(); S.reportRects(); }
   }
   function wakeLater() {

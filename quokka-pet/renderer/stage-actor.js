@@ -192,6 +192,7 @@
     // ---- 位置與畫格 ----
     place() {
       if (this.y > innerHeight - 4 && !this.dragging) this.y = innerHeight - 4;      // 腳不能超過螢幕底（螢幕變小時正在走的那隻）
+      if (S.resizedAt && !this.dragging && !this.releasing && performance.now() - S.resizedAt < 6000) this.x = S.clamp(this.x, 20, innerWidth - 20);   // 螢幕剛變小：還在收尾的動作也不能把牠寫回螢幕外
       const left = this.x - (S.FOOT.x - S.VB.x) * this.k, top = this.y - (S.FOOT.y - S.VB.y) * this.k - this.depth;
       this.el.style.transform = `translate3d(${left.toFixed(1)}px, ${top.toFixed(1)}px, 0)`;
       const z = Math.round(this.y - this.depth) + this.zBoost + (this.dragging ? 10000 : 0);
@@ -1340,6 +1341,7 @@
       this.bubble.destroy();
       this.el.remove();
       S.purgeFrames(this.id);
+      try { if (S.unslim) S.unslim(['L' + this.uid]); } catch (e) { /* 清不掉就算了 */ }
     }
   }
   S.Actor = Actor;

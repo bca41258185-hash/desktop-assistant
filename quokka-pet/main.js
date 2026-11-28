@@ -3,7 +3,14 @@
 const { app, Menu, dialog } = require('electron');
 
 // 只允許開一個：第二次開啟時把面板叫出來
-if (!app.requestSingleInstanceLock()) { app.quit(); }
+if (!app.requestSingleInstanceLock()) {
+  try {
+    const fs = require('fs'), path = require('path'), dir = app.getPath('userData');
+    fs.mkdirSync(dir, { recursive: true });
+    const t = path.join(dir, '.write-test-' + process.pid); fs.writeFileSync(t, ''); fs.unlinkSync(t);
+  } catch (e) { try { dialog.showErrorBox('庫卡助理無法啟動', '資料夾無法寫入：\n' + app.getPath('userData')); } catch (e2) { /* 連訊息都跳不出來 */ } }
+  app.quit();
+}
 else {
   let v2 = null;
   app.on('second-instance', () => { if (v2) { v2.unhide(); v2.showPanel(); } });   // 再開一次程式＝把藏起來的庫卡叫回來

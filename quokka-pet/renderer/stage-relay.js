@@ -58,13 +58,18 @@
     if (Math.abs(a.x - ball.x) < 70 * a.k && Math.abs(a.y - ball.ground) < 30) { take(run, a); return; }
     a.relay = run; run.team.add(a.id);
     const job = a.walkJob(ball.x - Math.sign(ball.x - a.x || 1) * 40 * a.k, { name: 'relayGet', noPause: true, gait: 'hop', cursorOk: true, y: Math.abs(ball.ground - a.y) > 30 ? ball.ground : null,
-      onArrive: () => setTimeout(() => take(run, a), 30) });
+      onArrive: () => setTimeout(() => {
+        if (!relays.has(run)) { if (a.relay === run) a.relay = null; return; }
+        if (!run.ball.gone && Math.abs(a.x - run.ball.x) > 150 * a.k) { a.relay = null; endRun(run, null); return; }   // 被擋住沒走到：這一輪算了，球照舊處理
+        take(run, a);
+      }, 30) });
     const int0 = job.interrupt;
     job.interrupt = (...x) => { if (int0) int0(...x); if (run.holder !== a) { a.relay = null; endRun(run, null); } };
     if (!a.requestActivity(4, job)) { a.relay = null; endRun(run, null); }
   }
 
   function take(run, a) {
+    if (!relays.has(run)) { if (a.relay === run) a.relay = null; return; }       // 這一輪已經結束（保險收掉了）：不要再掛上去
     const ball = run.ball; run.at = performance.now();
     if (ball.gone || !S.actors.has(a.id)) { endRun(run, null); return; }
     if (!enlist(run, a)) { endRun(run, null); return; }
@@ -180,6 +185,6 @@
   }
 
   // 保險：20 秒沒有任何進展（撿、傳、接）就結束這一輪，不讓誰卡在接力裡
-  setInterval(() => { const now = performance.now(); for (const r of [...relays]) if (now - (r.at || now) > 20000) endRun(r, r.holder); }, 5000);
+  setInterval(() => { const now = performance.now(); for (const r of [...relays]) { const walking = [...r.team].some((id) => { const o = S.actors.get(id); return o && o.job && o.job.name === 'relayGet'; }); if (now - (r.at || now) > (walking ? 60000 : 20000)) endRun(r, r.holder); } }, 5000);   // 還在走去撿球（寬螢幕要走比較久）：放寬到 60 秒
   S.Relay = { active: () => [...relays].map((r) => ({ age: Math.round(performance.now() - (r.at || 0)), passes: r.passes, max: r.max, holder: r.holder && r.holder.id, team: [...r.team] })) };
 })();

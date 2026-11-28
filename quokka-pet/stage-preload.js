@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('stageApi', {
   basketPos: (fx, fy) => ipcRenderer.send('basket:pos', { fx: Number(fx), fy: Number(fy) }),
   basketMenu: () => ipcRenderer.send('basket:menu'),
   onBasket: on('basket:cmd'),
+  onShortcutsChanged: on('shortcuts:changed'),
   playWith: (p) => ipcRenderer.invoke('item:play-with', { qid: str(p && p.qid), item: str(p && p.item, 20) }),
   relayDone: (pairs) => ipcRenderer.send('relay:done', (Array.isArray(pairs) ? pairs : []).slice(0, 20).map((p) => [str(p && p[0]), str(p && p[1])])),
   holdItem: (p) => ipcRenderer.invoke('item:hold', { qid: str(p && p.qid), item: str(p && p.item, 20), prepaid: !!(p && p.prepaid) }),

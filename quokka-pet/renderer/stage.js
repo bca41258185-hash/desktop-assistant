@@ -12,7 +12,7 @@
     // 新來的：從右往左排，隻數多時自動縮小間距，保證都在螢幕內
     if (!q.pos || !isFinite(q.pos.x) || q.pos.x < 20 || q.pos.x > innerWidth - 20) {
       const gap = Math.max(36, Math.min(220, (innerWidth - 200) / Math.max(1, n)));
-      q.pos = { x: Math.round(innerWidth - 120 - i * gap), y: innerHeight - 6 };
+      q.pos = { x: Math.round(Math.max(60, innerWidth - 250 - i * gap)), y: innerHeight - 6 };
     }
   }
   function add(q, i = S.actors.size, n = S.actors.size + 1) {
@@ -192,12 +192,20 @@
   // 螢幕大小改變：身體整個留在螢幕內；原本站在最底下的，螢幕變高後也回到最底下（不會停在半空）
   let lastH = innerHeight;
   window.addEventListener('resize', () => {
+    S.resizedAt = performance.now();
+    const dy = innerHeight - lastH;
     for (const a of S.actors.values()) {
+      const top = Math.min(innerHeight - 4, (a.h || 220) + 8);                  // 最高只能站到整隻還看得到的地方
+      if (a.job && a.layer > 1 && !a.releasing) { try { S.failJob(a); } catch (e) { /* 收尾失敗就算了 */ } }
       const onFloor = a.y >= lastH - 8;
-      a.y = onFloor ? innerHeight - 4 : Math.min(a.y, innerHeight - 4);
+      a.y = onFloor ? innerHeight - 4 : S.clamp(a.y + dy, top, innerHeight - 4);
+      if (a.homeY != null && isFinite(a.homeY)) a.homeY = S.clamp(a.homeY + dy, top, innerHeight - 4);
       const half = Math.max(20, (a.w || 0) * .32);
-      a.x = S.clamp(a.x, half, innerWidth - half); a.place();
+      a.x = S.clamp(a.x, half, innerWidth - half);
+      if (isFinite(a.home)) a.home = S.clamp(a.home, half, innerWidth - half);
+      a.place();
     }
+    S.kick();
     lastH = innerHeight;
     S.reportRects();
   });

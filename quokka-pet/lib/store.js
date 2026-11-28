@@ -32,8 +32,8 @@
       out.quokkas = out.quokkas.filter((q) => typeof q.id === 'string' && q.id && !seen.has(q.id) && seen.add(q.id));
       out.quokkas.forEach((q, i) => {
         if (typeof q.name !== 'string' || !q.name.trim()) q.name = '庫卡' + (i + 1);
-        if (q.traits != null && (typeof q.traits !== 'object' || Array.isArray(q.traits))) q.traits = null;
-        if (q.traits && q.traits.personality != null && (typeof q.traits.personality !== 'object' || !Array.isArray(q.traits.personality.likes))) delete q.traits.personality;   // 個性壞掉：之後重新產生
+        if (q.traits != null && (typeof q.traits !== 'object' || Array.isArray(q.traits))) { q.traits = null; migrate.repaired = true; }
+        if (q.traits && q.traits.personality != null && (typeof q.traits.personality !== 'object' || !Array.isArray(q.traits.personality.likes))) { delete q.traits.personality; migrate.repaired = true; }   // 個性壞掉：之後重新產生（原檔會先備份）
       });
       out.folders = out.folders.filter((f) => typeof f.path === 'string' && f.path);
       out.stocks = out.stocks.filter((x) => typeof x.symbol === 'string' && x.symbol);
@@ -53,7 +53,7 @@
   }
 
   function createStore(file, { debounceMs = 300 } = {}) {
-    let data = defaults(), timer = null, retries = 0; const readOnly = false;
+    let data = defaults(), timer = null, retries = 0, failed = 0; const readOnly = false;
     // 把讀不懂的檔案另存一份，絕不直接用預設值蓋掉使用者的資料
     function quarantine(tag) {
       try { fs.copyFileSync(file, file.replace(/\.json$/, '') + `.${tag}-${Date.now()}.json`); } catch (e) { /* 備份失敗不阻擋 */ }
@@ -90,9 +90,10 @@
         try { fs.writeFileSync(fs.existsSync(bak) ? bak.replace(/\.json$/, `-${Date.now()}.json`) : bak, JSON.stringify(raw, null, 2)); } catch (e) { /* 備份失敗不阻擋 */ }
       }
       const COLS = ['quokkas', 'tasks', 'reminders', 'stocks', 'folders', 'postcards'];
+      migrate.repaired = false;
       data = migrate(raw);
       // 有整欄格式不對、或有項目壞掉被拿掉：先備份原檔（不默默覆蓋使用者的資料）
-      if (raw && !isV1 && text != null && COLS.some((k) => raw[k] != null && (!Array.isArray(raw[k]) || raw[k].length !== data[k].length))) quarantine('fixed');
+      if (raw && !isV1 && text != null && COLS.some((k) => raw[k] != null && (!Array.isArray(raw[k]) || raw[k].length !== data[k].length)) || raw && !isV1 && text != null && migrate.repaired) quarantine('fixed');
       if (isV1) saveNow();
       return data;
     }
@@ -105,14 +106,15 @@
         const fd = fs.openSync(tmp, 'w');
         try { fs.writeFileSync(fd, JSON.stringify(data, null, 2), 'utf-8'); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
         fs.renameSync(tmp, file);              // 原子取代：不會留下寫一半的檔案
-        retries = 0;
+        retries = 0; failed = 0;
       } catch (e) {
+        failed++;
         console.error('儲存失敗:', e.message);
         if (retries < 5) { retries++; timer = setTimeout(saveNow, 2000 * retries); }   // 被鎖住：等一下再存
       }
     }
     function save() { if (timer) clearTimeout(timer); timer = setTimeout(saveNow, debounceMs); }
-    return { load, save, saveNow, get data() { return data; }, set data(v) { data = v; } };
+    return { load, save, saveNow, get saveFailing() { return failed >= 3; }, get data() { return data; }, set data(v) { data = v; } };
   }
 
   module.exports = { createStore, migrate, defaults, newId, LIMITS };

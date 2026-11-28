@@ -51,6 +51,7 @@
 
   // 牠拿去用
   async function use(a, item, prepaid) {
+    if (a.releasing) { if (prepaid) S.api.refundItem(item); return; }
     if (!canUse(a)) { a.say('我還太小了……', { ms: 1800 }); if (prepaid) S.api.refundItem(item); return; }
     if (a.mode !== 'awake') { a.say('Zzz……', { ms: 1600 }); if (prepaid) S.api.refundItem(item); return; }
     if (PLAY.has(item)) {
@@ -98,13 +99,13 @@
       el.style.transform = `translate(${(p.x - sz / 2).toFixed(1)}px, ${(p.y - sz / 2).toFixed(1)}px) rotate(-10deg)`;
       el.style.zIndex = (a.z || 0) + 1;
     }
-    if (holdEls.size && !following) { following = true; requestAnimationFrame(follow); }
+    if (holdEls.size && !following) { following = true; if (S.running()) requestAnimationFrame(follow); else setTimeout(follow, 250); }
   }
   const hearts = (a) => { if (S.burst) { const p = a.toStage(80, 40); S.burst(p.x, p.y, 'hearts'); } };
   async function choose(a, item, prepaid) {
     if (a.holding && item !== 'snack') { a.say(`我手上已經有${NAME[a.holding]}了～`, { ms: 2000 }); if (prepaid) S.api.refundItem(item); return; }
     const r = await S.api.holdItem({ qid: a.id, item, prepaid: !!prepaid }).catch(() => null);
-    if (!r || !r.ok) { a.say((r && r.message) || `${NAME[item]}拿不到`, { ms: 2400 }); return; }
+    if (!r || !r.ok) { a.say((r && r.message) || `${NAME[item]}拿不到`, { ms: 2400 }); if (prepaid) S.api.refundItem(item); return; }
     if (r.eatNow) { a.play('eat'); a.say(pickOne(['點心！謝謝！我直接吃掉～', '手上拿不下了，那就馬上吃！', '好好吃！']), { ms: 2200 }); return; }
     if (!holdEls.size) setTimeout(() => { if (!following) { following = true; requestAnimationFrame(follow); } }, 0);
     setHolding(a, item);

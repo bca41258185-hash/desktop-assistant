@@ -379,17 +379,17 @@ function start() {
   async function shortcutInfo(f) {
     {
       let st = null; try { st = await fs.promises.stat(f.path); } catch (err) { /* 找不到 */ }
-      let name = path.basename(f.path) || f.path, dir = st ? st.isDirectory() : !f.file, icon = '';
+      let name = path.basename(f.path) || f.path, dir = st ? st.isDirectory() : !f.file, icon = '', lnkGone = false;
       // Windows 捷徑（.lnk）：用它指向的程式／資料夾的圖示（直接拿 .lnk 的圖示只會是一張白紙），名稱去掉 .lnk
       if (st && st.isFile() && /\.lnk$/i.test(f.path) && process.platform === 'win32') {
         name = name.replace(/\.lnk$/i, '');
         let link = null; try { link = shell.readShortcutLink(f.path); } catch (err) { /* 讀不到就照一般檔案 */ }
-        let tst = null; if (link && link.target) { try { tst = await fs.promises.stat(link.target); } catch (err) { /* 目標不見了 */ } }
+        let tst = null; if (link && link.target) { try { tst = await fs.promises.stat(link.target); } catch (err) { lnkGone = /^[A-Za-z]:[\\/]/.test(link.target); /* 目標不見了（本機路徑才標，網路磁碟可能只是沒連上） */ } }
         if (tst && tst.isDirectory()) dir = true;
         else if (link) icon = (link.icon && (/\.(ico|png)$/i.test(link.icon) ? imageIcon(link.icon) : await iconOf(link.icon))) || (link.target && tst && await iconOf(link.target)) || '';
       }
       if (!dir && !icon && st && st.isFile()) icon = await iconOf(f.path);
-      return { id: f.id, path: f.path, name, dir, missing: !st, icon };
+      return { id: f.id, path: f.path, name, dir, missing: !st || lnkGone, icon };
     }
   }
   // 捷徑的右鍵選單：在檔案總管中顯示、複製路徑（只對清單裡的 id）
@@ -402,7 +402,7 @@ function start() {
     const others = data.quokkas.filter((q) => q.id !== f.owner && romance.canOwnTasks(q));
     const give = (owner) => {
       if (LIM.folder && countOf('folder', owner) >= LIM.folder) { event(f.owner, 'note', { text: `${qById(owner).name}的捷徑已經滿了` }); return; }
-      f.owner = owner; changed(); event(owner, 'task-added', { text: name });
+      f.owner = owner; changed(); toStage('shortcuts:changed'); event(owner, 'task-added', { text: name });
     };
     stage.popupMenu(Menu.buildFromTemplate([
       { label: `打開「${name}」`, click: () => shell.openPath(f.path).then((err) => { if (err) event(f.owner, 'note', { text: `打不開「${name}」，可能被移走或刪掉了` }); }) },
@@ -410,7 +410,7 @@ function start() {
       { label: '複製路徑', click: () => require('electron').clipboard.writeText(f.path) },
       { type: 'separator' },
       { label: '交給…', enabled: others.length > 0, submenu: others.length ? others.map((q) => ({ label: q.name, click: () => give(q.id) })) : [{ label: '（沒有別隻）', enabled: false }] },
-      { label: '從捷徑移除', click: () => { const i = data.folders.indexOf(f); if (i >= 0) { data.folders.splice(i, 1); changed(); event(f.owner, 'note', { text: `「${name}」從捷徑拿掉了` }); } } }
+      { label: '從捷徑移除', click: () => { const i = data.folders.indexOf(f); if (i >= 0) { data.folders.splice(i, 1); changed(); toStage('shortcuts:changed'); event(f.owner, 'note', { text: `「${name}」從捷徑拿掉了` }); } } }
     ]), e.sender);
   });
   // 捷徑圖示拖到另一隻身上：交給牠
@@ -420,7 +420,7 @@ function start() {
     const name = (path.basename(f.path) || f.path).replace(/\.lnk$/i, '');
     if (!romance.canOwnTasks(q)) { event(f.owner, 'note', { text: `${q.name}還太小，不能幫忙拿捷徑` }); return; }
     if (LIM.folder && countOf('folder', qid) >= LIM.folder) { event(f.owner, 'note', { text: `${q.name}的捷徑已經滿了` }); return; }
-    f.owner = qid; changed(); event(qid, 'task-added', { text: name });
+    f.owner = qid; changed(); toStage('shortcuts:changed'); event(qid, 'task-added', { text: name });
   });
   ipcMain.on('shortcut:open', async (e, { id } = {}) => {
     const f = data.folders.find((x) => x.id === id); if (!f) return;      // 只開清單裡的路徑
@@ -515,9 +515,9 @@ function start() {
       if (moved) stillSince = t;
       wait = t - stillSince < 1000 ? 40 : 250;
       const hit = circles.push(c.x, c.y, t);
-      if (hit && t - lastRainAt > 20000) {
+      const wa = screen.getPrimaryDisplay().workArea;                                      // 舞台座標＝螢幕座標 − 工作區左上角
+      if (hit && t - lastRainAt > 20000 && hit.x >= wa.x && hit.x <= wa.x + wa.width && hit.y >= wa.y && hit.y <= wa.y + wa.height) {
         lastRainAt = t;
-        const wa = screen.getPrimaryDisplay().workArea;                                    // 舞台座標＝螢幕座標 − 工作區左上角
         toStage('stage:leafrain', { by: 'cursor', x: hit.x - wa.x, y: hit.y - wa.y, r: hit.r });
       }
     }
@@ -542,11 +542,11 @@ function start() {
     const text = str(p.text), owner = ownerOf(p.owner);
     if (!text) return { ok: false, message: '請先輸入內容' };
     // 貼上一個存在的資料夾路徑 → 監看資料夾
-    if (!p.forceType && /[\\/]/.test(text)) {
+    if (!p.forceType && /^(?:[A-Za-z]:[\\/]|\\\\[^\\/]|~[\\/])/.test(text)) {
       const full = expandHome(text);                          // 「~/專案」→ 家目錄底下
-      let st = null; try { st = fs.statSync(full); } catch (err) { /* 不是路徑就當一般文字 */ }
+      let st = null; try { st = await Promise.race([fs.promises.stat(full), new Promise((res) => setTimeout(() => res(null), 3000))]); } catch (err) { /* 不是路徑就當一般文字 */ }
       if (st && (st.isDirectory() || st.isFile())) return addFolder(full, owner);     // 資料夾或檔案 → 捷徑
-      if (/^(?:[A-Za-z]:[\\/]|\\\\|\/|~[\\/])/.test(text)) return { ok: false, type: 'folder', message: '找不到這個資料夾或檔案，請確認路徑。要當成待辦嗎？', askTask: true };
+      return { ok: false, type: 'folder', message: '找不到這個資料夾或檔案，請確認路徑。要當成待辦嗎？', askTask: true };
     }
     let r = parseInput(text);
     if (p.forceType === 'task') r = { type: 'task', text };
@@ -727,7 +727,6 @@ function start() {
   ipcMain.handle('quokka:delete', (e, { qid, transferTo, release } = {}) => removeQuokka(qid, transferTo, !!release));
   function removeQuokka(qid, transferTo, release) {
     const q = qById(qid); if (!q) return { ok: false };
-    if (data.holding && data.holding[qid]) { const h = data.holding[qid]; delete data.holding[qid]; if (GIFTS[h]) { const it = items()[h]; it.n = Math.min(GIFTS[h].max, it.n + 1); } }   // 手上的禮物退回道具包
     const owners = data.quokkas.filter((x) => romance.canOwnTasks(x));
     if (owners.length <= 1 && romance.canOwnTasks(q)) return { ok: false, message: release ? '最後一隻不能放生' : '最後一隻不能刪除' };
     const to = transferTo === 'delete' ? null : qById(transferTo) && transferTo !== qid && romance.canOwnTasks(qById(transferTo)) ? transferTo : (owners.find((x) => x.id !== qid) || {}).id;
@@ -749,6 +748,7 @@ function start() {
       data.postcards = (data.postcards || []).concat([postcard.plan({ from: q, relations: rels, nameOf: (id) => (id !== qid && qById(id) ? qById(id).name : null) })]).slice(-50);
     }
     social.removeQuokka(qid);
+    if (data.holding && data.holding[qid]) { const h = data.holding[qid]; delete data.holding[qid]; if (GIFTS[h]) { const it = items()[h]; it.n = Math.min(GIFTS[h].max, it.n + 1); } }   // 手上的禮物（含送到一半被收回來的）退回道具包
     delete layers[qid]; delete positions[qid]; delete digest[qid];      // 舞台回報的圖層、位置、離開期間的待報告事項
     const famEvents = romance.onDelete(qid);                   // 墓碑紀錄、伴侶恢復單身、小袋鼠交給爸爸
     data.quokkas = data.quokkas.filter((x) => x.id !== qid);
@@ -1103,7 +1103,7 @@ function start() {
       { label: '今天股市怎麼了？', click: () => tellMarket(qid).catch(() => {}) },
       { label: '陪我玩', submenu: [play('badminton', '羽球'), play('volleyball', '排球'), play('basketball', '籃球'), play('eat', '吃葉子'), play('hop', '跳一跳'), play('nap', '打盹')] },
       { label: '打開面板', click: () => showPanel(qid) },
-      { label: '送禮物', enabled: romance.canOwnTasks(q), submenu: Object.entries(GIFTS).map(([k, g]) => ({ label: `${g.icon} ${g.name}（剩 ${items()[k].n}）`, enabled: items()[k].n > 0, click: () => { const r = giveGift(qid, k); event(qid, 'note', { text: r.ok ? `我把${g.name}送給${r.to}！` : r.message }); } })) },
+      { label: '送禮物', enabled: romance.canOwnTasks(q), submenu: Object.entries(GIFTS).map(([k, g]) => ({ label: `${g.icon} ${g.name}（剩 ${items()[k].n}）`, enabled: items()[k].n > 0, click: () => { const r = giveGift(qid, k); if (!r.ok) event(qid, 'note', { text: r.message }); } })) },
       { type: 'separator' },
       { label: `放生${q.name}…`, enabled: romance.canOwnTasks(q) ? data.quokkas.filter((x) => romance.canOwnTasks(x)).length > 1 : true, click: () => confirmRelease(qid) },
       // 有提醒在響時不能藏；選單打開後才開始響的，點下去時再檢查一次
@@ -1141,6 +1141,15 @@ function start() {
   try { romance.refreshAges(); romance.dailyDecay(); sweepReminders(); } catch (e) {}
   scheduleSocial(15000);               // 開機 15 秒後開始安排互動
   // Windows 關機／登出：before-quit 不會觸發，視窗收到 session-end 時就先把最後的修改存起來
+  // 設定存不進去（檔案唯讀、被鎖住、磁碟滿）：跳一次系統通知，不然使用者以為有存、重開才發現不見
+  let saveWarned = false;
+  const saveWatch = setInterval(() => {
+    if (!store.saveFailing) { saveWarned = false; return; }
+    if (saveWarned) return;
+    saveWarned = true;
+    try { if (Notification.isSupported()) new Notification({ title: '庫卡助理：設定存不進去', body: '設定檔可能是唯讀或被別的程式鎖住，現在的修改重開後會不見。' + String.fromCharCode(10) + file }).show(); } catch (e) { /* 通知跳不出來就算了 */ }
+  }, 5000);
+  if (saveWatch.unref) saveWatch.unref();
   const flushAll = () => { try { reminderNotes.flush(); posSaver.flush(); store.saveNow(); } catch (e) { /* 盡量存 */ } };
   app.on('browser-window-created', (e, w) => w.on('session-end', flushAll));
   for (const w of BrowserWindow.getAllWindows()) w.on('session-end', flushAll);

@@ -379,7 +379,19 @@
   S.startSocial = function (p) {
     const A = S.actors.get(p.a), B = S.actors.get(p.b), api = S.api;
     if (!A || !B || A === B || A.inPouch || B.inPouch) { api.socialAbort(p.pairId, p.a, 'user'); return null; }
-    if (Math.abs(A.y - B.y) > 40) { api.socialAbort(p.pairId, p.a, 'user'); return null; }       // 不在同一地面
+    if (Math.abs(A.y - B.y) > 40) {                                                                // 不在同一地面：發起的先走到對方那一層
+      const I0 = p.initiator === p.b ? B : A, O0 = I0 === A ? B : A, tries = p._tries || 0;
+      if (tries >= 2 || S.reduceMotion) { api.socialAbort(p.pairId, p.a, 'user'); return null; }
+      const tx = S.clamp(I0.x + (Math.sign(O0.x - I0.x) || 1) * 60 * I0.k, 60, innerWidth - 60);
+      let settled = false;
+      const job = I0.walkJob(tx, { name: 'toLayer', noPause: true, gait: 'hop', cursorOk: true, y: O0.y,
+        onArrive: () => { if (settled) return; settled = true; setTimeout(() => S.startSocial({ ...p, _tries: tries + 1 }), 30); } });
+      const int0 = job.interrupt;
+      job.interrupt = (...x) => { if (int0) int0(...x); if (!settled) { settled = true; api.socialAbort(p.pairId, I0.id, 'user'); } };
+      if (!I0.requestActivity(5, job)) { settled = true; api.socialAbort(p.pairId, I0.id, 'busy'); }
+      else { if (p.gift) I0.say(`我拿去送給${S.str(O0.name || '牠', 12)}！`, { ms: 2200 }); S.kick(); }
+      return null;
+    }
     const soc = { pairId: p.pairId, a: p.a, b: p.b, type: S.str(p.type, 30), initiator: p.initiator === p.b ? p.b : p.a, anchor: p.anchor || null, gift: !!p.gift };
     const I = soc.initiator === p.a ? A : B, O = I === A ? B : A;
     if (S.reduceMotion) { api.socialDone(soc.pairId, true, soc.type); return null; }
