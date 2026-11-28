@@ -119,6 +119,7 @@
       if (!a.holding || now < (a.holdDecideAt || 0) || a.mode !== 'awake' || a.dragging || a.inPouch || (a.job && a.job.layer <= 5) || a.deciding) continue;
       a.deciding = true;
       const item = a.holding;
+      a.giftAskAt = performance.now();                     // 等一下牠自己會說要拿去給誰（走去對方那一層時不要再說一次）
       const r = await S.api.heldDecide(a.id, a.giftFor && a.giftTries < 6 ? a.giftFor : null).catch(() => null);
       a.deciding = false;
       if (!r || !r.ok) { a.holdDecideAt = now + 30000; continue; }

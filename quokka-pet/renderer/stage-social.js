@@ -389,7 +389,7 @@
       const int0 = job.interrupt;
       job.interrupt = (...x) => { if (int0) int0(...x); if (!settled) { settled = true; api.socialAbort(p.pairId, I0.id, 'user'); } };
       if (!I0.requestActivity(5, job)) { settled = true; api.socialAbort(p.pairId, I0.id, 'busy'); }
-      else { if (p.gift) I0.say(`我拿去送給${S.str(O0.name || '牠', 12)}！`, { ms: 2200 }); S.kick(); }
+      else { if (p.gift && !tries && performance.now() - (I0.giftAskAt || -1e9) > 4000) I0.say(`我拿去送給${S.str(O0.name || '牠', 12)}！`, { ms: 2200 }); S.kick(); }
       return null;
     }
     const soc = { pairId: p.pairId, a: p.a, b: p.b, type: S.str(p.type, 30), initiator: p.initiator === p.b ? p.b : p.a, anchor: p.anchor || null, gift: !!p.gift };
