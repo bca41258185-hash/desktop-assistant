@@ -22,6 +22,21 @@
   S.CRAWL = false;
   // 同時最多幾隻自己在動（只限 L4–L7；主人叫的、傳球接力不算）——看電腦忙不忙自動調，幀率不降：
   //   閒 4 隻（偶爾有一分鐘全員一起動）、普通 2 隻、很忙 1 隻；閒的時候大家也動得比較勤（S.restMul）；舞台自己畫不順（被自動降到 30 格）時也只留 1 隻
+  // 這台電腦的效能等級（主行程依硬體判斷後送來；沒收到＝中等）：
+  //   high 閒 4 隻（偶爾全員）／普通 2；mid 閒 3（偶爾 4）／普通 2；low 閒 2／普通 1。很忙一律 1 隻。
+  const CAPS = { high: { free: 4, party: 8, normal: 2 }, mid: { free: 3, party: 4, normal: 2 }, low: { free: 2, party: 2, normal: 1 } };
+  let tier = 'mid', cacheLimit = 80 * 1024 * 1024, degrades = [];
+  S.setMachine = (m) => {
+    tier = CAPS[m.tier] ? m.tier : 'mid';
+    const gb = Number(m.memGB) || 8;
+    cacheLimit = (gb < 7.5 ? 40 : gb < 15 ? 80 : 120) * 1024 * 1024;              // 畫格快取：記憶體少的電腦少放一點
+    S.machine = { ...m, tier };
+  };
+  // 舞台畫不順（5 分鐘內被自動降到 30 格兩次）：這次執行降一級，並請主行程記下來（下次啟動先照降過的）
+  S.noteDegrade = () => {
+    const now = performance.now(); degrades = degrades.filter((t) => now - t < 300000); degrades.push(now);
+    if (degrades.length >= 2 && tier !== 'low') { degrades = []; tier = tier === 'high' ? 'mid' : 'low'; if (S.machine) S.machine.tier = tier; if (S.api && S.api.tierDown) S.api.tierDown(tier); }
+  };
   let loadLevel = 'normal', partyUntil = 0;
   S.restMul = 1;                                     // 休息間隔的倍數：閒 0.6（動得勤）、很忙 1.5
   S.setLoad = (lv) => { loadLevel = lv === 'free' || lv === 'busy' ? lv : 'normal'; S.restMul = loadLevel === 'free' ? .6 : loadLevel === 'busy' ? 1.5 : 1; };
@@ -31,9 +46,10 @@
     if (maxOverride != null) return maxOverride;                              // 測試用：直接指定
     const p = S.perf;
     if (p && p.target === 60 && p.fps === 30) return 1;
-    return loadLevel === 'busy' ? 1 : loadLevel === 'free' ? (performance.now() < partyUntil ? 8 : 4) : 2;
+    const c = CAPS[tier];
+    return loadLevel === 'busy' ? 1 : loadLevel === 'free' ? (performance.now() < partyUntil ? c.party : c.free) : c.normal;
   } });
-  S.loadInfo = () => ({ level: loadLevel, max: S.MAX_MOVING });
+  S.loadInfo = () => ({ level: loadLevel, tier, max: S.MAX_MOVING, cacheMB: Math.round(cacheLimit / 1048576) });
   S.REPORT_GAP = 1200;                                // 報告佇列每則間隔
   S.QUEUE_MAX = 5;
   // ---- 幀率：預設每秒 60 格 ----------------------------------------------------------------------------
@@ -71,7 +87,7 @@
     if (perf.fps === 60 && avg > 1.5 * 1000 / 60) {
       if (now - perf.lastUp < 20000) perf.need = Math.min(15000, perf.need * 2);
       perf.history.push({ t: Math.round(now), to: 30, avgGap: +avg.toFixed(1) });
-      applyFps(30);
+      applyFps(30); if (S.noteDegrade) S.noteDegrade();
     } else if (perf.fps === 30) {
       const c = perf.cost.reduce((n, v) => n + v, 0) / perf.cost.length;
       if (c < .45 * 1000 / 60 && avg < 1.2 * 1000 / 30) { if (!perf.okSince) perf.okSince = now; } else perf.okSince = 0;
@@ -94,7 +110,6 @@
   // ---- 畫格快取：同一隻、同一個姿勢只畫一次（LRU，總量 200 MB） ---------------------
   const cache = new Map();          // key → { url, bytes }
   let cacheBytes = 0;
-  const CACHE_LIMIT = 80 * 1024 * 1024;
   S.frameURL = function (a, key, th, pose, wide) {
     const k = a.id + '|' + key + (wide ? '|w' : '') + (a.decoKey || '');
     const hit = cache.get(k);
@@ -112,7 +127,7 @@
     cache.set(k, entry);
     cacheBytes += blob.size;
     toPNG(entry, svg);
-    while (cacheBytes > CACHE_LIMIT && cache.size) {               // 超過上限：丟掉最久沒用的
+    while (cacheBytes > cacheLimit && cache.size) {               // 超過上限：丟掉最久沒用的
       const [ok, ov] = cache.entries().next().value;
       URL.revokeObjectURL(ov.url); ready.delete(ov.url); cacheBytes -= ov.bytes; cache.delete(ok);
     }

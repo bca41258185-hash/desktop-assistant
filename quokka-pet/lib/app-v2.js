@@ -847,10 +847,33 @@ function start() {
   powerMonitor.on('on-ac', () => sendPerf());                // 插回電源 → 60 格（省電沒開時）
 
   // ---- 舞台 → 主行程 ---------------------------------------------------------------
+  // 這台電腦的效能等級（依核心數、記憶體、顯示卡）：舞台照等級設定同時做動作的隻數、快取大小。
+  //   舞台執行中畫不順會回報降一級（stage:tier-down），記 14 天，下次啟動先照降過的來。
+  const MACHINE = require('./machine');
+  let machine = null;
+  async function sendMachine(wc) {
+    try {
+      if (!machine) {
+        const os = require('os');
+        let gi = null; try { gi = await app.getGPUInfo('basic'); } catch (err) { /* 讀不到顯示卡資訊就當不知道 */ }
+        let hz = 60; try { hz = Math.round(screen.getPrimaryDisplay().displayFrequency || 60); } catch (err) { /* 用預設 */ }
+        const info = { cores: os.cpus().length, memGB: +(os.totalmem() / 2 ** 30).toFixed(1), gpu: MACHINE.gpuOf(gi), hz };
+        machine = { ...info, hardware: MACHINE.classify(info) };
+      }
+      const cap = data.settings.perfCap && Date.now() - (data.settings.perfCap.at || 0) < 14 * 86400000 ? data.settings.perfCap.tier : null;
+      const tier = process.env.QUOKKA_TIER || MACHINE.capTier(machine.hardware, cap);
+      if (wc && !wc.isDestroyed()) wc.send('stage:machine', { tier, hardware: machine.hardware, memGB: machine.memGB, cores: machine.cores, gpu: machine.gpu.vendor, hz: machine.hz });
+    } catch (err) { /* 判斷不出來：舞台用預設（中等） */ }
+  }
+  ipcMain.on('stage:tier-down', (e, { tier } = {}) => {
+    if (!MACHINE.ORDER.includes(tier)) return;
+    data.settings.perfCap = { tier, at: Date.now() }; store.save();
+  });
   ipcMain.on('stage:ready', (e) => {
     e.sender.send('stage:quokkas', data.quokkas.map(stageQ));
     e.sender.send('stage:settings', data.settings);
     sendPerf(true);                                   // 舞台（重新）載入好：一定補送目前的幀率
+    sendMachine(e.sender);
     for (const r of data.reminders) if (r.ringing) e.sender.send('q:alert', { qid: r.owner, reminderId: r.id, text: r.text });
     stageReady = true;
     const backlog = stageBacklog.splice(0);
