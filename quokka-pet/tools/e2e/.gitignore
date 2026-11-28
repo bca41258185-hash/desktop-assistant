@@ -1,0 +1,5 @@
+cfg-*/
+*.txt
+*.mp4
+*.png
+out/

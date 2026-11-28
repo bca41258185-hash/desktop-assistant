@@ -1,0 +1,373 @@
+// 舞台共用核心：常數、畫格快取、共用排程迴圈、回報範圍（規格第 1、6、10 節）
+// 其他舞台檔案（stage-ball.js、stage-bubble.js、stage-actor.js、stage.js）都掛在 window.Stage 上。
+// 省資源的做法：
+//   · 走路、轉身、待機、睡覺、看左看右、撿球的畫格先用 3D 姿勢模型畫成 SVG，再轉成 PNG 存起來，之後只換圖片
+//   · 位置只改 CSS transform（交給顯示卡），不移動視窗
+//   · 所有庫卡和球共用一個排程迴圈；沒有東西在動時迴圈完全停下（不跑 requestAnimationFrame），只留低頻計時器
+(function () {
+  const S = window.Stage = {};
+  S.POSE = window.QuokkaPose; S.ART = window.QuokkaArt; S.TR = window.QuokkaTraits; S.ANIM = window.QuokkaAnim;
+  S.SOC = window.QuokkaSocial;
+  S.api = window.stageApi;
+  S.stageEl = document.getElementById('stage');
+  S.fxEl = document.getElementById('fx');
+  S.VB = { x: -10, y: -30, w: 180, h: 230 };          // 每隻的畫框（SVG 單位）；腳底在 (80,183)
+  S.VB_STR = `${S.VB.x} ${S.VB.y} ${S.VB.w} ${S.VB.h}`;
+  // 寬畫框：四腳著地、往前撲這類比較長的姿勢（撿球）用，免得口鼻或尾巴被切掉；圖片往左右各多 50 單位
+  S.VBW = { x: -60, y: -30, w: 280, h: 230 };
+  S.VBW_STR = `${S.VBW.x} ${S.VBW.y} ${S.VBW.w} ${S.VBW.h}`;
+  S.FOOT = { x: 80, y: 183 };                         // 腳底在 SVG 座標
+  S.SCALE = 0.95;                                     // 1 個 SVG 單位約 0.95 px（之後乘上個體大小）
+  // 封存：四肢著地慢慢走（地上爬）先停用，散步和走位一律用小跳。程式碼和畫格都保留，改成 true 就恢復
+  S.CRAWL = false;
+  // 同時最多幾隻自己在動（只限 L4–L7；主人叫的、傳球接力不算）——看電腦忙不忙自動調，幀率不降：
+  //   閒 4 隻（偶爾有一分鐘全員一起動）、普通 2 隻、很忙 1 隻；閒的時候大家也動得比較勤（S.restMul）；舞台自己畫不順（被自動降到 30 格）時也只留 1 隻
+  // 這台電腦的效能等級（主行程依硬體判斷後送來；沒收到＝中等）：
+  //   high 閒 4 隻（偶爾全員）／普通 2；mid 閒 3（偶爾 4）／普通 2；low 閒 2／普通 1。很忙一律 1 隻。
+  const CAPS = { high: { free: 4, party: 8, normal: 2 }, mid: { free: 3, party: 4, normal: 2 }, low: { free: 2, party: 2, normal: 1 } };
+  let tier = 'mid', cacheLimit = 80 * 1024 * 1024, degrades = [];
+  S.setMachine = (m) => {
+    tier = CAPS[m.tier] ? m.tier : 'mid';
+    const gb = Number(m.memGB) || 8;
+    cacheLimit = (gb < 7.5 ? 40 : gb < 15 ? 80 : 120) * 1024 * 1024;              // 畫格快取：記憶體少的電腦少放一點
+    S.machine = { ...m, tier };
+  };
+  // 舞台畫不順（5 分鐘內被自動降到 30 格兩次）：這次執行降一級，並請主行程記下來（下次啟動先照降過的）
+  S.noteDegrade = () => {
+    const now = performance.now(); degrades = degrades.filter((t) => now - t < 300000); degrades.push(now);
+    if (degrades.length >= 2 && tier !== 'low') { degrades = []; tier = tier === 'high' ? 'mid' : 'low'; if (S.machine) S.machine.tier = tier; if (S.api && S.api.tierDown) S.api.tierDown(tier); }
+  };
+  let loadLevel = 'normal', partyUntil = 0;
+  S.restMul = 1;                                     // 休息間隔的倍數：閒 0.6（動得勤）、很忙 1.5
+  S.setLoad = (lv) => { loadLevel = lv === 'free' || lv === 'busy' ? lv : 'normal'; S.restMul = loadLevel === 'free' ? .6 : loadLevel === 'busy' ? 1.5 : 1; };
+  setInterval(() => { if (loadLevel === 'free' && Math.random() < .2) partyUntil = performance.now() + 60000; }, 60000);
+  let maxOverride = null;
+  Object.defineProperty(S, 'MAX_MOVING', { configurable: true, set(v) { maxOverride = v; }, get() {
+    if (maxOverride != null) return maxOverride;                              // 測試用：直接指定
+    const p = S.perf;
+    if (p && p.target === 60 && p.fps === 30) return 1;
+    const c = CAPS[tier];
+    return loadLevel === 'busy' ? 1 : loadLevel === 'free' ? (performance.now() < partyUntil ? c.party : c.free) : c.normal;
+  } });
+  S.loadInfo = () => ({ level: loadLevel, tier, max: S.MAX_MOVING, cacheMB: Math.round(cacheLimit / 1048576) });
+  S.REPORT_GAP = 1200;                                // 報告佇列每則間隔
+  S.QUEUE_MAX = 5;
+  // ---- 幀率：預設每秒 60 格 ----------------------------------------------------------------------------
+  //   主行程送 stage:perf {fps:30}（使用電池或使用者開省電）→ 固定 30 格；送 {fps:60} → 回到 60 格並恢復自動保險。
+  //   自動保險（只在目標 60 格時）：連續 2 秒平均每格超過目標時間 1.5 倍（真的跟不上）才降到 30；
+  //   在 30 格時每格的工作量穩定低於 60 格預算的 45% 連續 5 秒以上才升回 60；
+  //   升回去 20 秒內又降下來，下一次要穩定的時間加倍（最多 60 秒），不會來回抖。
+  //   S.fps        目前的幀率（60 或 30）
+  //   S.frameGap   共用迴圈兩格之間至少隔多少毫秒（比一格的時間少一點容差，60 格時每次 rAF 都跑）
+  //   S.LIVE_MS    即時繪製（live SVG）的間隔，跟著幀率走
+  //   S.qMul       快取畫格（走路、跳、撿球）每段的格數倍率：60 格時用兩倍的格數（動作更細），位移照樣以時間計算
+  // 所有位移、步態相位、球的物理都以「經過的時間」計算，所以改幀率不會變快或變慢。
+  const perf = S.perf = { target: 60, fps: 60, frames: 0, work: 0, stages: {}, win: [], cost: [], since: 0, okSince: 0, need: 5000, lastUp: -1e9, history: [] };
+  function applyFps(fps) {
+    S.fps = perf.fps = fps;
+    S.frameGap = 1000 / fps - 3;
+    S.LIVE_MS = 1000 / fps - 2;
+    S.qMul = fps >= 45 ? 2 : 1;
+    perf.win = []; perf.cost = []; perf.okSince = 0; perf.since = performance.now();
+  }
+  applyFps(60);
+  S.setTargetFps = function (fps) {
+    fps = Number(fps) === 30 ? 30 : 60;
+    if (fps === perf.target) return;
+    perf.target = fps; perf.need = 5000; applyFps(fps);
+  };
+  function perfSample(now, gap, cost) {
+    if (gap > 250) { perf.win = []; perf.cost = []; if (perf.fps !== 30) perf.okSince = 0; return; }   // 迴圈剛醒來（之前停著）或整台機器卡了一下：這筆不算
+    if (perf.target !== 60) return;
+    perf.win.push([now, gap]); perf.cost.push(cost);
+    while (perf.win.length && now - perf.win[0][0] > 2000) { perf.win.shift(); perf.cost.shift(); }
+    if (now - perf.since < 2000 || perf.win.length < 15) return;
+    const gaps = perf.win.map((w) => w[1]).sort((x, y) => x - y);
+    const avg = gaps[gaps.length >> 1];                                              // 用中位數：幾格特別慢的不算數，一半以上都慢才是真的吃力
+    if (perf.fps === 60 && avg > 1.5 * 1000 / 60) {
+      if (now - perf.lastUp < 20000) perf.need = Math.min(15000, perf.need * 2);
+      perf.history.push({ t: Math.round(now), to: 30, avgGap: +avg.toFixed(1) });
+      applyFps(30); if (S.noteDegrade) S.noteDegrade();
+    } else if (perf.fps === 30) {
+      const c = perf.cost.reduce((n, v) => n + v, 0) / perf.cost.length;
+      if (c < .45 * 1000 / 60 && avg < 1.2 * 1000 / 30) { if (!perf.okSince) perf.okSince = now; } else perf.okSince = 0;
+      if (perf.okSince && now - perf.okSince >= perf.need) { perf.history.push({ t: Math.round(now), to: 60, cost: +c.toFixed(2) }); perf.lastUp = now; applyFps(60); }
+    }
+  }
+  // 分段計時（量效能用，平常只是累加幾個數字）：S.prof('svg', ms)
+  S.prof = (k, ms) => { const o = perf.stages[k] || (perf.stages[k] = { n: 0, ms: 0 }); o.n++; o.ms += ms; };
+
+  S.actors = new Map();
+  S.balls = new Set();
+  S.cursor = { x: -9999, y: -9999 };
+  S.mode = 'awake';                                   // 全域模式：awake / asleep / hidden
+  S.systemReduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  S.reduceMotion = S.systemReduce;                    // ⚙「減少動態效果」：system（跟系統）／on／off
+  S.settings = { fetchReturn: 'alternate', walk: 'home', reducedMotion: 'system' };
+  S.clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  S.str = (v, n = 200) => (typeof v === 'string' ? v : v == null ? '' : String(v)).slice(0, n);
+
+  // ---- 畫格快取：同一隻、同一個姿勢只畫一次（LRU，總量 200 MB） ---------------------
+  const cache = new Map();          // key → { url, bytes }
+  let cacheBytes = 0;
+  S.frameURL = function (a, key, th, pose, wide) {
+    const k = a.id + '|' + key + (wide ? '|w' : '') + (a.decoKey || '');
+    const hit = cache.get(k);
+    if (hit) { cache.delete(k); cache.set(k, hit); S.prof('frame.hit', 0); return hit.url; }   // 最近使用的移到最後
+    const t0 = performance.now();
+    let svg = S.svgFor(a, th, 'f' + a.uid, pose, wide ? S.VBW_STR : S.VB_STR);
+    S.prof('frame.miss.pose+svg', performance.now() - t0);
+    // 圖片是獨立文件，讀不到 CSS 變數 → 把頭帶等顏色直接寫進去
+    const dpr = window.devicePixelRatio || 1;
+    svg = svg.replace(/var\(--band,\s*#[0-9a-fA-F]{6}\)/g, a.traits.band || '#e5533d')
+      .replace('<svg ', `<svg width="${Math.round(a.w * (wide ? S.VBW.w / S.VB.w : 1) * dpr)}" height="${Math.round(a.h * dpr)}" `);
+    svg = fixDupStyle(svg);
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const entry = { url: URL.createObjectURL(blob), bytes: blob.size, key: k };
+    cache.set(k, entry);
+    cacheBytes += blob.size;
+    toPNG(entry, svg);
+    while (cacheBytes > cacheLimit && cache.size) {               // 超過上限：丟掉最久沒用的
+      const [ok, ov] = cache.entries().next().value;
+      URL.revokeObjectURL(ov.url); ready.delete(ov.url); cacheBytes -= ov.bytes; cache.delete(ok);
+    }
+    return entry.url;
+  };
+  // PNG 先在背景解碼好才換（換上去不會有空白格）
+  const ready = new Set();
+  S.decodeFrame = function (u) {
+    const im = new Image();
+    im.src = u;
+    const done = () => { ready.add(u); };
+    return (im.decode ? im.decode() : new Promise((r, j) => { im.onload = r; im.onerror = j; })).then(done, done);
+  };
+  // 畫一隻（含個體特徵、小袋鼠的大頭、媽媽肚子上的育兒袋與探頭的小袋鼠）→ 分層與手掌位置
+  S.poseFor = (a, pose) => (a.hs && a.hs !== 1 && pose.headScale == null ? { ...pose, headScale: a.hs } : pose);
+  S.renderActor = function (a, th, id, pose) {
+    pose = S.poseFor(a, pose);
+    S.ART.configure(a.traits);
+    const r = S.POSE.render(th, id, pose);
+    S.ART.configure(null);
+    const L = r.layers, deco = S.deco ? S.deco(a, th, pose, id) : '';
+    return { hands: r.hands, layers: L, inner: L.defs + L.shadow + L.back + L.body + deco + L.front };
+  };
+  S.svgFor = (a, th, id, pose, vb) => `<svg viewBox="${vb}" class="view-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="overflow:visible">${S.renderActor(a, th, id, pose).inner}</svg>`;
+  // ---- 即時繪製（live SVG、雙人互動）用的瘦身：每格重建的 DOM 越少，解析＋樣式計算越快 ----------------
+  //   · 不會變的漸層／濾鏡（同一個 id、內容一直一樣）搬到文件裡共用的 <defs> 一次，之後每格不再重建
+  //     （同一個 id 出現過不同內容＝會變的，例如跟著姿勢走的漸層、身體輪廓的裁切 → 一律留在每格裡）
+  //   · 身體上的毛（固定亂數、幾百條短線）放進共用的 <defs>，每格只用一個 <use> 引用
+  //   · 模糊的實心橢圓換成柔邊漸層（soft-blur.js）：逐像素比對最大差 14/255、平均 0.3，看不出來；濾鏡少約四成
+  //   畫出來的樣子完全一樣（同樣的元素、同樣的 id，只是放的位置不同）
+  let sharedDefs = null;
+  const hoisted = new Map(), seenDef = new Map(), dynId = new Set(), furIds = new Map();
+  function shared() {
+    if (sharedDefs && sharedDefs.isConnected) return sharedDefs;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('width', '0'); svg.setAttribute('height', '0');
+    svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none';
+    sharedDefs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    svg.appendChild(sharedDefs); document.body.appendChild(svg);                  // 放在最後：同一個 id 若每格裡也有，以每格裡的為準
+    return sharedDefs;
+  }
+  const addShared = (str) => { const t = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); t.innerHTML = str; const el = t.firstElementChild; if (el) shared().appendChild(el); return el; };
+  const DEF_RE = /<(linearGradient|radialGradient|filter|clipPath|mask|pattern)\b[^>]*?id="([^"]+)"[^>]*?(?:\/>|>[\s\S]*?<\/\1>)/g;
+  S.slim = function (svg) {
+    // 模糊的實心橢圓 → 柔邊漸層（看起來一樣，省掉大部分模糊濾鏡；漸層放共用的 <defs>）
+    if (window.QuokkaSoftBlur) svg = window.QuokkaSoftBlur.merge(window.QuokkaSoftBlur.apply(svg, { sink: addShared }));   // ＋相鄰兩個毛邊濾鏡合成一次
+    // 共用的毛
+    svg = svg.replace(/<g data-fur="1">([\s\S]*?)<\/g>/g, (m, inner) => {
+      // 毛畫成圖了就直接貼圖（fur-image.js：幾百條線 → 一張圖，顯示卡少約四分之一的工作）；還沒畫好先用共用定義
+      const FI = window.QuokkaFurImage, im = FI && FI.get(inner);
+      if (im) return FI.tag(im);
+      let id = furIds.get(inner);
+      if (!id) { if (furIds.size > 40) return m; id = 'qfur' + furIds.size; furIds.set(inner, id); addShared(`<g id="${id}">${inner}</g>`); }
+      return `<use href="#${id}"/>`;
+    });
+    // 共用的漸層、濾鏡
+    return svg.replace(DEF_RE, (m, tag, id) => {
+      if (dynId.has(id)) return m;
+      const h = hoisted.get(id);
+      if (h) { if (h.str === m) return ''; dynId.add(id); h.el.remove(); hoisted.delete(id); return m; }
+      const prev = seenDef.get(id);
+      if (prev == null) { if (seenDef.size > 4000) seenDef.clear(); seenDef.set(id, m); return m; }
+      if (prev !== m) { dynId.add(id); seenDef.delete(id); return m; }
+      seenDef.delete(id);
+      const el = addShared(m); if (!el) return m;
+      hoisted.set(id, { str: m, el });
+      return '';
+    }).replace(/<defs>\s*<\/defs>/g, '');
+  };
+  // ---- 只改有變的地方：即時繪製每格的 SVG 結構（元素的種類、順序）幾乎都一樣，只有座標在變 ----------------
+  //   原本每格整段 innerHTML 換掉 → 瀏覽器要重新解析、建立一百多個元素、重算全部樣式。
+  //   結構和上一格一樣時，只對「屬性有變」的元素改屬性（沒變的元素完全不碰）；結構不同（換動作、多了道具）才整段重建。
+  //   畫出來的結果和整段換掉完全一樣（同樣的元素、同樣的屬性）。
+  const TOK = /<(\/?)([a-zA-Z][\w:-]*)((?:\s+[\w:-]+="[^"]*")*)\s*(\/?)>|([^<]+)/g, ATT = /([\w:-]+)="([^"]*)"/g;
+  const ent = (v) => (v.indexOf('&') < 0 ? v : v.replace(/&(quot|amp|lt|gt|apos|#\d+|#x[0-9a-f]+);/gi, (m, e) => ({ quot: '"', amp: '&', lt: '<', gt: '>', apos: "'" })[e.toLowerCase()] || (e[1] === 'x' || e[1] === 'X' ? String.fromCodePoint(parseInt(e.slice(2), 16)) : String.fromCodePoint(+e.slice(1)))));
+  function tokens(str) {
+    const tags = [], attrs = []; let sig = '', m; TOK.lastIndex = 0;
+    while ((m = TOK.exec(str))) {
+      if (m[5] != null) { if (/\S/.test(m[5])) return null; continue; }          // 有文字內容：不走省力路線
+      if (m[1]) { sig += '/'; continue; }
+      sig += m[2] + (m[4] ? '/,' : ','); tags.push(m[2]); attrs.push(m[3]);
+    }
+    return { sig, attrs };
+  }
+  S.patchSvg = function (host, svg) {
+    const st = host.__patch || (host.__patch = {});
+    const t = tokens(svg);
+    if (t && st.sig === t.sig && st.els && st.els.length === t.attrs.length && host.firstElementChild === st.els[0]) {
+      for (let i = 0; i < t.attrs.length; i++) {
+        const a = t.attrs[i], b = st.attrs[i]; if (a === b) continue;
+        const el = st.els[i], old = new Map(); let m;
+        ATT.lastIndex = 0; while ((m = ATT.exec(b))) old.set(m[1], m[2]);                    // 上一格的屬性（字串比，不必問 DOM）
+        ATT.lastIndex = 0; while ((m = ATT.exec(a))) { const o = old.get(m[1]); old.delete(m[1]); if (o !== m[2]) el.setAttribute(m[1], ent(m[2])); }
+        for (const k of old.keys()) el.removeAttribute(k);
+      }
+      st.attrs = t.attrs; return;
+    }
+    host.innerHTML = svg;
+    if (!t) { st.sig = null; st.els = null; return; }
+    const els = []; const walk = (n) => { for (let c = n.firstElementChild; c; c = c.nextElementSibling) { els.push(c); walk(c); } }; walk(host);
+    st.sig = t.sig; st.attrs = t.attrs; st.els = els;
+  };
+  S.slimInfo = () => ({ hoisted: hoisted.size, dyn: dynId.size, fur: furIds.size });
+  // 互動結束：那一輪用的共用定義（id 以 suffix 結尾）拿掉，不會越積越多
+  S.unslim = function (suffixes) {
+    const hit = (id) => suffixes.some((x) => id.endsWith(x));
+    for (const [id, h] of [...hoisted]) if (hit(id)) { h.el.remove(); hoisted.delete(id); }
+    for (const id of [...dynId]) if (hit(id)) dynId.delete(id);
+    for (const id of [...seenDef.keys()]) if (hit(id)) seenDef.delete(id);
+  };
+  // 先把某一格畫好放進快取（眨眼、耳朵抖這種只出現 0.1 秒的畫格，要用的時候才不會來不及）
+  S.warm = (a, key, th, pose, wide) => { S.frameURL(a, key, th, pose, wide); };
+  // 圖片（獨立 SVG 文件）用嚴格 XML 解析：同一個標籤有兩個 style 屬性會整張讀不出來（某些飾品會這樣）→ 合併成一個
+  function fixDupStyle(svg) {
+    return svg.replace(/<[a-zA-Z][^>]*>/g, (tag) => {
+      const m = tag.match(/\sstyle="[^"]*"/g);
+      if (!m || m.length < 2) return tag;
+      const merged = ' style="' + m.map((x) => x.slice(8, -1)).join(';') + '"';
+      let first = true;
+      return tag.replace(/\sstyle="[^"]*"/g, () => (first ? ((first = false), merged) : ''));
+    });
+  }
+  S.fixDupStyle = fixDupStyle;
+  // 某隻的外觀變了或被刪掉：丟掉牠的所有畫格
+  S.purgeFrames = function (id) {
+    for (const [k, v] of cache) if (k.startsWith(id + '|')) { URL.revokeObjectURL(v.url); ready.delete(v.url); cacheBytes -= v.bytes; cache.delete(k); }
+  };
+  S.cacheInfo = () => ({ n: cache.size, mb: +(cacheBytes / 1048576).toFixed(1) });
+
+  // 背景把 SVG 畫格轉成 PNG：之後只留點陣圖（SVG 文件連同濾鏡會佔很多記憶體）
+  const pngQueue = [];
+  let pngBusy = false;
+  function toPNG(entry, svg) { pngQueue.push(entry); if (!pngBusy) nextPNG(); }
+  function nextPNG() {
+    let entry = pngQueue.shift();
+    while (entry && cache.get(entry.key) !== entry) entry = pngQueue.shift();      // 已經被丟掉（外觀變了、長大）的畫格：網址已釋放，不要再載入
+    if (!entry) { pngBusy = false; return; }
+    pngBusy = true;
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+      c.getContext('2d').drawImage(img, 0, 0);
+      c.toBlob((b) => {
+        c.width = c.height = 0;                                  // 畫布和原圖用完馬上放掉（不等回收，省一兩百 MB）
+        img.onload = img.onerror = null; img.removeAttribute('src');
+        if (b && cache.get(entry.key) === entry) {
+          const old = entry.url, png = URL.createObjectURL(b);
+          // PNG 先解碼好再換（直接換 src 會有一格空白）；舊網址晚一點才釋放（可能還有一張正在等著換上去）
+          S.decodeFrame(png).then(() => {
+            if (cache.get(entry.key) !== entry) { URL.revokeObjectURL(png); return; }
+            for (const a of S.actors.values()) if (a.img.src === old && !a.pendingSrc && !a.liveShown) a.showURL(png, !!a.wideImg);
+            cacheBytes += b.size - entry.bytes; entry.url = png; entry.bytes = b.size;
+            ready.delete(old); setTimeout(() => URL.revokeObjectURL(old), 3000);
+            setTimeout(nextPNG, 0);
+          });
+          return;
+        }
+        setTimeout(nextPNG, 0);
+      }, 'image/png');
+    };
+    img.onerror = () => setTimeout(nextPNG, 0);
+    img.src = entry.url;
+  }
+
+  // ---- 名額：同時在動（L4–L7）的隻數 ----------------------------------------------
+  // 一起互動的一對（L5）只算 1 個名額：只算發起的那隻
+  S.movingCount = () => { let n = 0; for (const a of S.actors.values()) if (a.layer >= 4 && a.layer <= 7 && !(a.job && a.job.name === 'social' && !a.job.isInit)) n++; return n; };
+  // 有球停下來在等主人撿：散步先讓位（L4 優先拿名額）
+  S.fetchWaiting = () => { for (const b of S.balls) if (b.stopped && !b.picked && b.owner.layer > 4) return true; return false; };
+
+  // ---- 共用的排程迴圈：有東西在動才跑；全部待機時只用低頻計時器 ----------------------
+  let raf = 0, idleTimer = 0, lastFrame = 0, lastBall = 0;
+  function loop(now) {
+    raf = 0;
+    if (now - lastFrame < S.frameGap) { raf = requestAnimationFrame(loop); return; }   // 每秒最多 S.fps 格（預設 60，吃力時自動降級）
+    const gap = lastFrame ? now - lastFrame : 1e9, c0 = performance.now();
+    lastFrame = now; perf.frames++;
+    let busy = false;
+    const dt = Math.min(0.05, (now - (lastBall || now)) / 1000); lastBall = now;
+    for (const b of [...S.balls]) { try { if (b.tick(dt, now)) busy = true; } catch (e) { console.warn('球的更新出錯，收掉這顆球', e); try { b.remove(); } catch (e2) { /* 已經移除 */ } } }
+    // 每一隻各自保護：某一隻的活動出錯，就強制結束牠的活動（互動中會送 social:abort），其他隻照常
+    for (const a of [...S.actors.values()]) {
+      try { if (a.tick(now)) busy = true; }
+      catch (e) { console.warn('活動出錯，強制結束：' + (a.job && a.job.name), e); S.failJob(a); busy = true; }
+    }
+    const cost = performance.now() - c0;
+    perf.work += cost; perfSample(now, gap, cost);
+    if (busy) { if (!raf) raf = requestAnimationFrame(loop); S.reportRectsThrottled(); }
+    else { lastBall = 0; lastFrame = 0; wakeLater(); S.reportRects(); }
+  }
+  function wakeLater() {
+    clearTimeout(idleTimer);
+    let next = Infinity;
+    for (const a of S.actors.values()) next = Math.min(next, a.wakeAt());
+    if (!isFinite(next)) return;
+    const wait = Math.max(200, Math.min(5000, next - performance.now()));
+    idleTimer = setTimeout(() => S.kick(), wait);
+  }
+  // 強制結束某一隻目前的活動（出錯時用）：照正常的打斷流程收尾，再回待機
+  S.failJob = function (a) {
+    const j = a.job;
+    a.job = null;
+    try { if (j && j.duet) j.duet.fail(a); else if (j && j.interrupt) j.interrupt('error'); } catch (e) { /* 收尾也出錯就算了 */ }
+    try { a.hideLive(); a.depth = 0; a.zBoost = 0; a.dy = 0; a.el.classList.remove('in-duet', 'ringing', 'dragging', 'bang-on'); a.duetOn = false; a.th = Math.round((a.th || 0) / 15) * 15 || -15; a.setLayer(8); a.showRest(); a.place(); } catch (e) { /* 盡量恢復 */ }
+  };
+  S.kick = function () { if (!raf) { lastBall = 0; raf = requestAnimationFrame(loop); } };
+  S.running = () => !!raf;
+
+  // ---- 回報每隻（和提醒氣泡）的範圍給主行程（判斷滑鼠穿透） ---------------------------
+  let lastReport = 0;
+  S.reportRects = function (dragging) {
+    lastReport = performance.now();
+    const rects = [];
+    let drag = !!dragging;
+    if (S.mode !== 'hidden') for (const a of S.actors.values()) {
+      if (a.rect) rects.push(a.rect);
+      const br = a.bubble && a.bubble.clickRect();
+      if (br) rects.push(br);
+      // 保險：拎著卻已經沒有按鍵在追蹤（監聽遺失、出錯）→ 當場放下，不讓舞台卡在「拖曳中」
+      if (a.dragging && a.pressing && !a.pressing()) { try { a.job.release(0, 0); } catch (e) { S.failJob(a); } }
+      if (a.dragging) drag = true;
+    }
+    if (S.Shortcuts && S.mode !== 'hidden') for (const r of S.Shortcuts.rects()) rects.push(r);
+    if (S.Items && S.mode !== 'hidden') for (const r of S.Items.rects()) rects.push(r);
+    if (S.Shortcuts && S.Shortcuts.dragging && S.Shortcuts.dragging()) drag = true;           // 正在拖捷徑圖示：整個舞台可點
+    if (S.Basket && S.mode !== 'hidden') { for (const r of S.Basket.rects()) rects.push(r); if (S.Basket.dragging()) drag = true; }   // 道具籃（和彈出來的道具）；拿著道具或搬籃子時整個舞台可點           // 禮物「自己用／送給誰」的選單也要能點   // 浮出來的捷徑也要能點
+    S.api.reportRects(rects, drag);
+    S.reportPos();
+  };
+  S.reportRectsThrottled = function () { if (performance.now() - lastReport > 120) S.reportRects(); };
+
+  // ---- 回報腳底位置（q:pos，給社交排程判斷距離與地面）：有變才送，最多每秒一次 ----------------
+  let lastPos = 0, posTimer = 0, lastPosSig = '';
+  S.reportPos = function () {
+    const now = performance.now();
+    if (now - lastPos < 1000) { if (!posTimer) posTimer = setTimeout(() => { posTimer = 0; S.reportPos(); }, 1000 - (now - lastPos)); return; }
+    const list = [...S.actors.values()].map((a) => ({ qid: a.id, x: Math.round(a.x), y: Math.round(a.y) }));
+    const sig = list.map((p) => p.qid + p.x + ',' + p.y).join('|');
+    if (sig === lastPosSig) return;
+    lastPos = now; lastPosSig = sig;
+    S.api.pos(list);
+  };
+})();

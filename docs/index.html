@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="住在桌面上的短尾矮袋鼠：幫你記待辦、響提醒、報股價，滑鼠碰到牠就浮出常用檔案。Windows 免安裝，免費下載。">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="庫卡桌面助理">
+<meta property="og:title" content="庫卡｜住在桌面上的短尾矮袋鼠">
+<meta property="og:description" content="住在桌面上的短尾矮袋鼠：幫你記待辦、響提醒、報股價，滑鼠碰到牠就浮出常用檔案。Windows 免安裝，免費下載。">
+<meta property="og:url" content="https://bca41258185-hash.github.io/desktop-assistant/">
+<meta property="og:image" content="https://bca41258185-hash.github.io/desktop-assistant/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="庫卡：短尾矮袋鼠頭上浮出一排常用資料夾和檔案">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://bca41258185-hash.github.io/desktop-assistant/og.png">
+<meta name="theme-color" content="#f6eee2">
+<link rel="icon" href="tick.png">
+<title>庫卡桌面助理</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Huninn&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* 版面：米色的地面＋點點，奶茶棕主色、蜂蜜黃點綴、淡淡腮紅；圓滾滾的卡片和按鈕。頁首介紹和下載，下面一區一個功能 */
+:root {
+  --ground: #f6eee2;      /* 米色 */
+  --dot: #ece0cd;
+  --panel: #fffaf2;
+  --ink: #4b3a2e;
+  --muted: #8a7563;
+  --line: #e8d8c0;
+  --fur: #c68a5a;         /* 奶茶棕（主色） */
+  --fur-deep: #a5683d;
+  --fur-ink: #fffaf2;
+  --gold: #f6c15a;        /* 蜂蜜黃 */
+  --mint: #f3dcd3;        /* 腮紅米粉（標籤） */
+  --sky1: #f3e6d2; --sky2: #e6efe4;
+  --shadow: 0 6px 0 #e2cfb3;
+  --up: #d8473b;
+  --down: #2a8a55;
+  --display: "Huninn", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  --body: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --ground: #2a231c; --dot: #342b22; --panel: #372d24; --ink: #f5ebdd; --muted: #c9b6a0; --line: #54453a;
+  --fur: #e0aa7c; --fur-deep: #f0c49e; --fur-ink: #2a231c; --gold: #f6c96e; --mint: #4a3a33;
+  --sky1: #4a3e31; --sky2: #3c4a40; --shadow: 0 6px 0 #1b1510; --up: #ff7a6e; --down: #5fd99a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --ground: #2a231c; --dot: #342b22; --panel: #372d24; --ink: #f5ebdd; --muted: #c9b6a0; --line: #54453a;
+  --fur: #e0aa7c; --fur-deep: #f0c49e; --fur-ink: #2a231c; --gold: #f6c96e; --mint: #4a3a33;
+  --sky1: #4a3e31; --sky2: #3c4a40; --shadow: 0 6px 0 #1b1510; --up: #ff7a6e; --down: #5fd99a; color-scheme: dark }
+
+body { background: var(--ground) radial-gradient(var(--dot) 2.5px, transparent 3px) 0 0 / 28px 28px; color: var(--ink); font: 400 1rem/1.75 var(--body); }
+.wrap { max-width: 1040px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--display); font-weight: 400; text-wrap: balance; margin: 0; line-height: 1.3; }
+p { margin: 0; }
+a { color: var(--fur); }
+a:focus-visible, button:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; border-radius: 10px; }
+
+/* 頁首 */
+.hero { padding-block: 3.5rem 2.5rem; display: grid; grid-template-columns: 1.05fr 1fr; gap: 2.5rem; align-items: center; }
+.hero > * { min-width: 0; }
+.kicker { display: inline-block; font-size: .8rem; letter-spacing: .1em; color: var(--fur-deep); background: var(--panel); border: 2px solid var(--line); border-radius: 999px; padding: .15rem .8rem; }
+.hero h1 { font-size: clamp(2.6rem, 6vw, 4rem); margin-top: .3rem; }
+.hero h1 { color: var(--fur-deep); }
+.hero h1 small { display: block; font-size: .42em; color: var(--ink); margin-top: .4rem; }
+.lead { font-size: 1.1rem; margin-top: 1.2rem; max-width: 34em; }
+.dl { margin-top: 1.8rem; display: flex; flex-wrap: wrap; gap: .8rem 1.2rem; align-items: center; }
+.btn { display: inline-flex; align-items: center; gap: .6rem; background: var(--fur); color: var(--fur-ink); text-decoration: none; font: 500 1.1rem/1 var(--body); padding: 1rem 1.6rem; border-radius: 999px; box-shadow: 0 5px 0 var(--fur-deep); transition: transform .15s, box-shadow .15s; }
+.btn:hover { transform: translateY(-3px) rotate(-1deg); box-shadow: 0 8px 0 var(--fur-deep); }
+.btn:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--fur-deep); }
+.btn svg { flex: none; }
+.meta { font-size: .88rem; color: var(--muted); line-height: 1.5; }
+.hero-art { position: relative; }
+.hero-art img { display: block; width: 100%; height: auto; }
+.bubble { position: absolute; left: 50%; top: 4%; transform: translateX(-50%); }
+
+/* 輸入框示範 */
+.typer { margin-top: 2rem; background: var(--panel); border: 2px solid var(--line); border-radius: 22px; box-shadow: var(--shadow); padding: .9rem 1.1rem; max-width: 30em; }
+.typer .field { font-size: 1.05rem; border-bottom: 2px dashed var(--line); padding-bottom: .4rem; min-height: 1.75em; }
+.typer .field::after { content: ""; display: inline-block; width: 2px; height: 1.1em; background: var(--fur); vertical-align: -.15em; margin-left: 2px; animation: blink 1s steps(2) infinite; }
+.typer .out { color: var(--fur); font-size: .92rem; padding-top: .4rem; min-height: 1.6em; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* 功能區 */
+.feature { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; align-items: center; padding-block: 3rem; border-top: 3px dotted var(--line); }
+.feature > * { min-width: 0; }
+.feature.flip .pic { order: 2; }
+.feature h2, .poses h2, .install h2 { color: var(--fur-deep); }
+.feature h2 { font-size: clamp(1.6rem, 3.4vw, 2.1rem); }
+.feature p, .feature ul { margin-top: .9rem; color: var(--ink); max-width: 33em; }
+.feature ul { padding-left: 1.2em; }
+.feature li + li { margin-top: .3rem; }
+.pic { background: var(--panel); border: 2px solid var(--line); border-radius: 30px; box-shadow: var(--shadow); padding: 1.2rem; display: grid; place-items: center; }
+.pic img { display: block; max-width: 100%; height: auto; }
+.pic.sky { background: linear-gradient(160deg, var(--sky1), var(--sky2)); }
+code, .chip { font-family: var(--mono); font-size: .88em; background: var(--mint); color: var(--ink); border-radius: 999px; padding: .1em .65em; }
+.examples { list-style: none; padding: 0 !important; display: grid; gap: .45rem; }
+.examples li { display: grid; grid-template-columns: minmax(0, 11.5em) 1fr; gap: .8rem; align-items: baseline; margin: 0 !important; }
+.examples li span:last-child { color: var(--muted); font-size: .92rem; }
+.up { color: var(--up); font-weight: 700; } .down { color: var(--down); font-weight: 700; }
+
+.poses { padding-block: 3rem; border-top: 3px dotted var(--line); }
+.poses h2 { font-size: clamp(1.6rem, 3.4vw, 2.1rem); }
+.poses p { margin-top: .8rem; max-width: 40em; }
+.poses .pic { margin-top: 1.5rem; padding: 0; overflow: hidden; }
+
+/* 安裝 */
+.install { padding-block: 3rem; border-top: 3px dotted var(--line); display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; }
+.install > * { min-width: 0; }
+.install h2 { font-size: clamp(1.6rem, 3.4vw, 2.1rem); }
+.steps { counter-reset: s; list-style: none; padding: 0; margin: 1.2rem 0 0; display: grid; gap: 1rem; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 2.2rem 1fr; gap: .8rem; }
+.steps li::before { content: counter(s); font-family: var(--display); font-size: 1.15rem; width: 2.2rem; height: 2.2rem; border-radius: 50%; background: var(--gold); color: #4a3640; display: grid; place-items: center; transform: rotate(-6deg); }
+.steps b { font-weight: 700; }
+.notes { margin: 1.2rem 0 0; display: grid; gap: 1rem; }
+.notes dt { font-weight: 700; }
+.notes dd { margin: .15rem 0 0; color: var(--muted); }
+
+footer { border-top: 3px dotted var(--line); padding-block: 2rem 3rem; color: var(--muted); font-size: .9rem; display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; justify-content: space-between; }
+
+@media (max-width: 760px) {
+  .hero, .feature, .install { grid-template-columns: 1fr; gap: 1.5rem; }
+  .feature.flip .pic { order: 0; }
+  .hero { padding-block: 2rem 1.5rem; }
+  .examples li { grid-template-columns: 1fr; gap: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } .typer .field::after { animation: none; } }
+</style>
+<style>*,*::before,*::after{box-sizing:border-box} body{margin:0} img{max-width:100%} [hidden]{display:none!important} :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="hero">
+    <div>
+      <div class="kicker">WINDOWS 桌面寵物 · 工作助理</div>
+      <h1>庫卡<small>住在桌面上的短尾矮袋鼠</small></h1>
+      <p class="lead">把待辦、提醒、股票和常用的資料夾交給牠們，每隻各管各的。有事時牠會跳出來講，沒事時就在螢幕下面散步、打球、打瞌睡。</p>
+      <div class="dl">
+        <a class="btn" id="download" href="https://github.com/bca41258185-hash/desktop-assistant/releases/download/quokka-v0.1.0/Quokka-Pet-win-x64.zip">
+          <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v11m0 0-4.5-4.5M10 13l4.5-4.5M3 17h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          下載 Windows 版
+        </a>
+        <div class="meta">Windows 10／11（64 位元）· 免安裝 zip · 約 106 MB</div>
+      </div>
+      <div class="typer" aria-label="輸入框示範">
+        <div class="field" id="typed"></div>
+        <div class="out" id="parsed"></div>
+      </div>
+    </div>
+    <div class="hero-art pic sky">
+      <img src="tick.png" alt="一隻短尾矮袋鼠頭上的對話氣泡寫著：台積電 1,050 漲 1.2%" width="293" height="250" style="max-width:300px">
+    </div>
+  </header>
+
+  <section class="feature">
+    <div>
+      <h2>一個輸入框，什麼都能丟進去</h2>
+      <p>不用選類型。打完按 Enter，牠會自己判斷是提醒、股票、捷徑還是待辦，下面先顯示判斷結果讓你確認。</p>
+      <ul class="examples">
+        <li><span class="chip">30分 泡茶</span><span>30 分鐘後提醒一次</span></li>
+        <li><span class="chip">明天 10:00 看工地</span><span>明天早上十點提醒</span></li>
+        <li><span class="chip">每週一三五 8:30 運動</span><span>重複提醒</span></li>
+        <li><span class="chip">週五前送審</span><span>截止前提早提醒</span></li>
+        <li><span class="chip">2330</span><span>盯台積電的股價</span></li>
+        <li><span class="chip">D:\工地\照片</span><span>放進捷徑</span></li>
+        <li><span class="chip">回覆業主信件</span><span>待辦</span></li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="font-size:1.35rem">提醒不會漏</h3>
+      <p>時間到了，負責的那隻跳出來響鈴，可以按「知道了」或「5 分後」。電腦睡著或程式沒開而錯過的，回來時會告訴你錯過了哪幾件。</p>
+      <h3 style="font-size:1.35rem;margin-top:1.6rem">很多隻，各管各的</h3>
+      <p>可以養好幾隻，每件事都有負責的那隻。把事情拖到另一隻的頭像上，就換牠管。</p>
+    </div>
+  </section>
+
+  <section class="feature flip">
+    <div class="pic sky"><img src="shortcuts.png" alt="游標移到短尾矮袋鼠身上，牠頭頂浮出一排資料夾和檔案圖示：畢業設計、期中評圖.pdf、參考圖、設計說明.docx、面積表.xlsx、工地照片" width="540" height="295"></div>
+    <div>
+      <h2>游標碰到牠，常用的檔案就浮出來</h2>
+      <p>每隻可以管 12 個捷徑。滑鼠移到牠身上，頭頂浮出一排資料夾和檔案，滑過去點一下就打開。</p>
+      <ul>
+        <li>把檔案或資料夾直接拖到牠身上就加進去</li>
+        <li>移到另一隻身上，換成那隻的捷徑</li>
+        <li>牠睡著的時候不打擾你</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="feature">
+    <div>
+      <h2>開盤時每分鐘報一次股價</h2>
+      <p>台股和美股都可以。開盤時間每分鐘講一次現價，<span class="up">漲是紅色</span>、<span class="down">跌是綠色</span>，同一隻盯好幾檔時一檔一檔輪流講。漲跌跨過你設的門檻（1%、2% 或 3%）時，牠會歡呼或垂頭。</p>
+      <p>右鍵問「今天股市怎麼了？」，牠會用自己的個性解釋今天的均線、RSI、KD 這些指標發生了什麼。只講已經發生的事，不預測、不建議買賣。</p>
+    </div>
+    <div class="pic">
+      <ul class="examples" style="width:100%;margin:0">
+        <li><span class="chip">每分鐘</span><span>台積電 1,050 <span class="up">▲1.2%</span> → Apple 231.42 <span class="down">▼0.5%</span></span></li>
+        <li><span class="chip">漲過 2%</span><span>跳起來歡呼</span></li>
+        <li><span class="chip">跌過 2%</span><span>垂頭喪氣</span></li>
+        <li><span class="chip">收盤後</span><span>自動講一次今天的重點</span></li>
+        <li><span class="chip">抓不到報價</span><span>面板寫「暫停更新」，不亂報</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="poses">
+    <h2>每一隻都長得不一樣</h2>
+    <p>毛色、體型、年齡和個性都是隨機的，範圍照真的短尾矮袋鼠資料。點一下摸頭，點兩下打開面板，拖起來會被拎著走，甩太快會頭暈。閒的時候自己散步、打羽球、打籃球、吃葉子；處得好的兩隻會變好朋友，甚至生小袋鼠。</p>
+    <div class="pic"><img src="poses.jpg" alt="24 種姿勢一覽：八個方向的轉身、摸頭、撒嬌、被拎起來、頭暈、揮手、睡覺、跳、吃葉子、自拍、打盹、羽球、排球、籃球" width="1360" height="846"></div>
+  </section>
+
+  <section class="install" id="install">
+    <div>
+      <h2>安裝</h2>
+      <ol class="steps">
+        <li><div><b>下載 zip</b>，按上面的「下載 Windows 版」。</div></li>
+        <li><div><b>解壓縮</b>到一個固定的地方，例如「文件」裡面。不要直接在 zip 裡面點開。</div></li>
+        <li><div><b>打開資料夾裡的 Quokka.exe。</b>第一次開時 Windows 可能會出現藍色的「Windows 已保護您的電腦」，按「其他資訊」→「仍要執行」。這是因為程式沒有買數位簽章，不是病毒。</div></li>
+        <li><div>庫卡會出現在螢幕下方。<b>點兩下牠</b>打開面板，在輸入框打第一件事。</div></li>
+      </ol>
+    </div>
+    <div>
+      <h2>常見問題</h2>
+      <dl class="notes">
+        <div><dt>要註冊帳號或付費嗎？</dt><dd>不用。也沒有 AI 聊天，不需要任何金鑰。</dd></div>
+        <div><dt>我的資料存在哪？</dt><dd>只存在你自己的電腦：<code>%APPDATA%\quokka-pet</code>。不會上傳。</dd></div>
+        <div><dt>會擋到我工作嗎？</dt><dd>牠們住在一層透明的圖層裡，滑鼠會直接穿過去，只有碰到牠們身上才點得到。右鍵可以讓全部先藏 30 分鐘。</dd></div>
+        <div><dt>會不會很吃電腦？</dt><dd>平常每秒 60 格；用電池時自動降到 30 格省電。離開電腦 5 分鐘，牠們就去睡覺。</dd></div>
+        <div><dt>要怎麼移除？</dt><dd>右鍵選「結束」，再把解壓縮的資料夾刪掉。想連設定一起清掉，就刪 <code>%APPDATA%\quokka-pet</code>。</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <footer>
+    <span>股價資料來自證交所和 Yahoo，可能延遲，僅供參考，不是投資建議。</span>
+    <a href="https://github.com/bca41258185-hash/desktop-assistant">原始碼（GitHub）</a>
+  </footer>
+</div>
+
+<script>
+(function () {
+  const demos = [
+    ['明天 10:00 看工地', '→ 明天 10:00 提醒'],
+    ['30分 泡茶', '→ 30 分鐘後提醒（今天 ' + (() => { const d = new Date(Date.now() + 30 * 60000); return d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); })() + '）'],
+    ['2330', '→ 台股 2330 台積電'],
+    ['D:\\工地\\照片', '→ 放進捷徑'],
+    ['回覆業主信件', '→ 待辦'],
+  ];
+  const typed = document.getElementById('typed'), parsed = document.getElementById('parsed');
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (still) { typed.textContent = demos[0][0]; parsed.textContent = demos[0][1]; return; }
+  let i = 0;
+  typed.textContent = demos[0][0]; parsed.textContent = demos[0][1];
+  async function loop() {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (;;) {
+      await wait(2600);
+      i = (i + 1) % demos.length;
+      const [t, p] = demos[i];
+      parsed.textContent = ''; typed.textContent = '';
+      for (const ch of t) { typed.textContent += ch; await wait(90); }
+      await wait(250); parsed.textContent = p;
+    }
+  }
+  loop();
+})();
+</script>
+
+</body>
+</html>

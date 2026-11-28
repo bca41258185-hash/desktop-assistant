@@ -1,0 +1,125 @@
+{
+  "description": "Lines for the quokka desktop pet: original pep-talk lines (kind \"original\") and general animal facts (kind \"fact\"). None of these are quotations.",
+  "quotes": [
+    {
+      "id": "quokka",
+      "zh": "球還沒落地，就還有機會。先動起來再說！",
+      "source": "Original line",
+      "sourceZh": "球場語錄（原創）",
+      "kind": "original",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "一次只接一球。把眼前這一件做好，下一球自然會來。",
+      "source": "Original line",
+      "sourceZh": "球場語錄（原創）",
+      "kind": "original",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "失誤沒關係，撿起球、笑一下，再發一次。",
+      "source": "Original line",
+      "sourceZh": "球場語錄（原創）",
+      "kind": "original",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "暖身不能省：開工前先伸個懶腰、喝口水。",
+      "source": "Original line",
+      "sourceZh": "球場語錄（原創）",
+      "kind": "original",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "坐太久囉！起來走一走，肩膀轉一轉，再回來繼續。",
+      "source": "Original line",
+      "sourceZh": "球場語錄（原創）",
+      "kind": "original",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "今天的你已經很努力了，這一分算你的！",
+      "source": "Original line",
+      "sourceZh": "球場語錄（原創）",
+      "kind": "original",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "短尾矮袋鼠（quokka，學名 Setonix brachyurus）是有袋類動物，和袋鼠、沙袋鼠同屬袋鼠科。",
+      "source": "General fact",
+      "sourceZh": "生態小知識",
+      "kind": "fact",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "我的同伴大多住在西澳洲外海的羅特尼斯島（Rottnest Island）。",
+      "source": "General fact",
+      "sourceZh": "生態小知識",
+      "kind": "fact",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "我們是草食動物，而且多半在傍晚到夜間才比較活躍。",
+      "source": "General fact",
+      "sourceZh": "生態小知識",
+      "kind": "fact",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "短尾矮袋鼠在 IUCN 紅色名錄被列為「易危」物種。遇到我們時，請只用眼睛看，不要觸摸或餵食喔。",
+      "source": "General fact",
+      "sourceZh": "生態小知識",
+      "kind": "fact",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "我的前爪很靈巧，可以捧著葉子吃東西。",
+      "source": "General fact",
+      "sourceZh": "生態小知識",
+      "kind": "fact",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "為了吃到葉子，我們會爬上大約兩公尺高的灌木或矮樹。",
+      "source": "General fact",
+      "sourceZh": "生態小知識",
+      "kind": "fact",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "白天我多半躲在陰涼的灌木叢下休息，常常是坐著睡，頭低低地靠向腳邊。",
+      "source": "General fact",
+      "sourceZh": "生態小知識",
+      "kind": "fact",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "我看起來一直在笑，其實是臉部構造的關係，不代表我每分每秒都很開心喔。",
+      "source": "General fact",
+      "sourceZh": "生態小知識",
+      "kind": "fact",
+      "lang": "zh"
+    },
+    {
+      "id": "quokka",
+      "zh": "要趕快離開的時候，我會用兩隻後腳一蹦一蹦地跳。",
+      "source": "General fact",
+      "sourceZh": "生態小知識",
+      "kind": "fact",
+      "lang": "zh"
+    }
+  ]
+}

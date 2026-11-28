@@ -1,0 +1,161 @@
+/* 舞台圖層：全螢幕透明；每隻庫卡是一個絕對定位的元素，移動只改 transform（交給顯示卡） */
+html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; user-select: none; }
+body.hidden #stage, body.hidden #fx { display: none; }
+#stage, #fx { position: absolute; inset: 0; pointer-events: none; }
+#fx { z-index: 100000; }
+.actor { position: absolute; left: 0; top: 0; will-change: transform; cursor: grab; pointer-events: auto; }
+.actor img, .actor .live { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; transform-origin: 50% 92.6%; }   /* 以腳底為基準 */
+.actor .live svg { width: 100%; height: 100%; overflow: visible; }
+.actor.live-on img { visibility: hidden; }
+.actor img.back { visibility: hidden; }   /* 背景緩衝：下一格在這裡解碼好才換到前面 */
+.actor img.wide { left: -27.78%; width: 155.56%; }   /* 寬畫框（x −60…220，平常是 −10…170） */
+/* 呼吸：只做 transform（交給合成器，不重畫）；每隻用 animation-delay 錯開；睡覺時更慢更深 */
+/* 只在 .breathe（游標 400 px 內、或剛動完 10 秒內）時播放；其餘時間停在靜止格，待機幾乎不耗資源 */
+.actor.breathe img { will-change: transform; animation: breathe 3.2s ease-in-out infinite; }
+.actor.breathe.asleep img { animation: breathe-sleep 5.4s ease-in-out infinite; }
+.actor.dragging img { animation: none; }
+.actor.dragging { cursor: grabbing; }
+@keyframes breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(.994, 1.012); } }
+@keyframes breathe-sleep { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(.99, 1.022); } }
+/* 兩隻互動播放中：各自的圖先藏起來，畫在共用的那一張（.duet）裡；元素本身留著接滑鼠 */
+.actor.in-duet img, .actor.in-duet .live { visibility: hidden; }
+.duet { position: absolute; pointer-events: none; contain: layout style; }
+.duet .dl { position: absolute; left: 0; top: 0; will-change: transform; }
+.duet .dl svg { display: block; overflow: visible; }
+
+/* 睡覺時偶爾冒 zZ（CSS 動畫，不重畫） */
+.actor .zz { position: absolute; left: 64%; top: 14%; display: none; font: 700 15px/1 "Noto Sans TC", Arial, sans-serif; color: #7c8696; pointer-events: none; opacity: 0; }
+.actor .zz b { font-size: 20px; margin-left: 2px; position: relative; top: -8px; }
+.actor.asleep .zz { display: block; animation: zz 6s ease-in-out infinite; }
+@keyframes zz { 0%, 50% { opacity: 0; transform: translate(0, 6px) scale(.8); } 62% { opacity: .9; } 90% { opacity: .8; transform: translate(10px, -14px) scale(1.05); } 100% { opacity: 0; transform: translate(12px, -18px) scale(1.05); } }
+
+/* 撿球：發現球時頭上冒一個橘色「！」 */
+.actor .bang { position: absolute; left: 50%; top: 2%; transform: translateX(-50%) scale(.4); font: 900 28px/1 "Noto Sans TC", Arial, sans-serif; color: #e8865a; opacity: 0; pointer-events: none; text-shadow: 0 1px 0 #fff; transition: opacity .12s, transform .18s cubic-bezier(.3, 1.6, .5, 1); }
+.actor.bang-on .bang { opacity: 1; transform: translateX(-50%) scale(1); }
+
+.actor .name { position: absolute; left: 50%; bottom: -2px; transform: translateX(-50%); font: 600 11px/1.6 "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
+  color: #6b5640; background: rgba(255, 250, 242, .78); border-radius: 8px; padding: 0 7px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .2s; }
+.actor:hover .name, .actor.dragging .name { opacity: 1; }
+
+/* 氣泡：大字、圓角、柔和陰影；說話氣泡不接收滑鼠（不擋使用者） */
+.bubble { position: absolute; left: 0; top: 0; max-width: 260px; padding: 9px 15px 10px; border-radius: 18px; background: #fffaf1; color: #4a3a2c;
+  font: 600 17px/1.45 "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif; box-shadow: 0 6px 18px rgba(70, 50, 30, .18), 0 1px 3px rgba(70, 50, 30, .12);
+  border: 1.5px solid rgba(190, 160, 120, .35); pointer-events: none; opacity: 0; visibility: hidden; transition: opacity .18s, visibility 0s .18s; will-change: transform; word-break: break-word; }
+.bubble.show { opacity: 1; visibility: visible; transition: opacity .18s; }
+.bubble::after { content: ''; position: absolute; left: var(--tail-x, 50%); bottom: -8px; width: 14px; height: 14px; margin-left: -7px; background: inherit;
+  border-right: 1.5px solid rgba(190, 160, 120, .35); border-bottom: 1.5px solid rgba(190, 160, 120, .35); transform: rotate(45deg); border-radius: 0 0 4px 0; }
+.bubble.big { font-size: 20px; }
+.bubble .tone-up { color: #d7322f; }        /* 台股：漲紅 */
+.bubble .tone-down { color: #16894a; }      /* 台股：跌綠 */
+.bubble.alert { pointer-events: auto; cursor: pointer; font-size: 20px; min-width: 200px; max-width: 300px; background: #fff6e0; border-color: #f0b54a; box-shadow: 0 8px 24px rgba(200, 120, 20, .28), 0 1px 3px rgba(70, 50, 30, .15); animation: pulse 2.4s ease-in-out infinite; }
+.bubble.alert::after { border-color: #f0b54a; }
+.bubble-btns { display: flex; gap: 8px; margin-top: 8px; }
+.bubble-btns:empty { display: none; }
+.bubble-btns button { flex: 1; font: 700 16px/1 "Noto Sans TC", "Microsoft JhengHei", sans-serif; padding: 9px 12px; border-radius: 12px; border: 0; cursor: pointer; white-space: nowrap; }
+.bubble-btns button[data-act="ack"] { background: #f08a3c; color: #fff; }
+.bubble-btns button[data-act="snooze"] { background: #f3e6cf; color: #6b5640; }
+.bubble-btns button:hover { filter: brightness(1.06); }
+.bubble.alert.multi { max-width: 340px; }
+.bubble .alert-row + .alert-row { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #efc98a; }
+.bubble .alert-text { cursor: pointer; }
+.bubble .bubble-btns.small { margin-top: 5px; }
+.bubble .bubble-btns.small button { font-size: 14px; padding: 6px 10px; border-radius: 10px; }
+.bubble .alert-more { margin-top: 8px; font-size: 15px; color: #8a6a4a; text-align: right; }
+.bubble-btns button:focus-visible { outline: 3px solid #4a90d9; outline-offset: 2px; }
+@keyframes pulse { 0%, 100% { box-shadow: 0 8px 24px rgba(200, 120, 20, .28), 0 0 0 0 rgba(240, 160, 60, .35); } 50% { box-shadow: 0 8px 24px rgba(200, 120, 20, .28), 0 0 0 8px rgba(240, 160, 60, 0); } }
+
+/* 球 */
+.ball { position: absolute; left: 0; top: 0; will-change: transform; pointer-events: none; transition: opacity .5s; }
+.ball svg { display: block; }
+.ball.fade { opacity: 0; }
+
+/* 撒星星、煙火 */
+.burst { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+.burst span { position: absolute; left: 0; top: 0; color: var(--c); font-size: 16px; line-height: 1; transform: translate(-50%, -50%); opacity: 0; animation: burst 1.2s ease-out forwards; text-shadow: 0 0 4px rgba(255, 255, 255, .8); }
+.burst.big span { font-size: 20px; }
+.burst.fireworks span { width: 7px; height: 7px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); animation-duration: 1.3s; }
+@keyframes burst { 0% { opacity: 1; transform: translate(calc(-50% + var(--ox, 0px)), calc(-50% + var(--oy, 0px))) scale(.4); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(calc(-50% + var(--ox, 0px) + var(--dx)), calc(-50% + var(--oy, 0px) + var(--dy) + 24px)) scale(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .actor img, .bubble.alert { animation: none !important; }
+  .actor.asleep .zz { animation: none; opacity: .7; }
+}
+body.reduce .actor img, body.reduce .bubble.alert { animation: none !important; }
+body.reduce .actor.asleep .zz { animation: none; opacity: .7; }
+
+/* 落葉雨：從上方飄下（左右擺盪）→ 落地停在地面線上 → 沒人撿就淡出 */
+.leaf-fall { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 5; transform: translate3d(var(--x), var(--y0), 0); animation-name: leaf-fall; animation-timing-function: cubic-bezier(.35, .1, .55, 1); animation-fill-mode: both; }
+.leaf-fall .leaf-sway { animation: leaf-sway 1.2s ease-in-out infinite alternate; transform-origin: 50% 0; }
+.leaf-fall.landed { animation: none; transform: translate3d(var(--x1, var(--x)), var(--y1), 0); }
+.leaf-fall.pop .leaf-sway svg { animation: leaf-pop .35s ease-out both; }
+.leaf-fall.landed .leaf-sway { animation: none; transform: translateX(-11px) translateY(-20px) rotate(70deg) scaleY(.85); }
+.leaf-fall.fade { transition: opacity .8s; opacity: 0; }
+@keyframes leaf-fall { from { transform: translate3d(var(--x), var(--y0), 0); } to { transform: translate3d(var(--x1, var(--x)), var(--y1), 0); } }
+@keyframes leaf-pop { from { opacity: 0; scale: .2; } to { opacity: 1; scale: 1; } }
+@keyframes leaf-sway { from { transform: translateX(calc(var(--sway) * -1)) rotate(-25deg); } to { transform: translateX(var(--sway)) rotate(25deg); } }
+body.reduce .leaf-fall { display: none; }
+body.hidden .leaf-fall { display: none; }
+
+/* 放生：禿鷹（翅膀上下兩格交替拍動） */
+.vulture { position: fixed; left: 0; top: 0; width: 240px; height: 200px; pointer-events: none; z-index: 2147483000; }
+.vulture .wing-up { animation: flap-a .34s steps(1) infinite; }
+.vulture .wing-down { animation: flap-b .34s steps(1) infinite; }
+@keyframes flap-a { 0% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes flap-b { 0% { opacity: 0; } 50% { opacity: 1; } }
+.vulture .drool { animation: drool 1.4s ease-in infinite; transform-origin: 19px 67px; }
+@keyframes drool { 0% { transform: scaleY(.4); opacity: .9; } 70% { transform: scaleY(1.25); opacity: .9; } 85% { transform: scaleY(1.25) translateY(6px); opacity: 0; } 100% { transform: scaleY(.4); opacity: 0; } }
+
+/* 捷徑：游標碰到矮袋鼠時頭上浮出的資料夾／檔案 */
+.shortcuts { position: absolute; inset: 0; pointer-events: none; }
+.shortcuts .sc { position: absolute; width: 78px; padding: 0; border: 0; background: none; pointer-events: auto; cursor: pointer; text-align: center;
+  font: 12px/1.3 "Microsoft JhengHei", "Noto Sans TC", sans-serif; color: #fff;
+  opacity: 0; transform: translateY(10px) scale(.85); transition: opacity .16s ease, transform .16s ease; }
+.shortcuts.on .sc { opacity: 1; transform: none; }
+.shortcuts.out .sc { transition-duration: .08s; transition-delay: 0s !important; }   /* 收起來：不要一個一個慢慢退 */
+.shortcuts .ic { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; margin: 0 auto 4px; border-radius: 14px;
+  background: rgba(255,250,240,.93); box-shadow: 0 3px 10px rgba(0,0,0,.28); transition: transform .12s ease, box-shadow .12s ease; }
+.shortcuts .ic img { width: 34px; height: 34px; image-rendering: auto; }
+.shortcuts .ic b { font-size: 28px; font-weight: 400; }
+.shortcuts .lab { display: inline-block; max-width: 76px; padding: 1px 6px 2px; border-radius: 8px; background: rgba(40,34,28,.72); word-break: break-all; }   /* 深色小底：什麼顏色的桌布都看得清楚 */
+.shortcuts .sc:hover .ic, .shortcuts .sc:focus-visible .ic { transform: scale(1.15); box-shadow: 0 0 0 3px #ffd36b, 0 3px 12px rgba(0,0,0,.32); }
+.shortcuts .sc:focus { outline: none; }
+.shortcuts .sc.missing .ic { opacity: .5; }
+.shortcuts .sc.opened .ic { transform: scale(.92); }
+@media (prefers-reduced-motion: reduce) { .shortcuts .sc, .shortcuts .ic { transition: none; } }
+
+/* 道具包：拖著的道具、經過的那隻身上的虛線圈、掉在地上的道具 */
+.item-held, .item-ground { position: absolute; left: 0; top: 0; font-size: 34px; line-height: 1; pointer-events: none; will-change: transform; }
+.item-held { font-size: 38px; filter: drop-shadow(0 8px 6px rgba(0, 0, 0, .3)); z-index: 60; }
+.item-ground { filter: drop-shadow(0 3px 2px rgba(0, 0, 0, .25)); transition: opacity .45s; }
+.item-ground.fade { opacity: 0; }
+.item-ring { position: absolute; border: 3px dashed #ffd86b; border-radius: 50%; pointer-events: none; box-shadow: 0 0 12px rgba(255, 216, 107, .55); z-index: 59; }
+.bubble .tone-muse { display: block; margin-top: 2px; font-weight: 400; font-size: .88em; color: #6b5a48; }   /* 報股價時牠自己的感想（第二行） */
+.item-hand { position: absolute; left: 0; top: 0; line-height: 1; pointer-events: none; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .25)); will-change: transform; }   /* 拿在手上的禮物 */
+
+/* 桌面道具籃 */
+.basket { position: absolute; left: 0; top: 0; width: 74px; height: 60px; cursor: grab; pointer-events: auto; filter: drop-shadow(0 4px 5px rgba(0, 0, 0, .3)); z-index: 40; }
+.basket[hidden] { display: none; }
+.basket svg { width: 100%; height: 100%; display: block; }
+.basket:hover { filter: drop-shadow(0 4px 5px rgba(0, 0, 0, .3)) brightness(1.06); }
+.basket.wiggle { animation: bkWiggle .6s ease; }
+@keyframes bkWiggle { 0%, 100% { rotate: 0deg; } 25% { rotate: -6deg; } 50% { rotate: 5deg; } 75% { rotate: -3deg; } }
+.basket-fan { position: absolute; inset: 0; pointer-events: none; z-index: 41; }
+.bk-it { position: absolute; width: 48px; height: 48px; border-radius: 50%; border: 0; background: #fffaf0; box-shadow: 0 3px 8px rgba(0, 0, 0, .28);
+  font-size: 24px; display: grid; place-items: center; cursor: grab; pointer-events: auto; opacity: 0; transform: scale(.4); transition: opacity .14s, transform .16s cubic-bezier(.3, 1.6, .5, 1); }
+.basket-fan.on .bk-it { opacity: 1; transform: none; }
+.bk-it:hover { transform: scale(1.15) !important; box-shadow: 0 0 0 3px #ffd86b, 0 3px 8px rgba(0, 0, 0, .28); }
+.bk-it i { position: absolute; right: -4px; bottom: -4px; font-style: normal; font-size: 11px; line-height: 16px; min-width: 16px; padding: 0 4px; border-radius: 8px; background: #9a5420; color: #fff; }
+.bk-it i:empty { display: none; }
+.bk-it.empty { opacity: .4 !important; cursor: not-allowed; }
+.bk-it.shake { animation: bkShake .35s; }
+@keyframes bkShake { 0%, 100% { translate: 0; } 25% { translate: -4px; } 75% { translate: 4px; } }
+@media (prefers-reduced-motion: reduce) { .bk-it { transition: none; } .basket.wiggle, .bk-it.shake { animation: none; } }
+/* 拖著的捷徑圖示、要交給的那隻 */
+.sc-ghost { position: absolute; left: 0; top: 0; width: 52px; height: 52px; border-radius: 14px; background: #fffaf0; box-shadow: 0 8px 14px rgba(0, 0, 0, .3); display: grid; place-items: center; pointer-events: none; z-index: 70; }
+.sc-ghost img { width: 34px; height: 34px; }
+.actor.sc-target, .sc-target { filter: drop-shadow(0 0 6px #ffd86b) drop-shadow(0 0 2px #ffb020); }
+/* 傳球接力：傳之前看對方一眼的視線 */
+.relay-sight { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 55; animation: relaySight .85s ease forwards; }
+@keyframes relaySight { 0% { opacity: 0; } 20%, 80% { opacity: .45; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .relay-sight { animation: none; } }
+.shortcuts .sc img, .bk-it, .basket, .tile-ic img { -webkit-user-drag: none; user-select: none; }   /* 不讓瀏覽器自己的拖放介入 */
