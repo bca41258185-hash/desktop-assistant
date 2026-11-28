@@ -12,7 +12,7 @@ const { app, BrowserWindow, ipcMain, dialog, screen, Menu, Notification, powerMo
 }
 const path = require('path');
 const fs = require('fs');
-const chokidar = require('chokidar');
+const chokidar = { watch: (...a) => require('chokidar').watch(...a) };   // 用到才載入（啟動快一點）
 const { createStore, newId, LIMITS } = require('./store');
 const { parseInput, noteText } = require('./parse-input');
 const R = require('./reminders');
@@ -94,7 +94,7 @@ function start() {
     if (sig === crushSig) return;
     crushSig = sig;
     toStage('stage:quokkas', data.quokkas.map(stageQ));
-    toPanel('store:changed', snapshot());
+    if (panelLive()) panel.webContents.send('store:changed', snapshot());   // 面板沒開就不用整理整份資料
   }
   let away = false;
   const digest = {};                    // 離開期間各隻的待報告事項：{ qid: R.digestPush 的累積 }，回來時由各隻報告（R.digestTexts 轉成文字）
@@ -188,7 +188,7 @@ function start() {
   }
   function changed({ quokkas = false } = {}) {
     store.save(); posSaver.markSaved();               // 整份寫入時位置也在裡面
-    toPanel('store:changed', snapshot());
+    if (panelLive()) panel.webContents.send('store:changed', snapshot());   // 面板沒開就不用整理整份資料
     if (quokkas) toStage('stage:quokkas', data.quokkas.map(stageQ));
   }
   const DIGEST_TEXT = {
@@ -515,10 +515,12 @@ function start() {
       if (moved) stillSince = t;
       wait = t - stillSince < 1000 ? 40 : 250;
       const hit = circles.push(c.x, c.y, t);
-      const wa = screen.getPrimaryDisplay().workArea;                                      // 舞台座標＝螢幕座標 − 工作區左上角
-      if (hit && t - lastRainAt > 20000 && hit.x >= wa.x && hit.x <= wa.x + wa.width && hit.y >= wa.y && hit.y <= wa.y + wa.height) {
-        lastRainAt = t;
-        toStage('stage:leafrain', { by: 'cursor', x: hit.x - wa.x, y: hit.y - wa.y, r: hit.r });
+      if (hit && t - lastRainAt > 20000) {
+        const wa = screen.getPrimaryDisplay().workArea;                                    // 舞台座標＝螢幕座標 − 工作區左上角（真的繞了一圈才查）
+        if (hit.x >= wa.x && hit.x <= wa.x + wa.width && hit.y >= wa.y && hit.y <= wa.y + wa.height) {
+          lastRainAt = t;
+          toStage('stage:leafrain', { by: 'cursor', x: hit.x - wa.x, y: hit.y - wa.y, r: hit.r });
+        }
       }
     }
     setTimeout(circlePoll, wait);

@@ -95,6 +95,9 @@
       el.hidden = !!hide;
       if (hide) continue;
       const p = a.toStage(88, 112), sz = Math.round(26 * a.k / .8);
+      const sig = sz + '|' + p.x.toFixed(1) + '|' + p.y.toFixed(1) + '|' + (a.z || 0);
+      if (el.__sig === sig) continue;                                      // 沒動就不重寫樣式
+      el.__sig = sig;
       el.style.fontSize = sz + 'px';
       el.style.transform = `translate(${(p.x - sz / 2).toFixed(1)}px, ${(p.y - sz / 2).toFixed(1)}px) rotate(-10deg)`;
       el.style.zIndex = (a.z || 0) + 1;

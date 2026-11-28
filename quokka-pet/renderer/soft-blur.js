@@ -9,7 +9,7 @@
 (function (root) {
   const blurOf = new Map();                       // 濾鏡 id → { s: 模糊半徑, w, h: 濾鏡區域寬高（相對外框的倍數，null＝不限） }
   const grads = new Map();                        // 漸層 key → id
-  const GRAD_MAX = 400;                          // 上限（漸層很小；超過就照舊用濾鏡）
+  const GRAD_MAX = 1500;                          // 上限（漸層很小；超過就照舊用濾鏡）
   const FILTER_RE = /<filter\b([^>]*)>\s*<feGaussianBlur stdDeviation="([\d.]+)"\s*\/>\s*<\/filter>/g;
   const RX = {};
   const attr = (s, n) => { const m = s.match(RX[n] || (RX[n] = new RegExp('(?:^|\\s)' + n + '="([^"]*)"'))); return m ? m[1] : null; };

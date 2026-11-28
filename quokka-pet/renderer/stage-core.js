@@ -256,6 +256,8 @@
       const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
       c.getContext('2d').drawImage(img, 0, 0);
       c.toBlob((b) => {
+        c.width = c.height = 0;                                  // 畫布和原圖用完馬上放掉（不等回收，省一兩百 MB）
+        img.onload = img.onerror = null; img.removeAttribute('src');
         if (b && cache.get(entry.key) === entry) {
           const old = entry.url, png = URL.createObjectURL(b);
           // PNG 先解碼好再換（直接換 src 會有一格空白）；舊網址晚一點才釋放（可能還有一張正在等著換上去）

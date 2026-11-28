@@ -24,7 +24,7 @@
     im.onload = () => {
       const c = document.createElement('canvas'); c.width = W; c.height = H;
       c.getContext('2d').drawImage(im, 0, 0, W, H); URL.revokeObjectURL(im.src);
-      c.toBlob((bl) => { if (!bl) { e.st = 'bad'; return; } Object.assign(e, b, { href: URL.createObjectURL(bl), st: 'ok' }); }, 'image/png');
+      c.toBlob((bl) => { c.width = c.height = 0; if (!bl) { e.st = 'bad'; return; } Object.assign(e, b, { href: URL.createObjectURL(bl), st: 'ok' }); }, 'image/png');
     };
     im.onerror = () => { e.st = 'bad'; URL.revokeObjectURL(im.src); };
     im.src = URL.createObjectURL(new Blob([doc], { type: 'image/svg+xml' }));

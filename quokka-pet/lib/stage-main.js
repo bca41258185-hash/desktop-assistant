@@ -17,7 +17,7 @@
         x: wa.x, y: wa.y, width: wa.width, height: wa.height,
         frame: false, transparent: true, resizable: false, movable: false, minimizable: false, maximizable: false,
         fullscreenable: false, skipTaskbar: true, hasShadow: false, focusable: true, alwaysOnTop: true, show: false,
-        webPreferences: { preload: path.join(dir, 'stage-preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false }
+        webPreferences: { preload: path.join(dir, 'stage-preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, spellcheck: false }
       });
       win.setAlwaysOnTop(true, 'screen-saver');
       win.setIgnoreMouseEvents(true, { forward: true });

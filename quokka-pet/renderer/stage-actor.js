@@ -194,7 +194,8 @@
       if (this.y > innerHeight - 4 && !this.dragging) this.y = innerHeight - 4;      // 腳不能超過螢幕底（螢幕變小時正在走的那隻）
       if (S.resizedAt && !this.dragging && !this.releasing && performance.now() - S.resizedAt < 6000) this.x = S.clamp(this.x, 20, innerWidth - 20);   // 螢幕剛變小：還在收尾的動作也不能把牠寫回螢幕外
       const left = this.x - (S.FOOT.x - S.VB.x) * this.k, top = this.y - (S.FOOT.y - S.VB.y) * this.k - this.depth;
-      this.el.style.transform = `translate3d(${left.toFixed(1)}px, ${top.toFixed(1)}px, 0)`;
+      const tf = `translate3d(${left.toFixed(1)}px, ${top.toFixed(1)}px, 0)`;
+      if (tf !== this.tfStr) { this.tfStr = tf; this.el.style.transform = tf; }          // 位置沒變就不重寫樣式
       const z = Math.round(this.y - this.depth) + this.zBoost + (this.dragging ? 10000 : 0);
       if (z !== this.z) { this.z = z; this.el.style.zIndex = z; }          // 腳底越下面畫越前面
       this.rect = this.inPouch ? null : { id: this.id, x: Math.round(left + this.w * .2), y: Math.round(top + this.h * .1), w: Math.round(this.w * .6), h: Math.round(this.h * .85) };

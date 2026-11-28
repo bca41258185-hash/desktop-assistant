@@ -53,7 +53,7 @@
   }
 
   function createStore(file, { debounceMs = 300 } = {}) {
-    let data = defaults(), timer = null, retries = 0, failed = 0; const readOnly = false;
+    let data = defaults(), timer = null, retries = 0, failed = 0, lastText = null; const readOnly = false;
     // 把讀不懂的檔案另存一份，絕不直接用預設值蓋掉使用者的資料
     function quarantine(tag) {
       try { fs.copyFileSync(file, file.replace(/\.json$/, '') + `.${tag}-${Date.now()}.json`); } catch (e) { /* 備份失敗不阻擋 */ }
@@ -101,12 +101,14 @@
       if (timer) { clearTimeout(timer); timer = null; }
       if (readOnly) return;
       try {
+        const text = JSON.stringify(data, null, 2);
+        if (text === lastText && fs.existsSync(file)) { retries = 0; failed = 0; return; }   // 內容和上次寫的一樣：不用再寫一次磁碟
         fs.mkdirSync(path.dirname(file), { recursive: true });
         const tmp = file + '.tmp';
         const fd = fs.openSync(tmp, 'w');
-        try { fs.writeFileSync(fd, JSON.stringify(data, null, 2), 'utf-8'); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+        try { fs.writeFileSync(fd, text, 'utf-8'); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
         fs.renameSync(tmp, file);              // 原子取代：不會留下寫一半的檔案
-        retries = 0; failed = 0;
+        retries = 0; failed = 0; lastText = text;
       } catch (e) {
         failed++;
         console.error('儲存失敗:', e.message);
