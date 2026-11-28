@@ -34,7 +34,7 @@
     const getter = !r && owner && Math.abs(owner.x - ball.x) < 500 && near.includes(owner) ? owner : near[0];
     if (!getter) return false;
     ball.picked = true; ball.relayLock = true;
-    const run = r || { at: performance.now(), ball, team: new Set(), passes: 0, max: 3 + Math.floor(Math.random() * 5), pairs: new Set(), last: null };
+    const run = r || { at: performance.now(), ball, team: new Set(), passes: 0, max: (ball.kind === 'vball' ? 5 : 3) + Math.floor(Math.random() * 5), pairs: new Set(), last: null };
     ball.relayRun = run; relays.add(run);
     if (owner && owner.job && owner.job.st && owner.job.st.thrown) owner.job.handoff = true;   // 丟球的那隻不用再盯著球
     S.kick();
@@ -82,15 +82,30 @@
   function holdAt(run, a) { const p = handOf(a); run.ball.x = p.x; run.ball.y = p.y; run.ball.born = performance.now(); run.ball.place(); }
 
   // 選要傳給誰：有空的、或已經在接力裡的；不傳回剛剛傳給我的那隻（有別人的話）
+  function target(run, a) {
+    const cands = [...S.actors.values()].filter((o) => o !== a && (free(o) || (o.relay === run && o.job && o.job.name === 'relay')) && Math.abs(o.x - a.x) < innerWidth * .7);
+    const pool = cands.filter((o) => o !== run.last).length ? cands.filter((o) => o !== run.last) : cands;
+    if (!pool.length) return null;
+    return pool.sort((x, y) => Math.abs(x.x - a.x) - Math.abs(y.x - a.x))[Math.random() < .7 ? 0 : Math.floor(Math.random() * pool.length)];
+  }
+  // 排球：接到不停球，直接托給下一隻（跟真的排球一樣）；找不到人可以托就接住
+  function bump(run, a) {
+    run.at = performance.now();
+    const to = target(run, a);
+    if (!to || !enlist(run, to)) { take(run, a); return; }
+    const dir = Math.sign(to.x - a.x) || 1;
+    turn(a, dir * 55); turn(to, -dir * 40);
+    if (Math.random() < .45) a.say(pick(['托！', '嘿！', '我來！', '接！', '給你！']), { ms: 650 });
+    else if (Math.random() < .4) to.say(pick(LINES.call), { ms: 800 });
+    run.holder = a;
+    throwTo(run, a, to, true);
+  }
   function aim(run, a) {
     if (run.ball.gone) { endRun(run, a); return; }
     if (run.holder !== a) return;
     run.at = performance.now();
-    const cands = [...S.actors.values()].filter((o) => o !== a && (free(o) || (o.relay === run && o.job && o.job.name === 'relay')) && Math.abs(o.x - a.x) < innerWidth * .7);
-    const pool = cands.filter((o) => o !== run.last).length ? cands.filter((o) => o !== run.last) : cands;
-    if (!pool.length) { finishRun(run, a); return; }
-    const to = pool.sort((x, y) => Math.abs(x.x - a.x) - Math.abs(y.x - a.x))[Math.random() < .7 ? 0 : Math.floor(Math.random() * pool.length)];
-    if (!enlist(run, to)) { finishRun(run, a); return; }
+    const to = target(run, a);
+    if (!to || !enlist(run, to)) { finishRun(run, a); return; }
     // 先看對方一眼：兩隻轉向彼此、拉一條視線，對方舉手喊「來！」
     const dir = Math.sign(to.x - a.x) || 1;
     turn(a, dir * 55); turn(to, -dir * 40);
@@ -115,9 +130,9 @@
     return el;
   }
 
-  function throwTo(run, a, to) {
-    const ball = run.ball, p0 = handOf(a);
-    const d = Math.hypot(to.x - a.x, to.y - a.y), T = 450 + d * .55, H = Math.max(70, Math.min(260, d * .35));
+  function throwTo(run, a, to, bumped) {
+    const ball = run.ball, p0 = bumped ? { x: ball.x, y: ball.y } : handOf(a);
+    const d = Math.hypot(to.x - a.x, to.y - a.y), T = (bumped ? 620 : 450) + d * .55, H = bumped ? Math.max(150, Math.min(340, d * .5)) : Math.max(70, Math.min(260, d * .35));   // 托球：弧線比較高、滯空久一點
     const catchOk = Math.random() < ({ shy: .78, sleepy: .8, athlete: .96 }[((to.traits || {}).personality || {}).archetype] || .9);
     run.holder = null; run.last = a; release(run, a);
     if (window.__L) window.__L({ id: a.id, ev: '傳球', with: to.id, ok: catchOk });   // 記錄器（測試用，平常沒有）
@@ -137,7 +152,7 @@
         return;
       }
       run.passes++; run.pairs.add([a.id, to.id].sort().join('|'));
-      take(run, to);
+      if (ball.kind === 'vball' && run.passes < run.max && !S.reduceMotion) bump(run, to); else take(run, to);
     };
     requestAnimationFrame(step);
   }
