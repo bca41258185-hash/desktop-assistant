@@ -288,7 +288,7 @@
     }
     // 即時 SVG（只有播放動作的這隻、只在播的時候）
     drawLive(th, pose) {
-      this.shown = { th, pose };
+      this.shown = { th, pose }; this.liveAt = performance.now();
       this.liveOn = true; this.frameGen++; this.pendingSrc = null;                 // 取消還在解碼、等著換上去的畫格
       if (!this.liveShown) { this.liveShown = true; this.el.classList.add('live-on'); }
       // 常駐層（呼吸、眨眼、耳朵抖）也疊到即時繪製的動作上

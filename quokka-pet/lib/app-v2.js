@@ -952,6 +952,16 @@ function start() {
   });
   // ---- 桌面道具籃：數量、位置（螢幕比例）、右鍵選單 ----
   ipcMain.handle('items:counts', () => itemsView());
+  // 桌面上其他視窗的上緣（給庫卡爬上去站）：只有位置，不讀內容；舞台自己那一層不算
+  const winEdges = require('./win-edges').create();
+  ipcMain.handle('windows:edges', () => {
+    try {
+      const own = [...stage.stages.values()].map((st) => { try { const b = st.win.getNativeWindowHandle(); return b.length >= 8 ? Number(b.readBigInt64LE(0)) : b.readInt32LE(0); } catch (e) { return 0; } });
+      const wa = screen.getPrimaryDisplay().workArea;
+      return winEdges.edges({ own, ox: wa.x, oy: wa.y });
+    } catch (e) { return { ready: false, edges: [] }; }
+  });
+  app.on('before-quit', () => winEdges.stop());
   ipcMain.handle('basket:get', () => ({ pos: (data.settings.basket && data.settings.basket.pos) || null, hiddenUntil: (data.settings.basket && data.settings.basket.hiddenUntil) || 0 }));
   ipcMain.on('basket:pos', (e, { fx, fy } = {}) => {
     if (!isNum(fx) || !isNum(fy)) return;

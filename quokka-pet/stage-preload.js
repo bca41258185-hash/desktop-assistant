@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('stageApi', {
   shortcutMenu: (id) => ipcRenderer.send('shortcut:menu', { id: str(id) }),
   giveShortcut: (id, qid) => ipcRenderer.send('shortcut:give', { id: str(id), qid: str(qid) }),
   itemCounts: () => ipcRenderer.invoke('items:counts'),
+  windowEdges: () => ipcRenderer.invoke('windows:edges'),
   basketGet: () => ipcRenderer.invoke('basket:get'),
   basketPos: (fx, fy) => ipcRenderer.send('basket:pos', { fx: Number(fx), fy: Number(fy) }),
   basketMenu: () => ipcRenderer.send('basket:menu'),

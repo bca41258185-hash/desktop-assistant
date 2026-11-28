@@ -37,7 +37,7 @@
   function applyFps(fps) {
     S.fps = perf.fps = fps;
     S.frameGap = 1000 / fps - 3;
-    S.LIVE_MS = 1000 / fps - 2;
+    S.LIVE_MS = S.liveBase = 1000 / fps - 2;
     S.qMul = fps >= 45 ? 2 : 1;
     perf.win = []; perf.cost = []; perf.okSince = 0; perf.since = performance.now();
   }
@@ -275,6 +275,8 @@
     if (now - lastFrame < S.frameGap) { raf = requestAnimationFrame(loop); return; }   // 每秒最多 S.fps 格（預設 60，吃力時自動降級）
     const gap = lastFrame ? now - lastFrame : 1e9, c0 = performance.now();
     lastFrame = now; perf.frames++;
+    // 同時有好幾隻在即時重畫（最吃顯示卡）：3 隻以上每隻改成每秒重畫約 30 次、5 隻以上約 20 次；位置移動照舊每格更新
+    { let n = 0; for (const a of S.actors.values()) if (now - (a.liveAt || -1e9) < 300) n++; S.liveCount = n; S.LIVE_MS = n >= 5 ? 48 : n >= 3 ? Math.max(S.liveBase, 31) : S.liveBase; }
     let busy = false;
     const dt = Math.min(0.05, (now - (lastBall || now)) / 1000); lastBall = now;
     for (const b of [...S.balls]) { try { if (b.tick(dt, now)) busy = true; } catch (e) { console.warn('球的更新出錯，收掉這顆球', e); try { b.remove(); } catch (e2) { /* 已經移除 */ } } }
